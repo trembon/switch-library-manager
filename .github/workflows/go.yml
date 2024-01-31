@@ -30,20 +30,9 @@ jobs:
     - name: Run bundler
       run: ./astilectron-bundler
       
-    - uses: upload-artifact@v4
+    - name: Upload Windows build
+      uses: upload-artifact@v4
       with:
         name: switch-library-manager.GUI.windows-amd64.zip
         path: output/windows-amd64/*
-        if-no-files-found: error
-      
-    - uses: upload-artifact@v4
-      with:
-        name: switch-library-manager.GUI.linux-amd64.zip
-        path: output/linux-amd64/*
-        if-no-files-found: error
-      
-    - uses: upload-artifact@v4
-      with:
-        name: switch-library-manager.GUI.darwin-amd64.zip
-        path: output/darwin-amd64/*
         if-no-files-found: error
