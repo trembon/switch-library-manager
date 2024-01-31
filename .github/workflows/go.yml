@@ -27,5 +27,11 @@ jobs:
     - name: Install bundler
       run: go install github.com/asticode/go-astilectron-bundler/astilectron-bundler
 
+    - name: Move bundler
+      run: mv $HOME/go/bin/astilectron-bundler .
+      
     - name: debug
       run: ls
+      
+    - name: Run bundler
+      run: ./astilectron-bundler
