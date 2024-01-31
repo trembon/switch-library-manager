@@ -35,3 +35,12 @@ jobs:
       
     - name: Run bundler
       run: ./astilectron-bundler
+      
+    - name: debug2
+      run: ls ./output
+      
+    - name: debug3
+      run: ls ./output/windows-amd64/
+      
+    - name: debug4
+      run: ls ./output/linux-amd64/
