@@ -1,9 +1,7 @@
-name: Go
+name: Build master
 
 on:
   push:
-    branches: [ "master" ]
-  pull_request:
     branches: [ "master" ]
 
 jobs:
@@ -33,20 +31,20 @@ jobs:
     - name: Upload Windows build
       uses: actions/upload-artifact@v4
       with:
-        name: switch-library-manager.GUI.windows-amd64.zip
+        name: switch-library-manager.GUI.windows-amd64
         path: output/windows-amd64/*
         if-no-files-found: error
       
     - name: Upload Linux build
       uses: actions/upload-artifact@v4
       with:
-        name: switch-library-manager.GUI.linux-amd64.zip
+        name: switch-library-manager.GUI.linux-amd64
         path: output/linux-amd64/*
         if-no-files-found: error
       
     - name: Upload Mac build
       uses: actions/upload-artifact@v4
       with:
-        name: switch-library-manager.GUI.darwin-amd64.zip
+        name: switch-library-manager.GUI.darwin-amd64
         path: output/darwin-amd64/*
         if-no-files-found: error
