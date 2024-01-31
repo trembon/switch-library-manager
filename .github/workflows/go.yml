@@ -1,6 +1,3 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-
 name: Go
 
 on:
@@ -30,17 +27,23 @@ jobs:
     - name: Move bundler
       run: mv $HOME/go/bin/astilectron-bundler .
       
-    - name: debug
-      run: ls
-      
     - name: Run bundler
       run: ./astilectron-bundler
       
-    - name: debug2
-      run: ls ./output
+    - name: Upload a Windows build
+      uses: upload-artifact@v4.3.0
+      with:
+        name: switch-library-manager.GUI.windows-amd64.zip
+        path: output/windows-amd64/
       
-    - name: debug3
-      run: ls ./output/windows-amd64/
+    - name: Upload a Linux build
+      uses: upload-artifact@v4.3.0
+      with:
+        name: switch-library-manager.GUI.linux-amd64.zip
+        path: output/linux-amd64/
       
-    - name: debug4
-      run: ls ./output/linux-amd64/
+    - name: Upload a Mac build
+      uses: upload-artifact@v4.3.0
+      with:
+        name: switch-library-manager.GUI.darwin-amd64.zip
+        path: output/darwin-amd64/
