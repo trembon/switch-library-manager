@@ -2,6 +2,9 @@ name: "Publish Artifacts"
 description: Publishes the build artifacts
 runs:
   using: composite
+  defaults:
+    run:
+      working-directory: ./src
   steps:
     - name: Upload Windows build
       uses: actions/upload-artifact@v4

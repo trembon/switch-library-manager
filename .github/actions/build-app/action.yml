@@ -2,8 +2,10 @@ name: "Build App"
 description: Builds the app
 runs:
   using: composite
+  defaults:
+    run:
+      working-directory: ./src
   steps:
     - name: Run bundler
-      working-directory: ./src
       shell: bash
       run: ./astilectron-bundler
