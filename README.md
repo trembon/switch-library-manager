@@ -98,6 +98,7 @@ The following template elements are supported:
 ## Building
 - Install and setup Go
 - Clone the repo: `git clone https://github.com/trembon/switch-library-manager.git`
+- Move into the src folder `cd src`
 - Get the bundler `go get -u github.com/asticode/go-astilectron-bundler/...`
 - Install bundler `go install github.com/asticode/go-astilectron-bundler/astilectron-bundler`
 - Copy bundler binary to the source folder `cd switch-library-manager` and then `mv $HOME/go/bin/astilectron-bundler .`
