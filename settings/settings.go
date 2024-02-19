@@ -60,6 +60,7 @@ type AppSettings struct {
 	OrganizeOptions        OrganizeOptions `json:"organize_options"`
 	ScanRecursively        bool            `json:"scan_recursively"`
 	GuiPagingSize          int             `json:"gui_page_size"`
+	IgnoreDLCUpdates       bool            `json:"ignore_dlc_updates"`
 	IgnoreDLCTitleIds      []string        `json:"ignore_dlc_title_ids"`
 }
 
@@ -99,6 +100,7 @@ func saveDefaultSettings(baseFolder string) *AppSettings {
 		Folder:                 "",
 		ScanFolders:            []string{},
 		IgnoreDLCTitleIds:      []string{},
+		IgnoreDLCUpdates:       false,
 		GUI:                    true,
 		GuiPagingSize:          100,
 		CheckForMissingUpdates: true,

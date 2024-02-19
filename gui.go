@@ -358,7 +358,8 @@ func (g *GUI) getMissingDLC() string {
 }
 
 func (g *GUI) getMissingUpdates() string {
-	missingUpdates := process.ScanForMissingUpdates(g.state.localDB.TitlesMap, g.state.switchDB.TitlesMap)
+	settingsObj := settings.ReadSettings(g.baseFolder)
+	missingUpdates := process.ScanForMissingUpdates(g.state.localDB.TitlesMap, g.state.switchDB.TitlesMap, settingsObj.IgnoreDLCUpdates)
 	values := make([]process.IncompleteTitle, len(missingUpdates))
 	i := 0
 	for _, missingUpdate := range missingUpdates {
