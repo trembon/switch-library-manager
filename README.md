@@ -3,11 +3,11 @@ Fork of [Switch Library Manager](https://github.com/giwty/switch-library-manager
 # Switch library manager
 Easily manage your switch game backups
 
-![Image description](https://raw.githubusercontent.com/trembon/switch-library-manager/master/updates_ui.png)
+![Image description](https://raw.githubusercontent.com/trembon/switch-library-manager/master/.github/readme/updates_ui.png)
 
-![Image description](https://raw.githubusercontent.com/trembon/switch-library-manager/master/dlc_ui.png)
+![Image description](https://raw.githubusercontent.com/trembon/switch-library-manager/master/.github/readme/dlc_ui.png)
  
-![Image description](https://raw.githubusercontent.com/trembon/switch-library-manager/master/cmd.png)
+![Image description](https://raw.githubusercontent.com/trembon/switch-library-manager/master/.github/readme/cmd.png)
 
 #### Features:
 - Cross platform, works on Windows / Mac / Linux
