@@ -136,7 +136,7 @@ func (c *Console) Start() {
 
 	if settingsObj.CheckForMissingUpdates {
 		fmt.Printf("\nChecking for missing updates\n")
-		c.processMissingUpdates(localDB, titlesDB)
+		c.processMissingUpdates(localDB, titlesDB, settingsObj)
 	}
 
 	if settingsObj.CheckForMissingDLC {
@@ -166,8 +166,8 @@ func (c *Console) processIssues(localDB *db.LocalSwitchFilesDB) {
 	t.Render()
 }
 
-func (c *Console) processMissingUpdates(localDB *db.LocalSwitchFilesDB, titlesDB *db.SwitchTitlesDB) {
-	incompleteTitles := process.ScanForMissingUpdates(localDB.TitlesMap, titlesDB.TitlesMap)
+func (c *Console) processMissingUpdates(localDB *db.LocalSwitchFilesDB, titlesDB *db.SwitchTitlesDB, settingsObj *settings.AppSettings) {
+	incompleteTitles := process.ScanForMissingUpdates(localDB.TitlesMap, titlesDB.TitlesMap, settingsObj.IgnoreDLCUpdates)
 	if len(incompleteTitles) != 0 {
 		fmt.Print("\nFound available updates:\n\n")
 	} else {

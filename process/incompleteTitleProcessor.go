@@ -2,11 +2,12 @@ package process
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
+
 	"github.com/giwty/switch-library-manager/db"
 	"github.com/giwty/switch-library-manager/switchfs"
 	"go.uber.org/zap"
-	"sort"
-	"strconv"
 )
 
 type IncompleteTitle struct {
@@ -19,14 +20,14 @@ type IncompleteTitle struct {
 }
 
 func ScanForMissingUpdates(localDB map[string]*db.SwitchGameFiles,
-	switchDB map[string]*db.SwitchTitle) map[string]IncompleteTitle {
+	switchDB map[string]*db.SwitchTitle, ignoreDLCupdates bool) map[string]IncompleteTitle {
 
 	result := map[string]IncompleteTitle{}
 
 	//iterate over local files, and compare to remote versions
 	for idPrefix, switchFile := range localDB {
 
-		if switchFile.BaseExist == false {
+		if !switchFile.BaseExist {
 			zap.S().Infof("missing base for game %v", idPrefix)
 			continue
 		}
@@ -36,6 +37,7 @@ func ScanForMissingUpdates(localDB map[string]*db.SwitchGameFiles,
 		}
 
 		switchTitle := IncompleteTitle{Attributes: switchDB[idPrefix].Attributes, Meta: switchFile.File.Metadata}
+
 		//sort the available local versions
 		localVersions := make([]int, len(switchFile.Updates))
 		i := 0
@@ -73,32 +75,34 @@ func ScanForMissingUpdates(localDB map[string]*db.SwitchGameFiles,
 		}
 
 		//process dlc
-		for k, availableDlc := range switchDB[idPrefix].Dlc {
+		if !ignoreDLCupdates {
+			for k, availableDlc := range switchDB[idPrefix].Dlc {
 
-			if localDlc, ok := switchFile.Dlc[k]; ok {
-				latestDlcVersion, err := availableDlc.Version.Int64()
-				if err != nil {
-					continue
-				}
-
-				if localDlc.Metadata == nil {
-					continue
-				}
-				if localDlc.Metadata.Version < int(latestDlcVersion) {
-					updateDate := "-"
-					if availableDlc.ReleaseDate != 0 {
-						updateDate = strconv.Itoa(availableDlc.ReleaseDate)
-						if len(updateDate) > 7 {
-							updateDate = updateDate[0:4] + "-" + updateDate[4:6] + "-" + updateDate[6:]
-						}
+				if localDlc, ok := switchFile.Dlc[k]; ok {
+					latestDlcVersion, err := availableDlc.Version.Int64()
+					if err != nil {
+						continue
 					}
 
-					result[availableDlc.Id] = IncompleteTitle{
-						Attributes:       availableDlc,
-						LatestUpdate:     int(latestDlcVersion),
-						LocalUpdate:      localDlc.Metadata.Version,
-						LatestUpdateDate: updateDate,
-						Meta:             localDlc.Metadata}
+					if localDlc.Metadata == nil {
+						continue
+					}
+					if localDlc.Metadata.Version < int(latestDlcVersion) {
+						updateDate := "-"
+						if availableDlc.ReleaseDate != 0 {
+							updateDate = strconv.Itoa(availableDlc.ReleaseDate)
+							if len(updateDate) > 7 {
+								updateDate = updateDate[0:4] + "-" + updateDate[4:6] + "-" + updateDate[6:]
+							}
+						}
+
+						result[availableDlc.Id] = IncompleteTitle{
+							Attributes:       availableDlc,
+							LatestUpdate:     int(latestDlcVersion),
+							LocalUpdate:      localDlc.Metadata.Version,
+							LatestUpdateDate: updateDate,
+							Meta:             localDlc.Metadata}
+					}
 				}
 			}
 		}
@@ -114,7 +118,7 @@ func ScanForMissingDLC(localDB map[string]*db.SwitchGameFiles,
 	//iterate over local files, and compare to remote versions
 	for idPrefix, switchFile := range localDB {
 
-		if switchFile.BaseExist == false {
+		if !switchFile.BaseExist {
 			continue
 		}
 
@@ -148,7 +152,7 @@ func ScanForBrokenFiles(localDB map[string]*db.SwitchGameFiles) []db.SwitchFileI
 	//iterate over local files, and compare to remote versions
 	for _, switchFile := range localDB {
 
-		if switchFile.BaseExist == false {
+		if !switchFile.BaseExist {
 			for _, f := range switchFile.Dlc {
 				result = append(result, f)
 			}
