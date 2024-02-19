@@ -339,16 +339,8 @@ $(function () {
         });
 
         $("body").on("click", ".export-btn", e => {
-            let page = currTable.getPage();
-            let pageSize = currTable.getPageSize();
-            currTable.setPageSize(true);
-            currTable.setPage(1);
-            currTable.download("csv", "export.csv");
-            currTable.setPageSize(pageSize);
-            currTable.setPage(page);
-           // currTable && currTable.download("csv", "data.csv");
+            currTable.download("csv", "export.csv", {}, "all");
         });
-
 
         $("body").on("click", ".library-organize-action", e => {
             e.preventDefault();
