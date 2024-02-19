@@ -5,6 +5,7 @@ runs:
   steps:
     - name: Upload Windows build
       uses: actions/upload-artifact@v4
+      working-directory: ./src
       with:
         name: switch-library-manager.windows-amd64
         path: output/windows-amd64/*
@@ -12,6 +13,7 @@ runs:
       
     - name: Upload Linux build
       uses: actions/upload-artifact@v4
+      working-directory: ./src
       with:
         name: switch-library-manager.linux-amd64
         path: output/linux-amd64/*
@@ -19,6 +21,7 @@ runs:
       
     - name: Upload Mac build
       uses: actions/upload-artifact@v4
+      working-directory: ./src
       with:
         name: switch-library-manager.darwin-amd64
         path: output/darwin-amd64/*
