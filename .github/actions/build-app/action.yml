@@ -4,5 +4,6 @@ runs:
   using: composite
   steps:
     - name: Run bundler
+      working-directory: ./src
       shell: bash
       run: ./astilectron-bundler
