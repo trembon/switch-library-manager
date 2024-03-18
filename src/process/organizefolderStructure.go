@@ -1,17 +1,18 @@
 package process
 
 import (
-	"github.com/giwty/switch-library-manager/db"
-	"github.com/giwty/switch-library-manager/settings"
-	"go.uber.org/zap"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
-	"robpike.io/nihongo"
 	"strconv"
 	"strings"
+
+	"github.com/giwty/switch-library-manager/db"
+	"github.com/giwty/switch-library-manager/settings"
+	"go.uber.org/zap"
+	"robpike.io/nihongo"
 )
 
 var (
@@ -136,7 +137,7 @@ func OrganizeByFolders(baseFolder string,
 
 		//process base title
 		from := filepath.Join(v.File.ExtendedInfo.BaseFolder, v.File.ExtendedInfo.FileName)
-		to := filepath.Join(destinationPath, getFileName(options, v.File.ExtendedInfo.FileName, templateData))
+		to := filepath.Join(destinationPath, getFileName(options, v.File.ExtendedInfo.FileName, templateData, 0))
 		err := moveFile(from, to)
 		if err != nil {
 			zap.S().Errorf("Failed to move file [%v]\n", err)
@@ -158,9 +159,9 @@ func OrganizeByFolders(baseFolder string,
 
 			from = filepath.Join(updateInfo.ExtendedInfo.BaseFolder, updateInfo.ExtendedInfo.FileName)
 			if options.CreateFolderPerGame {
-				to = filepath.Join(destinationPath, getFileName(options, updateInfo.ExtendedInfo.FileName, templateData))
+				to = filepath.Join(destinationPath, getFileName(options, updateInfo.ExtendedInfo.FileName, templateData, 0))
 			} else {
-				to = filepath.Join(updateInfo.ExtendedInfo.BaseFolder, getFileName(options, updateInfo.ExtendedInfo.FileName, templateData))
+				to = filepath.Join(updateInfo.ExtendedInfo.BaseFolder, getFileName(options, updateInfo.ExtendedInfo.FileName, templateData, 0))
 			}
 			err := moveFile(from, to)
 			if err != nil {
@@ -170,6 +171,7 @@ func OrganizeByFolders(baseFolder string,
 		}
 
 		//process DLC
+		existingDlcs := map[string]string{}
 		for id, dlc := range v.Dlc {
 			if dlc.Metadata != nil {
 				templateData[settings.TEMPLATE_VERSION] = strconv.Itoa(dlc.Metadata.Version)
@@ -178,11 +180,25 @@ func OrganizeByFolders(baseFolder string,
 			templateData[settings.TEMPLATE_TITLE_ID] = id
 			templateData[settings.TEMPLATE_DLC_NAME] = getDlcName(titlesDB.TitlesMap[k], dlc)
 			from = filepath.Join(dlc.ExtendedInfo.BaseFolder, dlc.ExtendedInfo.FileName)
-			if options.CreateFolderPerGame {
-				to = filepath.Join(destinationPath, getFileName(options, dlc.ExtendedInfo.FileName, templateData))
-			} else {
-				to = filepath.Join(dlc.ExtendedInfo.BaseFolder, getFileName(options, dlc.ExtendedInfo.FileName, templateData))
+
+			dlcNameTry := 0
+			for {
+				if options.CreateFolderPerGame {
+					to = filepath.Join(destinationPath, getFileName(options, dlc.ExtendedInfo.FileName, templateData, dlcNameTry))
+				} else {
+					to = filepath.Join(dlc.ExtendedInfo.BaseFolder, getFileName(options, dlc.ExtendedInfo.FileName, templateData, dlcNameTry))
+				}
+
+				// check if dlc will generate a duplicate name as a previous dlc, but not have the same id
+				// this is to prevent deletion of dlc with the same name
+				value, exists := existingDlcs[to]
+				if !exists && value != id {
+					break
+				}
+				dlcNameTry++
 			}
+			existingDlcs[to] = id
+
 			err = moveFile(from, to)
 			if err != nil {
 				zap.S().Errorf("Failed to move file [%v]\n", err)
@@ -266,22 +282,22 @@ func getTitleName(switchTitle *db.SwitchTitle, v *db.SwitchGameFiles) string {
 			return name
 		}
 	}
+
 	//for non eshop games (cartridge only), grab the name from the file
 	return db.ParseTitleNameFromFileName(v.File.ExtendedInfo.FileName)
-
 }
 
 func getFolderName(options settings.OrganizeOptions, templateData map[string]string) string {
 
-	return applyTemplate(templateData, options.SwitchSafeFileNames, options.FolderNameTemplate)
+	return applyTemplate(templateData, options.SwitchSafeFileNames, options.FolderNameTemplate, 0)
 }
 
-func getFileName(options settings.OrganizeOptions, originalName string, templateData map[string]string) string {
+func getFileName(options settings.OrganizeOptions, originalName string, templateData map[string]string, nameTry int) string {
 	if !options.RenameFiles {
 		return originalName
 	}
 	ext := path.Ext(originalName)
-	result := applyTemplate(templateData, options.SwitchSafeFileNames, options.FileNameTemplate)
+	result := applyTemplate(templateData, options.SwitchSafeFileNames, options.FileNameTemplate, nameTry)
 	return result + ext
 }
 
@@ -293,24 +309,31 @@ func moveFile(from string, to string) error {
 	return err
 }
 
-func applyTemplate(templateData map[string]string, useSafeNames bool, template string) string {
+func applyTemplate(templateData map[string]string, useSafeNames bool, template string, nameTry int) string {
 	result := strings.Replace(template, "{"+settings.TEMPLATE_TITLE_NAME+"}", templateData[settings.TEMPLATE_TITLE_NAME], 1)
 	result = strings.Replace(result, "{"+settings.TEMPLATE_TITLE_ID+"}", strings.ToUpper(templateData[settings.TEMPLATE_TITLE_ID]), 1)
 	result = strings.Replace(result, "{"+settings.TEMPLATE_VERSION+"}", templateData[settings.TEMPLATE_VERSION], 1)
 	result = strings.Replace(result, "{"+settings.TEMPLATE_TYPE+"}", templateData[settings.TEMPLATE_TYPE], 1)
 	result = strings.Replace(result, "{"+settings.TEMPLATE_VERSION_TXT+"}", templateData[settings.TEMPLATE_VERSION_TXT], 1)
 	result = strings.Replace(result, "{"+settings.TEMPLATE_REGION+"}", templateData[settings.TEMPLATE_REGION], 1)
+
 	//remove title name from dlc name
 	dlcName := strings.Replace(templateData[settings.TEMPLATE_DLC_NAME], templateData[settings.TEMPLATE_TITLE_NAME], "", 1)
 	dlcName = strings.TrimSpace(dlcName)
 	dlcName = strings.TrimPrefix(dlcName, "-")
 	dlcName = strings.TrimSpace(dlcName)
+
 	result = strings.Replace(result, "{"+settings.TEMPLATE_DLC_NAME+"}", dlcName, 1)
 	result = strings.ReplaceAll(result, "[]", "")
 	result = strings.ReplaceAll(result, "()", "")
 	result = strings.ReplaceAll(result, "<>", "")
+
 	if strings.HasSuffix(result, ".") {
 		result = result[:len(result)-1]
+	}
+
+	if nameTry > 0 {
+		result = result + "(" + strconv.Itoa(nameTry) + ")"
 	}
 
 	if useSafeNames {
@@ -318,6 +341,7 @@ func applyTemplate(templateData map[string]string, useSafeNames bool, template s
 		safe := nonAscii.FindAllString(result, -1)
 		result = strings.Join(safe, "")
 	}
+
 	result = strings.ReplaceAll(result, "  ", " ")
 	result = strings.TrimSpace(result)
 	return folderIllegalCharsRegex.ReplaceAllString(result, "")
