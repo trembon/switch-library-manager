@@ -3,15 +3,16 @@ package db
 import (
 	"errors"
 	"fmt"
-	"github.com/giwty/switch-library-manager/fileio"
-	"github.com/giwty/switch-library-manager/settings"
-	"github.com/giwty/switch-library-manager/switchfs"
-	"go.uber.org/zap"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/giwty/switch-library-manager/fileio"
+	"github.com/giwty/switch-library-manager/settings"
+	"github.com/giwty/switch-library-manager/switchfs"
+	"go.uber.org/zap"
 )
 
 var (
@@ -133,10 +134,6 @@ func scanFolder(folder string, recursive bool, files *[]ExtendedFileInfo, progre
 			return nil
 		}
 
-		//skip mac hidden files
-		if info.Name()[0:1] == "." {
-			return nil
-		}
 		base := path[0 : len(path)-len(info.Name())]
 		if strings.TrimSuffix(base, string(os.PathSeparator)) != strings.TrimSuffix(folder, string(os.PathSeparator)) &&
 			!recursive {
