@@ -153,7 +153,11 @@ $(function () {
 
 
         function loadTab(target) {
+            hideCurrentTab();
+
+            $("#tab_btns a[href='" + target + "']").addClass('active');
             $(target).show();
+
             if (target === "#settings") {
                 let settingsJSON = JSON.stringify(state.settings, null, 2)
                 let settingsHtml = $(target + "Template").render({code: settingsJSON})
@@ -258,7 +262,7 @@ $(function () {
                         ],
                     });
                 }
-            }else if (target === "#library") {
+            } else if (target === "#library") {
                 if (state.settings.folder && !state.library){
                     return
                 }
@@ -299,7 +303,7 @@ $(function () {
                         ],
                     });
                 }
-            }else if (target === "#missing") {
+            } else if (target === "#missing") {
                 if (state.settings.folder && !state.library){
                     return
                 }
@@ -393,17 +397,17 @@ $(function () {
 
         });
 
-        $('.tabs a').click(function (e) {
+        $('#tab_btns a').click(function (e) {
             e.preventDefault();
-            let $this = $(e.currentTarget);
-            let tabgroup = '#' + $this.parents('.tabs').data('tabgroup');
-            let others = $this.closest('li').siblings().children('a');
-            let target = $this.attr('href');
-            others.removeClass('active');
-            $this.addClass('active');
-            $(tabgroup).children('div').hide();
-            loadTab(target)
+            let target = $(e.currentTarget).attr('href');
+            loadTab(target);
         });
+
+        function hideCurrentTab() {
+            $("#tab_btns a").removeClass("active");
+            let tabgroup = $("#tab_btns").data('tabgroup');
+            $("#" + tabgroup).children('div').hide();
+        }
 
         function partial(func /*, 0..n args */) {
             var args = Array.prototype.slice.call(arguments, 1);
