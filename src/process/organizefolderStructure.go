@@ -195,6 +195,12 @@ func OrganizeByFolders(baseFolder string,
 				if !exists && value != id {
 					break
 				}
+
+				// if it exists and has same id, break and the remove duplicate file should handle this one
+				if exists && value == id {
+					break
+				}
+
 				dlcNameTry++
 			}
 			existingDlcs[to] = id
