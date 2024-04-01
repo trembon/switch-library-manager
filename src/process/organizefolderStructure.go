@@ -334,9 +334,7 @@ func applyTemplate(templateData map[string]string, useSafeNames bool, template s
 	result = strings.ReplaceAll(result, "()", "")
 	result = strings.ReplaceAll(result, "<>", "")
 
-	if strings.HasSuffix(result, ".") {
-		result = result[:len(result)-1]
-	}
+	result = strings.TrimSuffix(result, ".")
 
 	if nameTry > 0 {
 		result = result + "(" + strconv.Itoa(nameTry) + ")"
@@ -348,7 +346,9 @@ func applyTemplate(templateData map[string]string, useSafeNames bool, template s
 		result = strings.Join(safe, "")
 	}
 
-	result = strings.ReplaceAll(result, "  ", " ")
+	space := regexp.MustCompile(`\s+`)
+	result = space.ReplaceAllString(result, " ")
+
 	result = strings.TrimSpace(result)
 	return folderIllegalCharsRegex.ReplaceAllString(result, "")
 }
