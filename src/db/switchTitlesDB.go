@@ -2,7 +2,9 @@ package db
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
+	"strconv"
 	"strings"
 )
 
@@ -53,9 +55,16 @@ func CreateSwitchTitleDB(titlesFile, versionsFile io.Reader) (*SwitchTitlesDB, e
 		//TitleAttributes id rules:
 		//main TitleAttributes ends with 000
 		//Updates ends with 800
-		//Dlc have a running counter (starting with 001) in the 4 last chars
-		idPrefix := id[0 : len(id)-4]
+		//Dlc adds 1 to 4th char starting from the right (always odd) and
+		//have a running counter (starting with 001) in the 3 last chars
 		switchTitle := &SwitchTitle{Dlc: map[string]TitleAttributes{}}
+		idPrefix := id[0 : len(id)-3]
+		if !(strings.HasSuffix(id, "000") || strings.HasSuffix(id, "800")) {
+			intVar, _ := strconv.ParseUint(id[len(id)-4:len(id)-3], 16, 64)
+			h := fmt.Sprintf("%x", intVar-1)
+			idPrefix = id[0:len(id)-4] + h
+		}
+
 		if t, ok := result.TitlesMap[idPrefix]; ok {
 			switchTitle = t
 		}

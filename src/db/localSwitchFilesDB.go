@@ -205,7 +205,13 @@ func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,
 
 		for _, metadata := range contentMap {
 
-			idPrefix := metadata.TitleId[0 : len(metadata.TitleId)-4]
+			id := metadata.TitleId
+			idPrefix := id[0 : len(id)-3]
+			if !(strings.HasSuffix(id, "000") || strings.HasSuffix(id, "800")) {
+				intVar, _ := strconv.ParseUint(id[len(id)-4:len(id)-3], 16, 64)
+				h := fmt.Sprintf("%x", intVar-1)
+				idPrefix = id[0:len(id)-4] + h
+			}
 
 			multiContent := len(contentMap) > 1
 			switchTitle := &SwitchGameFiles{
