@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	"github.com/boltdb/bolt"
-	"github.com/giwty/switch-library-manager/settings"
-	"go.uber.org/zap"
 	"log"
 	"path/filepath"
+
+	"github.com/boltdb/bolt"
+	"github.com/trembon/switch-library-manager/settings"
+	"go.uber.org/zap"
 )
 
 const (

@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/giwty/switch-library-manager/settings"
+	"github.com/trembon/switch-library-manager/settings"
 	"go.uber.org/zap"
 )
 

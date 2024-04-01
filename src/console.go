@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/giwty/switch-library-manager/db"
-	"github.com/giwty/switch-library-manager/process"
-	"github.com/giwty/switch-library-manager/settings"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/schollz/progressbar/v3"
+	"github.com/trembon/switch-library-manager/db"
+	"github.com/trembon/switch-library-manager/process"
+	"github.com/trembon/switch-library-manager/settings"
 	"go.uber.org/zap"
 )
 

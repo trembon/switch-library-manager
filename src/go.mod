@@ -1,4 +1,4 @@
-module github.com/giwty/switch-library-manager
+module github.com/trembon/switch-library-manager
 
 go 1.20
 

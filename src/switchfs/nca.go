@@ -7,9 +7,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/giwty/switch-library-manager/settings"
-	"github.com/giwty/switch-library-manager/switchfs/_crypto"
 	"io"
+
+	"github.com/trembon/switch-library-manager/settings"
+	"github.com/trembon/switch-library-manager/switchfs/_crypto"
 )
 
 const (

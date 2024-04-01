@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/giwty/switch-library-manager/fileio"
-	"github.com/giwty/switch-library-manager/settings"
-	"github.com/giwty/switch-library-manager/switchfs"
+	"github.com/trembon/switch-library-manager/fileio"
+	"github.com/trembon/switch-library-manager/settings"
+	"github.com/trembon/switch-library-manager/switchfs"
 	"go.uber.org/zap"
 )
 
