@@ -46,7 +46,16 @@ func main() {
 		appSettings.GUI = false
 	}
 
-	if appSettings.GUI {
+	useGUI := appSettings.GUI
+	if contains(os.Args, "--gui") {
+		useGUI = true
+	}
+	if contains(os.Args, "--console") {
+		useGUI = false
+	}
+	sugar.Infof("[Use GUI mode: %v]", useGUI)
+
+	if useGUI {
 		CreateGUI(workingFolder, sugar).Start()
 	} else {
 		CreateConsole(workingFolder, sugar).Start()
@@ -83,4 +92,13 @@ func createLogger(workingFolder string, debug bool) *zap.Logger {
 	}
 	zap.ReplaceGlobals(logger)
 	return logger
+}
+
+func contains(s []string, e string) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
 }
