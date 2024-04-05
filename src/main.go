@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/trembon/switch-library-manager/flags"
 	"github.com/trembon/switch-library-manager/settings"
 	"go.uber.org/zap"
 )
@@ -48,21 +49,25 @@ func main() {
 		appSettings.GUI = false
 	}
 
+	flags.Initialize()
+	flags.LogFlags(sugar)
+
+	consoleFlags := flags.GetValues()
 	useGUI := appSettings.GUI
-	if contains(os.Args, "--gui") {
-		useGUI = true
+	if consoleFlags.Mode.IsSet() {
+		mode := consoleFlags.Mode.String()
+		if mode == "console" {
+			useGUI = false
+		} else if mode == "gui" {
+			useGUI = true
+		}
 	}
-	if contains(os.Args, "--console") {
-		useGUI = false
-	}
-	sugar.Infof("[Use GUI mode: %v]", useGUI)
 
 	if useGUI {
 		CreateGUI(workingFolder, sugar).Start()
 	} else {
-		CreateConsole(workingFolder, sugar).Start()
+		CreateConsole(workingFolder, sugar, consoleFlags).Start()
 	}
-
 }
 
 func createLogger(workingFolder string, debug bool) *zap.Logger {
@@ -94,15 +99,6 @@ func createLogger(workingFolder string, debug bool) *zap.Logger {
 	}
 	zap.ReplaceGlobals(logger)
 	return logger
-}
-
-func contains(s []string, e string) bool {
-	for _, a := range s {
-		if a == e {
-			return true
-		}
-	}
-	return false
 }
 
 func fixWindowsConsole() {

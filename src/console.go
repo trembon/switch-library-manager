@@ -2,58 +2,38 @@ package main
 
 import (
 	"encoding/csv"
-	"flag"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/schollz/progressbar/v3"
 	"github.com/trembon/switch-library-manager/db"
+	"github.com/trembon/switch-library-manager/flags"
 	"github.com/trembon/switch-library-manager/process"
 	"github.com/trembon/switch-library-manager/settings"
 	"go.uber.org/zap"
 )
-
-const (
-	ATTACH_PARENT_PROCESS = ^uint32(0) // (DWORD)-1
-)
-
-var (
-	modkernel32       = syscall.NewLazyDLL("kernel32.dll")
-	procAttachConsole = modkernel32.NewProc("AttachConsole")
-)
-
-func AttachConsole(dwParentProcess uint32) (ok bool) {
-	r0, _, _ := syscall.SyscallN(procAttachConsole.Addr(), 1, uintptr(dwParentProcess), 0, 0)
-	ok = bool(r0 != 0)
-	return
-}
 
 var (
 	progressBar *progressbar.ProgressBar
 )
 
 type Console struct {
-	baseFolder  string
-	sugarLogger *zap.SugaredLogger
+	baseFolder   string
+	sugarLogger  *zap.SugaredLogger
+	consoleFlags *flags.ConsoleFlags
 }
 
-func CreateConsole(baseFolder string, sugarLogger *zap.SugaredLogger) *Console {
-	return &Console{baseFolder: baseFolder, sugarLogger: sugarLogger}
+func CreateConsole(baseFolder string, sugarLogger *zap.SugaredLogger, consoleFlags *flags.ConsoleFlags) *Console {
+	return &Console{baseFolder: baseFolder, sugarLogger: sugarLogger, consoleFlags: consoleFlags}
 }
 
 func (c *Console) Start() {
-	ok := AttachConsole(ATTACH_PARENT_PROCESS)
-	if ok {
-		fmt.Println("Okay, attached")
-	}
-
-	flagSet := flag.NewFlagSet("console", flag.ContinueOnError)
+	/*flagSet := flag.NewFlagSet("console", flag.ContinueOnError)
 
 	nspFolder := flagSet.String("f", "", "path to NSP folder")
 	recursive := flagSet.Bool("r", true, "recursively scan sub folders")
@@ -62,13 +42,13 @@ func (c *Console) Start() {
 	flagSet.Parse(os.Args[1:])
 	fmt.Println("1")
 
-	fmt.Println("2")
+	fmt.Println("2")*/
 
 	settingsObj := settings.ReadSettings(c.baseFolder)
 
 	fmt.Println("3")
-	csvOutput := *exportCsvFolder
-	fmt.Println("exportCsvFolder", *exportCsvFolder)
+	csvOutput := ""
+	//fmt.Println("exportCsvFolder", *exportCsvFolder)
 	/*if indexOf(os.Args, "--export-csv") >= 0 {
 		index := indexOf(os.Args, "--export-csv")
 		if len(os.Args) > index+1 && !strings.HasPrefix(os.Args[index+1], "--") {
@@ -123,8 +103,8 @@ func (c *Console) Start() {
 
 	//5. read local files
 	folderToScan := settingsObj.Folder
-	if nspFolder != nil && *nspFolder != "" {
-		folderToScan = *nspFolder
+	if c.consoleFlags.NspFolder.IsSet() && c.consoleFlags.NspFolder.String() != "" {
+		folderToScan = c.consoleFlags.NspFolder.String()
 	}
 
 	if folderToScan == "" {
@@ -139,8 +119,8 @@ func (c *Console) Start() {
 	}
 
 	recursiveMode := settingsObj.ScanRecursively
-	if recursive != nil && *recursive != true {
-		recursiveMode = *recursive
+	if c.consoleFlags.Recursive.IsSet() {
+		recursiveMode = c.consoleFlags.Recursive.Bool()
 	}
 
 	localDbManager, err := db.NewLocalSwitchDBManager(c.baseFolder)
