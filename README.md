@@ -72,7 +72,7 @@ The following template elements are supported:
 - {DLC_NAME} - DLC name (only applicable to DLCs)
 
 ## Usage
-##### Windows
+#### Windows
 - Extract the zip file
 - Double click the Exe file
 - If you want to use command line mode, update the settings.json with `'GUI':false`
@@ -83,7 +83,7 @@ The following template elements are supported:
     - Edit the settings.json file for additional options
 
  
-##### macOS or Linux
+#### macOS or Linux
 - Extract the zip file
 - Double click the App file
 - If you want to use command line mode, update the settings.json with `'GUI':false`
@@ -94,6 +94,17 @@ The following template elements are supported:
     - Optionally -f `X:\folder\containing\nsp\files"`
     - Optionally add  `-r` to recursively scan for nested folders
     - Edit the settings.json file for additional options
+
+
+#### Console parameters
+
+NOTE: parameters are only usable in console mode, exept the parameter -m (mode) which will override the gui true/false setting.
+
+|Name|Flag|Description|
+|---|---|---|
+|Mode|-m|   |
+|   |   |   |
+|   |   |   |
 
 ## Building
 - Install and setup Go
