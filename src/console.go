@@ -239,7 +239,7 @@ func (c *Console) processMissingDLC(localDB *db.LocalSwitchFilesDB, titlesDB *db
 		return
 	}
 
-	csv := CreateCsvFile(csvOutput, []string{"Title", "TitleId", "Missing DLCs (titleId - Name)"})
+	csv := CreateCsvFile(csvOutput, []string{"Title", "TitleId", "Dlc (titleId - Name)"})
 
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
@@ -247,7 +247,9 @@ func (c *Console) processMissingDLC(localDB *db.LocalSwitchFilesDB, titlesDB *db
 	t.AppendHeader(table.Row{"#", "Title", "TitleId", "Missing DLCs (titleId - Name)"})
 	i := 0
 	for _, v := range incompleteTitles {
-		csv.Write([]string{v.Attributes.Name, v.Attributes.Id, strings.Join(v.MissingDLC, "\n")})
+		for _, dlc := range v.MissingDLC {
+			csv.Write([]string{v.Attributes.Name, v.Attributes.Id, dlc})
+		}
 
 		t.AppendRow([]interface{}{i, v.Attributes.Name, v.Attributes.Id, strings.Join(v.MissingDLC, "\n")})
 		i++
