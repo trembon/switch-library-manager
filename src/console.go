@@ -35,25 +35,19 @@ func CreateConsole(baseFolder string, sugarLogger *zap.SugaredLogger, consoleFla
 func (c *Console) Start() {
 	settingsObj := settings.ReadSettings(c.baseFolder)
 
-	fmt.Println("setting up export csv")
+	// 0. prepare csv export folder
 	csvOutput := ""
 	if c.consoleFlags.ExportCsv.IsSet() {
-		csvOutputFolder := c.consoleFlags.ExportCsv.String()
-		if csvOutputFolder == "" {
-			csvOutput = filepath.Join(c.baseFolder, "csv")
-		} else {
-			csvOutput = csvOutputFolder
-		}
+		csvOutput = c.consoleFlags.ExportCsv.String()
 
 		if _, err := os.Stat(csvOutput); os.IsNotExist(err) {
 			err = os.Mkdir(csvOutput, os.ModePerm)
 			if err != nil {
-				fmt.Printf("Failed to create folder for csv output %v - %v\n", csvOutput, err)
-				zap.S().Errorf("Failed to create folder for csv output %v - %v\n", csvOutput, err)
+				fmt.Printf("Failed to create folder for csv export %v - %v\n", csvOutput, err)
+				zap.S().Errorf("Failed to create folder for csv export %v - %v\n", csvOutput, err)
 			}
 		}
 	}
-	fmt.Printf("export csv folder: %v\n", csvOutput)
 
 	//1. load the titles JSON object
 	fmt.Println("Downlading latest switch titles json file")
@@ -132,7 +126,11 @@ func (c *Console) Start() {
 
 	fmt.Printf("Local library completion status: %.2f%% (have %d titles, out of %d titles)\n", p, len(localDB.TitlesMap), len(titlesDB.TitlesMap))
 
-	c.processIssues(localDB)
+	issuesCsvFile := ""
+	if csvOutput != "" {
+		issuesCsvFile = filepath.Join(csvOutput, "issues.csv")
+	}
+	c.processIssues(localDB, issuesCsvFile)
 
 	if settingsObj.OrganizeOptions.DeleteOldUpdateFiles {
 		progressBar = progressbar.New(2000)
@@ -173,33 +171,33 @@ func (c *Console) Start() {
 	fmt.Printf("Completed")
 }
 
-func (c *Console) processIssues(localDB *db.LocalSwitchFilesDB) {
+func (c *Console) processIssues(localDB *db.LocalSwitchFilesDB, csvOutput string) {
 	if len(localDB.Skipped) != 0 {
 		fmt.Print("\nSkipped files:\n\n")
 	} else {
 		return
 	}
+
+	csv := CreateCsvFile(csvOutput, []string{"Skipped file", "Reason", "Reason_Code"})
+
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
 	t.SetStyle(table.StyleColoredBright)
 	t.AppendHeader(table.Row{"#", "Skipped file", "Reason"})
 	i := 0
 	for k, v := range localDB.Skipped {
+		csv.Write([]string{path.Join(k.BaseFolder, k.FileName), v.ReasonText, strconv.Itoa(v.ReasonCode)})
+
 		t.AppendRow([]interface{}{i, path.Join(k.BaseFolder, k.FileName), v})
 		i++
 	}
 	t.AppendFooter(table.Row{"", "", "", "", "Total", len(localDB.Skipped)})
 	t.Render()
+
+	csv.Close()
 }
 
 func (c *Console) processMissingUpdates(localDB *db.LocalSwitchFilesDB, titlesDB *db.SwitchTitlesDB, settingsObj *settings.AppSettings, csvOutput string) {
-	var csvWriter *csv.Writer = nil
-	var csvFile *os.File = nil
-	if csvOutput != "" {
-		csvFile, _ = os.Create(csvOutput)
-		csvWriter = csv.NewWriter(csvFile)
-	}
-
 	incompleteTitles := process.ScanForMissingUpdates(localDB.TitlesMap, titlesDB.TitlesMap, settingsObj.IgnoreDLCUpdates)
 	if len(incompleteTitles) != 0 {
 		fmt.Print("\nFound available updates:\n\n")
@@ -207,16 +205,16 @@ func (c *Console) processMissingUpdates(localDB *db.LocalSwitchFilesDB, titlesDB
 		fmt.Print("\nAll NSP's are up to date!\n\n")
 		return
 	}
+
+	csv := CreateCsvFile(csvOutput, []string{"Title", "TitleId", "Local version", "Latest Version", "Update Date"})
+
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
 	t.SetStyle(table.StyleColoredBright)
 	t.AppendHeader(table.Row{"#", "Title", "TitleId", "Local version", "Latest Version", "Update Date"})
 	i := 0
 	for _, v := range incompleteTitles {
-		if csvWriter != nil {
-			row := []string{v.Attributes.Name, v.Attributes.Id, strconv.Itoa(v.LocalUpdate), strconv.Itoa(v.LatestUpdate), v.LatestUpdateDate}
-			_ = csvWriter.Write(row)
-		}
+		csv.Write([]string{v.Attributes.Name, v.Attributes.Id, strconv.Itoa(v.LocalUpdate), strconv.Itoa(v.LatestUpdate), v.LatestUpdateDate})
 
 		t.AppendRow([]interface{}{i, v.Attributes.Name, v.Attributes.Id, v.LocalUpdate, v.LatestUpdate, v.LatestUpdateDate})
 		i++
@@ -224,20 +222,10 @@ func (c *Console) processMissingUpdates(localDB *db.LocalSwitchFilesDB, titlesDB
 	t.AppendFooter(table.Row{"", "", "", "", "Total", len(incompleteTitles)})
 	t.Render()
 
-	if csvOutput != "" {
-		csvWriter.Flush()
-		csvFile.Close()
-	}
+	csv.Close()
 }
 
 func (c *Console) processMissingDLC(localDB *db.LocalSwitchFilesDB, titlesDB *db.SwitchTitlesDB, csvOutput string) {
-	var csvWriter *csv.Writer = nil
-	var csvFile *os.File = nil
-	if csvOutput != "" {
-		csvFile, _ = os.Create(csvOutput)
-		csvWriter = csv.NewWriter(csvFile)
-	}
-
 	settingsObj := settings.ReadSettings(c.baseFolder)
 	ignoreIds := map[string]struct{}{}
 	for _, id := range settingsObj.IgnoreDLCTitleIds {
@@ -250,16 +238,16 @@ func (c *Console) processMissingDLC(localDB *db.LocalSwitchFilesDB, titlesDB *db
 		fmt.Print("\nYou have all the DLCS!\n\n")
 		return
 	}
+
+	csv := CreateCsvFile(csvOutput, []string{"Title", "TitleId", "Missing DLCs (titleId - Name)"})
+
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
 	t.SetStyle(table.StyleColoredBright)
 	t.AppendHeader(table.Row{"#", "Title", "TitleId", "Missing DLCs (titleId - Name)"})
 	i := 0
 	for _, v := range incompleteTitles {
-		if csvWriter != nil {
-			row := []string{v.Attributes.Name, v.Attributes.Id, strings.Join(v.MissingDLC, "\n")}
-			_ = csvWriter.Write(row)
-		}
+		csv.Write([]string{v.Attributes.Name, v.Attributes.Id, strings.Join(v.MissingDLC, "\n")})
 
 		t.AppendRow([]interface{}{i, v.Attributes.Name, v.Attributes.Id, strings.Join(v.MissingDLC, "\n")})
 		i++
@@ -267,10 +255,7 @@ func (c *Console) processMissingDLC(localDB *db.LocalSwitchFilesDB, titlesDB *db
 	t.AppendFooter(table.Row{"", "", "", "", "Total", len(incompleteTitles)})
 	t.Render()
 
-	if csvOutput != "" {
-		csvWriter.Flush()
-		csvFile.Close()
-	}
+	csv.Close()
 }
 
 func (c *Console) UpdateProgress(curr int, total int, message string) {
@@ -278,11 +263,34 @@ func (c *Console) UpdateProgress(curr int, total int, message string) {
 	progressBar.Set(curr)
 }
 
-func indexOf(s []string, e string) int {
-	for i, a := range s {
-		if a == e {
-			return i
-		}
+type CsvFile struct {
+	Writer *csv.Writer
+	File   *os.File
+}
+
+func CreateCsvFile(output string, header []string) *CsvFile {
+	if output != "" {
+		file, _ := os.Create(output)
+		writer := csv.NewWriter(file)
+
+		_ = writer.Write(header)
+
+		instance := &CsvFile{Writer: writer, File: file}
+		return instance
+	} else {
+		return nil
 	}
-	return -1
+}
+
+func (csv *CsvFile) Close() {
+	if csv != nil {
+		csv.Writer.Flush()
+		csv.File.Close()
+	}
+}
+
+func (csv *CsvFile) Write(row []string) {
+	if csv != nil {
+		_ = csv.Writer.Write(row)
+	}
 }
