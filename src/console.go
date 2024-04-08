@@ -33,28 +33,16 @@ func CreateConsole(baseFolder string, sugarLogger *zap.SugaredLogger, consoleFla
 }
 
 func (c *Console) Start() {
-	/*flagSet := flag.NewFlagSet("console", flag.ContinueOnError)
-
-	nspFolder := flagSet.String("f", "", "path to NSP folder")
-	recursive := flagSet.Bool("r", true, "recursively scan sub folders")
-	exportCsvFolder := flagSet.String("export", "", "path to NSP folder")
-
-	flagSet.Parse(os.Args[1:])
-	fmt.Println("1")
-
-	fmt.Println("2")*/
-
 	settingsObj := settings.ReadSettings(c.baseFolder)
 
-	fmt.Println("3")
+	fmt.Println("setting up export csv")
 	csvOutput := ""
-	//fmt.Println("exportCsvFolder", *exportCsvFolder)
-	/*if indexOf(os.Args, "--export-csv") >= 0 {
-		index := indexOf(os.Args, "--export-csv")
-		if len(os.Args) > index+1 && !strings.HasPrefix(os.Args[index+1], "--") {
-			csvOutput = os.Args[index+1]
-		} else {
+	if c.consoleFlags.ExportCsv.IsSet() {
+		csvOutputFolder := c.consoleFlags.ExportCsv.String()
+		if csvOutputFolder == "" {
 			csvOutput = filepath.Join(c.baseFolder, "csv")
+		} else {
+			csvOutput = csvOutputFolder
 		}
 
 		if _, err := os.Stat(csvOutput); os.IsNotExist(err) {
@@ -64,11 +52,11 @@ func (c *Console) Start() {
 				zap.S().Errorf("Failed to create folder for csv output %v - %v\n", csvOutput, err)
 			}
 		}
-	}*/
-	fmt.Println("4")
+	}
+	fmt.Printf("export csv folder: %v\n", csvOutput)
 
 	//1. load the titles JSON object
-	fmt.Printf("Downlading latest switch titles json file")
+	fmt.Println("Downlading latest switch titles json file")
 	progressBar = progressbar.New(2)
 
 	filename := filepath.Join(c.baseFolder, settings.TITLE_JSON_FILENAME)
