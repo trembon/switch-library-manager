@@ -88,9 +88,6 @@ The following template elements are supported:
 - If you want to use command line mode, update the settings.json with `'GUI':false`
   - Open `cmd`
   - Run `switch-library-manager.exe`
-  - Optionally -f `X:\folder\containing\nsp\files"`
-  - Optionally add  `-r` to recursively scan for nested folders
-  - Edit the settings.json file for additional options
 
 ### macOS or Linux
 
@@ -101,13 +98,10 @@ The following template elements are supported:
   - `cd` to the folder containing `switch-library-manager`
   - `chmod +x switch-library-manager` to make it executable
   - Run `./switch-library-manager'
-  - Optionally -f `X:\folder\containing\nsp\files"`
-  - Optionally add  `-r` to recursively scan for nested folders
-  - Edit the settings.json file for additional options
 
 ### Console parameters
 
-NOTE: parameters are only usable in console mode, exept the parameter -m (mode) which will override the gui setting.
+NOTE: parameters are only usable in command line mode, exept the parameter -m (mode) which will override the gui setting.
 
 |Name|Flag|Value|Description|
 |---|---|---|---|
