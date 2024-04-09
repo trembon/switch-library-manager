@@ -17,13 +17,13 @@ var (
 )
 
 const (
-	SETTINGS_FILENAME      = "settings.json"
-	TITLE_JSON_FILENAME    = "titles.json"
-	VERSIONS_JSON_FILENAME = "versions.json"
-	SLM_VERSION            = "1.5.0"
-	TITLES_JSON_URL        = "https://tinfoil.media/repo/db/titles.json"
-	VERSIONS_JSON_URL      = "https://raw.githubusercontent.com/blawar/titledb/master/versions.json"
-	SLM_VERSION_URL        = "https://raw.githubusercontent.com/trembon/switch-library-manager/master/version.json"
+	SETTINGS_FILENAME         = "settings.json"
+	TITLE_JSON_FILENAME       = "titles.json"
+	VERSIONS_JSON_FILENAME    = "versions.json"
+	SLM_VERSION               = "1.5.0"
+	DEFAULT_TITLES_JSON_URL   = "https://tinfoil.media/repo/db/titles.json"
+	DEFAULT_VERSIONS_JSON_URL = "https://raw.githubusercontent.com/blawar/titledb/master/versions.json"
+	SLM_VERSION_URL           = "https://raw.githubusercontent.com/trembon/switch-library-manager/master/version.json"
 )
 
 const (
@@ -47,7 +47,9 @@ type OrganizeOptions struct {
 }
 
 type AppSettings struct {
+	VersionsJsonUrl        string          `json:"versions_json_url"`
 	VersionsEtag           string          `json:"versions_etag"`
+	TitlesJsonUrl          string          `json:"titles_json_url"`
 	TitlesEtag             string          `json:"titles_etag"`
 	Prodkeys               string          `json:"prod_keys"`
 	Folder                 string          `json:"folder"`
@@ -95,7 +97,9 @@ func ReadSettings(baseFolder string) *AppSettings {
 
 func saveDefaultSettings(baseFolder string) *AppSettings {
 	settingsInstance = &AppSettings{
+		TitlesJsonUrl:          DEFAULT_TITLES_JSON_URL,
 		TitlesEtag:             "W/\"a5b02845cf6bd61:0\"",
+		VersionsJsonUrl:        DEFAULT_VERSIONS_JSON_URL,
 		VersionsEtag:           "W/\"2ef50d1cb6bd61:0\"",
 		Folder:                 "",
 		ScanFolders:            []string{},

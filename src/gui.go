@@ -380,7 +380,7 @@ func (g *GUI) buildSwitchDb() (*db.SwitchTitlesDB, error) {
 	//1. load the titles JSON object
 	g.UpdateProgress(1, 4, "Downloading titles.json")
 	filename := filepath.Join(g.baseFolder, settings.TITLE_JSON_FILENAME)
-	titleFile, titlesEtag, err := db.LoadAndUpdateFile(settings.TITLES_JSON_URL, filename, settingsObj.TitlesEtag)
+	titleFile, titlesEtag, err := db.LoadAndUpdateFile(settingsObj.TitlesJsonUrl, filename, settingsObj.TitlesEtag)
 	if err != nil {
 		return nil, errors.New("failed to download switch titles [reason:" + err.Error() + "]")
 	}
@@ -388,7 +388,7 @@ func (g *GUI) buildSwitchDb() (*db.SwitchTitlesDB, error) {
 
 	g.UpdateProgress(2, 4, "Downloading versions.json")
 	filename = filepath.Join(g.baseFolder, settings.VERSIONS_JSON_FILENAME)
-	versionsFile, versionsEtag, err := db.LoadAndUpdateFile(settings.VERSIONS_JSON_URL, filename, settingsObj.VersionsEtag)
+	versionsFile, versionsEtag, err := db.LoadAndUpdateFile(settingsObj.VersionsJsonUrl, filename, settingsObj.VersionsEtag)
 	if err != nil {
 		return nil, errors.New("failed to download switch updates [reason:" + err.Error() + "]")
 	}

@@ -54,7 +54,7 @@ func (c *Console) Start() {
 	progressBar = progressbar.New(2)
 
 	filename := filepath.Join(c.baseFolder, settings.TITLE_JSON_FILENAME)
-	titleFile, titlesEtag, err := db.LoadAndUpdateFile(settings.TITLES_JSON_URL, filename, settingsObj.TitlesEtag)
+	titleFile, titlesEtag, err := db.LoadAndUpdateFile(settingsObj.TitlesJsonUrl, filename, settingsObj.TitlesEtag)
 	if err != nil {
 		fmt.Printf("title json file doesn't exist\n")
 		return
@@ -63,7 +63,7 @@ func (c *Console) Start() {
 	progressBar.Add(1)
 	//2. load the versions JSON object
 	filename = filepath.Join(c.baseFolder, settings.VERSIONS_JSON_FILENAME)
-	versionsFile, versionsEtag, err := db.LoadAndUpdateFile(settings.VERSIONS_JSON_URL, filename, settingsObj.VersionsEtag)
+	versionsFile, versionsEtag, err := db.LoadAndUpdateFile(settingsObj.VersionsJsonUrl, filename, settingsObj.VersionsEtag)
 	if err != nil {
 		fmt.Printf("version json file doesn't exist\n")
 		return
