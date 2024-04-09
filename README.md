@@ -7,13 +7,13 @@ Easily manage your switch game backups
 ![Image description](https://raw.githubusercontent.com/trembon/switch-library-manager/master/.github/readme/updates_ui.png)
 
 ![Image description](https://raw.githubusercontent.com/trembon/switch-library-manager/master/.github/readme/dlc_ui.png)
- 
+
 ![Image description](https://raw.githubusercontent.com/trembon/switch-library-manager/master/.github/readme/cmd.png)
 
 ## Features
 
 - Cross platform, works on Windows / Mac / Linux
-- GUI and command line interfaces 
+- GUI and command line interfaces
 - Scan your local switch backup library (NSP/NSZ/XCI)
 - Read titleId/version by decrypting NSP/XCI/NSZ (requires prod.keys)
 - If no prod.keys present, fallback to read titleId/version by parsing file name  (example: `Super Mario Odyssey [0100000000010000][v0].nsp`).
@@ -23,7 +23,7 @@ Easily manage your switch game backups
 - Rename files based on metadata read from NSP
 - Delete old update files (in case you have multiple update files for the same game, only the latest will remain)
 - Delete empty folders
-- Zero dependencies, all crypto operations implemented in Go.
+- Zero dependencies, all crypto operations implemented in Go
 
 ## Keys (optional)
 
@@ -41,7 +41,9 @@ You can customize the folder/file re-naming, as well as turn on/off features.
 
 ```json
 {
+ "versions_json_url": "https://raw.githubusercontent.com/blawar/titledb/master/versions.json",
  "versions_etag": "W/\"c3f5ecb3392d61:0\"",
+ "titles_json_url": "https://tinfoil.media/repo/db/titles.json",
  "titles_etag": "W/\"4a4fcc163a92d61:0\"",
  "prod_keys": "",
  "folder": "",
