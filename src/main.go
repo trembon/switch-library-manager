@@ -14,8 +14,6 @@ import (
 )
 
 func main() {
-	console.FixConsoleOutput()
-
 	exePath, err := os.Executable()
 	if err != nil {
 		fmt.Println("failed to get executable directory, please ensure app has sufficient permissions. aborting")
@@ -65,6 +63,7 @@ func main() {
 	if useGUI {
 		CreateGUI(workingFolder, sugar).Start()
 	} else {
+		console.FixConsoleOutput()
 		CreateConsole(workingFolder, sugar, consoleFlags).Start()
 	}
 }
