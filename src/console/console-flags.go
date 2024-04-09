@@ -1,4 +1,4 @@
-package flags
+package console
 
 import (
 	"flag"
@@ -40,7 +40,7 @@ var nspFolder string
 var recursive bool
 var exportCsv string
 
-func Initialize() {
+func InitializeFlags() {
 	if flag.Parsed() {
 		return
 	}
@@ -48,7 +48,7 @@ func Initialize() {
 	flag.StringVar(&mode, "m", "", "console or gui, overrides the gui flag in settings.json")
 	flag.StringVar(&nspFolder, "f", "", "path to NSP folder")
 	flag.BoolVar(&recursive, "r", true, "recursively scan sub folders")
-	flag.StringVar(&exportCsv, "e", "", "if exists, output missing updates, dlcs and issues as csv")
+	flag.StringVar(&exportCsv, "e", "", "output missing updates, dlcs and issues as csv")
 
 	flag.Parse()
 }
@@ -57,12 +57,12 @@ var (
 	consoleFlagsInstance *ConsoleFlags
 )
 
-func GetValues() *ConsoleFlags {
+func GetFlagsValues() *ConsoleFlags {
 	if consoleFlagsInstance != nil {
 		return consoleFlagsInstance
 	}
 	if !flag.Parsed() {
-		Initialize()
+		InitializeFlags()
 	}
 
 	flagset := make(map[string]bool)
@@ -99,7 +99,7 @@ func GetValues() *ConsoleFlags {
 }
 
 func LogFlags(sugar *zap.SugaredLogger) {
-	values := GetValues()
+	values := GetFlagsValues()
 
 	logFlag(sugar, "m", values.Mode)
 	logFlag(sugar, "f", values.NspFolder)

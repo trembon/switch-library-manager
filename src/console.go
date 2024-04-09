@@ -11,8 +11,8 @@ import (
 
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/schollz/progressbar/v3"
+	"github.com/trembon/switch-library-manager/console"
 	"github.com/trembon/switch-library-manager/db"
-	"github.com/trembon/switch-library-manager/flags"
 	"github.com/trembon/switch-library-manager/process"
 	"github.com/trembon/switch-library-manager/settings"
 	"go.uber.org/zap"
@@ -25,10 +25,10 @@ var (
 type Console struct {
 	baseFolder   string
 	sugarLogger  *zap.SugaredLogger
-	consoleFlags *flags.ConsoleFlags
+	consoleFlags *console.ConsoleFlags
 }
 
-func CreateConsole(baseFolder string, sugarLogger *zap.SugaredLogger, consoleFlags *flags.ConsoleFlags) *Console {
+func CreateConsole(baseFolder string, sugarLogger *zap.SugaredLogger, consoleFlags *console.ConsoleFlags) *Console {
 	return &Console{baseFolder: baseFolder, sugarLogger: sugarLogger, consoleFlags: consoleFlags}
 }
 
