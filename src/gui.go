@@ -304,7 +304,7 @@ func (g *GUI) handleMessage(m *astilectron.EventMessage) interface{} {
 		newUpdate, err := settings.CheckForUpdates()
 		if err != nil {
 			g.sugarLogger.Error(err)
-			if !strings.Contains(err.Error(), "dial tcp: lookup raw.githubusercontent.com: no such host") {
+			if !strings.Contains(err.Error(), "dial tcp") {
 				g.state.window.SendMessage(Message{Name: "error", Payload: err.Error()}, func(m *astilectron.EventMessage) {})
 			}
 		}
