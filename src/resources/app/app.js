@@ -196,7 +196,7 @@ $(function () {
                             {title: "Title id", headerSort:false, field: "Attributes.id", hozAlign: "right", sorter: "number"},
                             {title: "Local version", headerSort:false, field: "local_update", hozAlign: "right", sorter: "number"},
                             {title: "Available version", headerSort:false, field: "latest_update", hozAlign: "right"},
-                            {title: "Update date", headerSort:true, field: "latest_update_date",sorter:"date", sorterParams:{format:"YY-MM-DD"}}
+                            {title: "Update date", headerSort:true, field: "latest_update_date",sorter:"date", sorterParams:{format:"YYYY-MM-DD"}}
                         ],
                     });
                 }
