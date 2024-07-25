@@ -33,8 +33,8 @@ func InitSwitchKeys(baseFolder string) (*switchKeys, error) {
 	}
 	settings := ReadSettings(baseFolder)
 	if err != nil {
-		path := settings.Prodkeys
-		if path != "" {
+		if settings.Prodkeys != "" {
+			path = settings.Prodkeys
 			p, err = properties.LoadFile(filepath.Join(path, "prod.keys"), properties.UTF8)
 		}
 	}
