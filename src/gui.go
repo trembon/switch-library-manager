@@ -92,6 +92,7 @@ func (g *GUI) Start() {
 
 	g.localDbManager = localDbManager
 	defer localDbManager.Close()
+
 	// Run bootstrap
 	if err := bootstrap.Run(bootstrap.Options{
 		Asset:    Asset,
@@ -102,8 +103,6 @@ func (g *GUI) Start() {
 			AppIconDarwinPath:  "resources/icon.icns",
 			AppIconDefaultPath: "resources/icon.png",
 			SingleInstance:     true,
-			//VersionAstilectron: VersionAstilectron,
-			//VersionElectron:    VersionElectron,
 		},
 		Debug:         false,
 		Logger:        log.New(log.Writer(), log.Prefix(), log.Flags()),
@@ -113,9 +112,9 @@ func (g *GUI) Start() {
 			Adapter: func(w *astilectron.Window) {
 				g.state.window = w
 				g.state.window.OnMessage(g.handleMessage)
-				//g.state.window.OpenDevTools()
 			},
 			Options: &astilectron.WindowOptions{
+				AlwaysOnTop:     astikit.BoolPtr(true),
 				BackgroundColor: astikit.StrPtr("#333"),
 				Center:          astikit.BoolPtr(true),
 				Height:          astikit.IntPtr(600),
@@ -200,6 +199,8 @@ func (g *GUI) handleMessage(m *astilectron.EventMessage) interface{} {
 		retValue = strconv.FormatBool(keys != nil && keys.GetKey("header_key") != "")
 	case "loadSettings":
 		retValue = g.loadSettings()
+
+		g.state.window.SetAlwaysOnTop(false)
 	case "saveSettings":
 		err = g.saveSettings(msg.Payload)
 		if err != nil {
