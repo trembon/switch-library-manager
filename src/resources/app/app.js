@@ -331,7 +331,7 @@ $(function () {
                             {field: "name",title: "Title",  headerFilter:"input",formatter:"textarea",width:350},
                             {title: "Title id", headerSort:false, field: "titleId"},
                             {title: "Region", headerSort:true,headerFilter:"input",formatter:"textarea", field: "region"},
-                            {title: "Release date", headerSort:true, field: "release_date"},
+                            {title: "Release date", headerSort:true, field: "release_date", sorter:"date", sorterParams:{format:"YYYY-MM-DD"}},
                         ],
                     });
                 }

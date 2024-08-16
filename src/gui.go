@@ -36,7 +36,7 @@ type SwitchTitle struct {
 	TitleId     string `json:"titleId"`
 	Icon        string `json:"icon"`
 	Region      string `json:"region"`
-	ReleaseDate int    `json:"release_date"`
+	ReleaseDate string `json:"release_date"`
 }
 
 type LibraryTemplateData struct {
@@ -455,7 +455,7 @@ func (g *GUI) getMissingGames() []SwitchTitle {
 			Name:        v.Attributes.Name,
 			Icon:        v.Attributes.BannerUrl,
 			Region:      v.Attributes.Region,
-			ReleaseDate: v.Attributes.ReleaseDate,
+			ReleaseDate: v.Attributes.ParsedReleaseDate,
 		})
 	}
 	return result

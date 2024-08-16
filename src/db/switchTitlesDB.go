@@ -9,17 +9,18 @@ import (
 )
 
 type TitleAttributes struct {
-	Id          string      `json:"id"`
-	Name        string      `json:"name,omitempty"`
-	Version     json.Number `json:"version,omitempty"`
-	Region      string      `json:"region,omitempty"`
-	ReleaseDate int         `json:"releaseDate,omitempty"`
-	Publisher   string      `json:"publisher,omitempty"`
-	IconUrl     string      `json:"iconUrl,omitempty"`
-	Screenshots []string    `json:"screenshots,omitempty"`
-	BannerUrl   string      `json:"bannerUrl,omitempty"`
-	Description string      `json:"description,omitempty"`
-	Size        int         `json:"size,omitempty"`
+	Id                string      `json:"id"`
+	Name              string      `json:"name,omitempty"`
+	Version           json.Number `json:"version,omitempty"`
+	Region            string      `json:"region,omitempty"`
+	ReleaseDate       int         `json:"releaseDate,omitempty"`
+	ParsedReleaseDate string
+	Publisher         string   `json:"publisher,omitempty"`
+	IconUrl           string   `json:"iconUrl,omitempty"`
+	Screenshots       []string `json:"screenshots,omitempty"`
+	BannerUrl         string   `json:"bannerUrl,omitempty"`
+	Description       string   `json:"description,omitempty"`
+	Size              int      `json:"size,omitempty"`
 }
 
 type SwitchTitle struct {
@@ -69,6 +70,14 @@ func CreateSwitchTitleDB(titlesFile, versionsFile io.Reader) (*SwitchTitlesDB, e
 			switchTitle = t
 		}
 		result.TitlesMap[idPrefix] = switchTitle
+
+		// parse the release date to a date string
+		prd := strconv.Itoa(attr.ReleaseDate)
+		if len(prd) == 8 {
+			attr.ParsedReleaseDate = prd[0:4] + "-" + prd[4:6] + "-" + prd[6:8]
+		} else {
+			attr.ParsedReleaseDate = prd
+		}
 
 		//process Updates
 		if strings.HasSuffix(id, "800") {
