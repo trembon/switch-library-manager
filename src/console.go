@@ -198,7 +198,12 @@ func (c *Console) processIssues(localDB *db.LocalSwitchFilesDB, csvOutput string
 }
 
 func (c *Console) processMissingUpdates(localDB *db.LocalSwitchFilesDB, titlesDB *db.SwitchTitlesDB, settingsObj *settings.AppSettings, csvOutput string) {
-	incompleteTitles := process.ScanForMissingUpdates(localDB.TitlesMap, titlesDB.TitlesMap, settingsObj.IgnoreDLCUpdates)
+	ignoreIds := map[string]struct{}{}
+	for _, id := range settingsObj.IgnoreUpdateTitleIds {
+		ignoreIds[strings.ToLower(id)] = struct{}{}
+	}
+
+	incompleteTitles := process.ScanForMissingUpdates(localDB.TitlesMap, titlesDB.TitlesMap, ignoreIds, settingsObj.IgnoreDLCUpdates)
 	if len(incompleteTitles) != 0 {
 		fmt.Print("\nFound available updates:\n\n")
 	} else {

@@ -361,7 +361,11 @@ func (g *GUI) getMissingDLC() string {
 
 func (g *GUI) getMissingUpdates() string {
 	settingsObj := settings.ReadSettings(g.baseFolder)
-	missingUpdates := process.ScanForMissingUpdates(g.state.localDB.TitlesMap, g.state.switchDB.TitlesMap, settingsObj.IgnoreDLCUpdates)
+	ignoreIds := map[string]struct{}{}
+	for _, id := range settingsObj.IgnoreUpdateTitleIds {
+		ignoreIds[strings.ToLower(id)] = struct{}{}
+	}
+	missingUpdates := process.ScanForMissingUpdates(g.state.localDB.TitlesMap, g.state.switchDB.TitlesMap, ignoreIds, settingsObj.IgnoreDLCUpdates)
 	values := make([]process.IncompleteTitle, len(missingUpdates))
 	i := 0
 	for _, missingUpdate := range missingUpdates {

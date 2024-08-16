@@ -64,6 +64,7 @@ type AppSettings struct {
 	GuiPagingSize          int             `json:"gui_page_size"`
 	IgnoreDLCUpdates       bool            `json:"ignore_dlc_updates"`
 	IgnoreDLCTitleIds      []string        `json:"ignore_dlc_title_ids"`
+	IgnoreUpdateTitleIds   []string        `json:"ignore_update_title_ids"`
 }
 
 func ReadSettingsAsJSON(baseFolder string) string {
@@ -126,6 +127,7 @@ func saveDefaultSettings(baseFolder string) *AppSettings {
 		VersionsEtag:           "W/\"2ef50d1cb6bd61:0\"",
 		Folder:                 "",
 		ScanFolders:            []string{},
+		IgnoreUpdateTitleIds:   []string{},
 		IgnoreDLCTitleIds:      []string{},
 		IgnoreDLCUpdates:       false,
 		GUI:                    true,

@@ -20,7 +20,9 @@ type IncompleteTitle struct {
 }
 
 func ScanForMissingUpdates(localDB map[string]*db.SwitchGameFiles,
-	switchDB map[string]*db.SwitchTitle, ignoreDLCupdates bool) map[string]IncompleteTitle {
+	switchDB map[string]*db.SwitchTitle,
+	ignoreTitleIds map[string]struct{},
+	ignoreDLCupdates bool) map[string]IncompleteTitle {
 
 	result := map[string]IncompleteTitle{}
 
@@ -33,6 +35,10 @@ func ScanForMissingUpdates(localDB map[string]*db.SwitchGameFiles,
 		}
 
 		if _, ok := switchDB[idPrefix]; !ok {
+			continue
+		}
+
+		if _, ok := ignoreTitleIds[switchFile.File.Metadata.TitleId]; ok {
 			continue
 		}
 
@@ -87,6 +93,11 @@ func ScanForMissingUpdates(localDB map[string]*db.SwitchGameFiles,
 					if localDlc.Metadata == nil {
 						continue
 					}
+
+					if _, ok := ignoreTitleIds[localDlc.Metadata.TitleId]; ok {
+						continue
+					}
+
 					if localDlc.Metadata.Version < int(latestDlcVersion) {
 						updateDate := "-"
 						if availableDlc.ReleaseDate != 0 {
