@@ -3,7 +3,7 @@ package settings
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -71,7 +71,7 @@ func ReadSettingsAsJSON(baseFolder string) string {
 		saveDefaultSettings(baseFolder)
 	}
 	file, _ := os.Open(filepath.Join(baseFolder, SETTINGS_FILENAME))
-	bytes, _ := ioutil.ReadAll(file)
+	bytes, _ := io.ReadAll(file)
 	return string(bytes)
 }
 
@@ -88,11 +88,34 @@ func ReadSettings(baseFolder string) *AppSettings {
 			return saveDefaultSettings(baseFolder)
 		} else {
 			_ = json.NewDecoder(file).Decode(&settingsInstance)
+			settingsInstance = verifySettings(baseFolder, settingsInstance)
 			return settingsInstance
 		}
 	} else {
 		return saveDefaultSettings(baseFolder)
 	}
+}
+
+func verifySettings(baseFolder string, settings *AppSettings) *AppSettings {
+	// check so titles json url is set, if not revert to default
+	if settings.TitlesJsonUrl == "" {
+		settings.TitlesJsonUrl = DEFAULT_TITLES_JSON_URL
+	}
+	// check so version json url is set, if not revert to default
+	if settings.VersionsJsonUrl == "" {
+		settings.VersionsJsonUrl = DEFAULT_VERSIONS_JSON_URL
+	}
+
+	// check to the title json file exists, if it does not, revert ETAG
+	if _, err := os.Stat(filepath.Join(baseFolder, TITLE_JSON_FILENAME)); err != nil {
+		settings.TitlesEtag = "W/\"a5b02845cf6bd61:0\""
+	}
+	// check to the version json file exists, if it does not, revert ETAG
+	if _, err := os.Stat(filepath.Join(baseFolder, VERSIONS_JSON_FILENAME)); err != nil {
+		settings.VersionsEtag = "W/\"2ef50d1cb6bd61:0\""
+	}
+
+	return settings
 }
 
 func saveDefaultSettings(baseFolder string) *AppSettings {
@@ -128,7 +151,7 @@ func saveDefaultSettings(baseFolder string) *AppSettings {
 
 func SaveSettings(settings *AppSettings, baseFolder string) *AppSettings {
 	file, _ := json.MarshalIndent(settings, "", " ")
-	_ = ioutil.WriteFile(filepath.Join(baseFolder, SETTINGS_FILENAME), file, 0644)
+	_ = os.WriteFile(filepath.Join(baseFolder, SETTINGS_FILENAME), file, 0644)
 	settingsInstance = settings
 	return settings
 }
@@ -143,7 +166,7 @@ func CheckForUpdates() (bool, error) {
 	}
 	defer res.Body.Close()
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return false, err
 	}
