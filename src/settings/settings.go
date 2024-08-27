@@ -126,6 +126,7 @@ func saveDefaultSettings(baseFolder string) *AppSettings {
 		VersionsJsonUrl:        DEFAULT_VERSIONS_JSON_URL,
 		VersionsEtag:           "W/\"2ef50d1cb6bd61:0\"",
 		Folder:                 "",
+		Prodkeys: 				"",
 		ScanFolders:            []string{},
 		IgnoreUpdateTitleIds:   []string{},
 		IgnoreDLCTitleIds:      []string{},
