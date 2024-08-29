@@ -21,6 +21,7 @@ type TitleAttributes struct {
 	BannerUrl         string   `json:"bannerUrl,omitempty"`
 	Description       string   `json:"description,omitempty"`
 	Size              int      `json:"size,omitempty"`
+	IsDemo            bool     `json:"isDemo,omitempty"`
 }
 
 type SwitchTitle struct {

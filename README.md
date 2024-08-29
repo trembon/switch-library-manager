@@ -16,7 +16,7 @@ Easily manage your switch game backups
 - GUI and command line interfaces
 - Scan your local switch backup library (NSP/NSZ/XCI)
 - Read titleId/version by decrypting NSP/XCI/NSZ (requires prod.keys)
-- If no prod.keys present, fallback to read titleId/version by parsing file name  (example: `Super Mario Odyssey [0100000000010000][v0].nsp`).
+- If no prod.keys present, fallback to read titleId/version by parsing file name (example: `Super Mario Odyssey [0100000000010000][v0].nsp`).
 - Lists missing update files (for games and DLC)
 - Lists missing DLCs
 - Automatically organize games per folder
@@ -33,7 +33,7 @@ You can also specify a custom location in the settings.json (see below)
 
 Note: Only the header_key, and the key_area_key_application_XX keys are required.
 
-## Settings  
+## Settings
 
 During the App first launch a "settings.json" file will be created, that allows for granular control over the Apps execution.
 
@@ -52,7 +52,8 @@ You can customize the folder/file re-naming, as well as turn on/off features, an
  "debug": false, # Deprecated, no longer works
  "check_for_missing_updates": true,
  "check_for_missing_dlc": true,
- "hide_missing_games": false,
+ "hide_missing_games": false, # hides the missing games tab
+ "hide_demo_games": false, # hide demo games from the list on the missing games tab
  "organize_options": {
   "create_folder_per_game": false,
   "rename_files": false,
@@ -63,9 +64,9 @@ You can customize the folder/file re-naming, as well as turn on/off features, an
   "file_name_template": "{TITLE_NAME} ({DLC_NAME})[{TITLE_ID}][v{VERSION}]"
  },
  "scan_recursively": true,
- "gui_page_size": 100
+ "gui_page_size": 100,
  "ignore_dlc_updates": false,
- "ignore_dlc_title_ids": [] # Enter as a list of string, e.g. ["1234567890ABCDEF". "1234567890ABCDEE", "1234567890ABCDFF"]
+ "ignore_dlc_title_ids": [], # Enter as a list of string, e.g. ["1234567890ABCDEF". "1234567890ABCDEE", "1234567890ABCDFF"]
  "ignore_update_title_ids": [] # Enter as a list of string, e.g. ["1234567890ABCDEF". "1234567890ABCDEE", "1234567890ABCDFF"]
 }
 ```
@@ -106,12 +107,12 @@ The following template elements are supported:
 
 NOTE: parameters are only usable in command line mode, exept the parameter -m (mode) which will override the gui setting.
 
-|Name|Flag|Value|Description|
-|---|---|---|---|
-|Mode|-m|console/gui|Which mode to start the application in, overrides **gui** in settings.json|
-|NSP Folder|-|*path*|Path to the NSP folder, overrides **folder** in settings.json|
-|Recursive scan|-r|true/false|If recursive scan should be used for the NSP folder, overrides **scan_recursively** in settings.json|
-|Export CSV|-e|*path*|Which folder to output missing_updates, missing_dlcs and issues in CSV format|
+| Name           | Flag | Value       | Description                                                                                          |
+| -------------- | ---- | ----------- | ---------------------------------------------------------------------------------------------------- |
+| Mode           | -m   | console/gui | Which mode to start the application in, overrides **gui** in settings.json                           |
+| NSP Folder     | -    | _path_      | Path to the NSP folder, overrides **folder** in settings.json                                        |
+| Recursive scan | -r   | true/false  | If recursive scan should be used for the NSP folder, overrides **scan_recursively** in settings.json |
+| Export CSV     | -e   | _path_      | Which folder to output missing_updates, missing_dlcs and issues in CSV format                        |
 
 ## Building
 

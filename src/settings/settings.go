@@ -59,6 +59,7 @@ type AppSettings struct {
 	CheckForMissingUpdates bool            `json:"check_for_missing_updates"`
 	CheckForMissingDLC     bool            `json:"check_for_missing_dlc"`
 	HideMissingGames       bool            `json:"hide_missing_games"`
+	HideDemoGames		   bool	           `json:"hide_demo_games"`
 	OrganizeOptions        OrganizeOptions `json:"organize_options"`
 	ScanRecursively        bool            `json:"scan_recursively"`
 	GuiPagingSize          int             `json:"gui_page_size"`
@@ -136,6 +137,7 @@ func saveDefaultSettings(baseFolder string) *AppSettings {
 		CheckForMissingUpdates: true,
 		CheckForMissingDLC:     true,
 		HideMissingGames:       false,
+		HideDemoGames:          false,
 		ScanRecursively:        true,
 		Debug:                  false,
 		OrganizeOptions: OrganizeOptions{
