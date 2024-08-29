@@ -61,7 +61,8 @@ You can customize the folder/file re-naming, as well as turn on/off features, an
   "delete_old_update_files": false,
   "folder_name_template": "{TITLE_NAME}",
   "switch_safe_file_names": true,
-  "file_name_template": "{TITLE_NAME} ({DLC_NAME})[{TITLE_ID}][v{VERSION}]"
+  "file_name_template": "{TITLE_NAME} ({DLC_NAME})[{TITLE_ID}][v{VERSION}]",
+  "process_when_missing_base_game": false # if you want to organize updates and dlcs without having the base game present
  },
  "scan_recursively": true,
  "gui_page_size": 100,

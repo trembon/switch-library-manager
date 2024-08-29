@@ -62,38 +62,36 @@ func OrganizeByFolders(baseFolder string,
 	updateProgress db.ProgressUpdater) {
 
 	//validate template rules
-
+	logger := zap.S()
 	options := settings.ReadSettings(baseFolder).OrganizeOptions
 	if !IsOptionsValid(options) {
-		zap.S().Error("the organize options in settings.json are not valid, please check that the template contains file/folder name")
+		logger.Error("the organize options in settings.json are not valid, please check that the template contains file/folder name")
 		return
 	}
 	i := 0
 	tasksSize := len(localDB.TitlesMap) + 2
 	for k, v := range localDB.TitlesMap {
 		i++
-		if !v.BaseExist {
+		if !v.BaseExist && !options.ProcessWhenMissingBaseGame {
 			continue
 		}
 
 		if updateProgress != nil {
-			updateProgress.UpdateProgress(i, tasksSize, v.File.ExtendedInfo.FileName)
+			updateProgress.UpdateProgress(i, tasksSize, k)
 		}
 
-		titleName := getTitleName(titlesDB.TitlesMap[k], v)
+		title := titlesDB.TitlesMap[k]
+		titleName := getTitleName(title, v)
 
 		templateData := map[string]string{}
 
-		templateData[settings.TEMPLATE_TITLE_ID] = v.File.Metadata.TitleId
-		//templateData[settings.TEMPLATE_TYPE] = "BASE"
+		templateData[settings.TEMPLATE_TITLE_ID] = title.Attributes.Id
 		templateData[settings.TEMPLATE_TITLE_NAME] = titleName
 		templateData[settings.TEMPLATE_VERSION_TXT] = ""
-		if _, ok := titlesDB.TitlesMap[k]; ok {
-			templateData[settings.TEMPLATE_REGION] = titlesDB.TitlesMap[k].Attributes.Region
-		}
+		templateData[settings.TEMPLATE_REGION] = title.Attributes.Region
 		templateData[settings.TEMPLATE_VERSION] = "0"
 
-		if v.File.Metadata.Ncap != nil {
+		if v.File.Metadata != nil && v.File.Metadata.Ncap != nil {
 			templateData[settings.TEMPLATE_VERSION_TXT] = v.File.Metadata.Ncap.DisplayVersion
 		}
 
@@ -106,7 +104,7 @@ func OrganizeByFolders(baseFolder string,
 			if _, err := os.Stat(destinationPath); os.IsNotExist(err) {
 				err = os.Mkdir(destinationPath, os.ModePerm)
 				if err != nil {
-					zap.S().Errorf("Failed to create folder %v - %v\n", folderToCreate, err)
+					logger.Errorf("Failed to create folder %v - %v\n", folderToCreate, err)
 					continue
 				}
 			}
@@ -126,7 +124,7 @@ func OrganizeByFolders(baseFolder string,
 					to := filepath.Join(destinationPath, file.Name())
 					err := moveFile(from, to)
 					if err != nil {
-						zap.S().Errorf("Failed to move file [%v]\n", err)
+						logger.Errorf("Failed to move file [%v]\n", err)
 						continue
 					}
 				}
@@ -135,13 +133,21 @@ func OrganizeByFolders(baseFolder string,
 
 		}
 
+		var (
+			from string
+			to   string
+			err  error
+		)
+
 		//process base title
-		from := filepath.Join(v.File.ExtendedInfo.BaseFolder, v.File.ExtendedInfo.FileName)
-		to := filepath.Join(destinationPath, getFileName(options, v.File.ExtendedInfo.FileName, templateData, 0))
-		err := moveFile(from, to)
-		if err != nil {
-			zap.S().Errorf("Failed to move file [%v]\n", err)
-			continue
+		if v.BaseExist {
+			from = filepath.Join(v.File.ExtendedInfo.BaseFolder, v.File.ExtendedInfo.FileName)
+			to = filepath.Join(destinationPath, getFileName(options, v.File.ExtendedInfo.FileName, templateData, 0))
+			err = moveFile(from, to)
+			if err != nil {
+				logger.Errorf("Failed to move file [%v]\n", err)
+				continue
+			}
 		}
 
 		//process updates
@@ -165,7 +171,7 @@ func OrganizeByFolders(baseFolder string,
 			}
 			err := moveFile(from, to)
 			if err != nil {
-				zap.S().Errorf("Failed to move file [%v]\n", err)
+				logger.Errorf("Failed to move file [%v]\n", err)
 				continue
 			}
 		}
@@ -178,7 +184,7 @@ func OrganizeByFolders(baseFolder string,
 			}
 			templateData[settings.TEMPLATE_TYPE] = "DLC"
 			templateData[settings.TEMPLATE_TITLE_ID] = id
-			templateData[settings.TEMPLATE_DLC_NAME] = getDlcName(titlesDB.TitlesMap[k], dlc)
+			templateData[settings.TEMPLATE_DLC_NAME] = getDlcName(title, dlc)
 			from = filepath.Join(dlc.ExtendedInfo.BaseFolder, dlc.ExtendedInfo.FileName)
 
 			dlcNameTry := 0
@@ -207,7 +213,7 @@ func OrganizeByFolders(baseFolder string,
 
 			err = moveFile(from, to)
 			if err != nil {
-				zap.S().Errorf("Failed to move file [%v]\n", err)
+				logger.Errorf("Failed to move file [%v]\n", err)
 				continue
 			}
 		}

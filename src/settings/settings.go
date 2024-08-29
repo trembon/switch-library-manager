@@ -37,13 +37,14 @@ const (
 )
 
 type OrganizeOptions struct {
-	CreateFolderPerGame  bool   `json:"create_folder_per_game"`
-	RenameFiles          bool   `json:"rename_files"`
-	DeleteEmptyFolders   bool   `json:"delete_empty_folders"`
-	DeleteOldUpdateFiles bool   `json:"delete_old_update_files"`
-	FolderNameTemplate   string `json:"folder_name_template"`
-	SwitchSafeFileNames  bool   `json:"switch_safe_file_names"`
-	FileNameTemplate     string `json:"file_name_template"`
+	CreateFolderPerGame        bool   `json:"create_folder_per_game"`
+	RenameFiles                bool   `json:"rename_files"`
+	DeleteEmptyFolders         bool   `json:"delete_empty_folders"`
+	DeleteOldUpdateFiles       bool   `json:"delete_old_update_files"`
+	FolderNameTemplate         string `json:"folder_name_template"`
+	SwitchSafeFileNames        bool   `json:"switch_safe_file_names"`
+	FileNameTemplate           string `json:"file_name_template"`
+	ProcessWhenMissingBaseGame bool   `json:"process_when_missing_base_game"`
 }
 
 type AppSettings struct {
@@ -59,7 +60,7 @@ type AppSettings struct {
 	CheckForMissingUpdates bool            `json:"check_for_missing_updates"`
 	CheckForMissingDLC     bool            `json:"check_for_missing_dlc"`
 	HideMissingGames       bool            `json:"hide_missing_games"`
-	HideDemoGames		   bool	           `json:"hide_demo_games"`
+	HideDemoGames          bool            `json:"hide_demo_games"`
 	OrganizeOptions        OrganizeOptions `json:"organize_options"`
 	ScanRecursively        bool            `json:"scan_recursively"`
 	GuiPagingSize          int             `json:"gui_page_size"`
@@ -127,7 +128,7 @@ func saveDefaultSettings(baseFolder string) *AppSettings {
 		VersionsJsonUrl:        DEFAULT_VERSIONS_JSON_URL,
 		VersionsEtag:           "W/\"2ef50d1cb6bd61:0\"",
 		Folder:                 "",
-		Prodkeys: 				"",
+		Prodkeys:               "",
 		ScanFolders:            []string{},
 		IgnoreUpdateTitleIds:   []string{},
 		IgnoreDLCTitleIds:      []string{},
@@ -146,9 +147,10 @@ func saveDefaultSettings(baseFolder string) *AppSettings {
 			FolderNameTemplate:  fmt.Sprintf("{%v}", TEMPLATE_TITLE_NAME),
 			FileNameTemplate: fmt.Sprintf("{%v} ({%v})[{%v}][v{%v}]", TEMPLATE_TITLE_NAME, TEMPLATE_DLC_NAME,
 				TEMPLATE_TITLE_ID, TEMPLATE_VERSION),
-			DeleteEmptyFolders:   false,
-			SwitchSafeFileNames:  true,
-			DeleteOldUpdateFiles: false,
+			DeleteEmptyFolders:         false,
+			SwitchSafeFileNames:        true,
+			DeleteOldUpdateFiles:       false,
+			ProcessWhenMissingBaseGame: false,
 		},
 	}
 	return SaveSettings(settingsInstance, baseFolder)
