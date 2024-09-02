@@ -38,6 +38,8 @@ const (
 
 type OrganizeOptions struct {
 	CreateFolderPerGame        bool   `json:"create_folder_per_game"`
+	DlcFolder                  string `json:"dlc_folder"`
+	UpdatesFolder              string `json:"updates_folder"`
 	RenameFiles                bool   `json:"rename_files"`
 	DeleteEmptyFolders         bool   `json:"delete_empty_folders"`
 	DeleteOldUpdateFiles       bool   `json:"delete_old_update_files"`
@@ -144,6 +146,8 @@ func saveDefaultSettings(baseFolder string) *AppSettings {
 		OrganizeOptions: OrganizeOptions{
 			RenameFiles:         false,
 			CreateFolderPerGame: false,
+			DlcFolder:           "",
+			UpdatesFolder:       "",
 			FolderNameTemplate:  fmt.Sprintf("{%v}", TEMPLATE_TITLE_NAME),
 			FileNameTemplate: fmt.Sprintf("{%v} ({%v})[{%v}][v{%v}]", TEMPLATE_TITLE_NAME, TEMPLATE_DLC_NAME,
 				TEMPLATE_TITLE_ID, TEMPLATE_VERSION),

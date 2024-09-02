@@ -101,12 +101,8 @@ func OrganizeByFolders(baseFolder string,
 		if options.CreateFolderPerGame {
 			folderToCreate := getFolderName(options, templateData)
 			destinationPath = filepath.Join(baseFolder, folderToCreate)
-			if _, err := os.Stat(destinationPath); os.IsNotExist(err) {
-				err = os.Mkdir(destinationPath, os.ModePerm)
-				if err != nil {
-					logger.Errorf("Failed to create folder %v - %v\n", folderToCreate, err)
-					continue
-				}
+			if err := createFolder(destinationPath, logger); err != nil {
+				continue
 			}
 		}
 
@@ -165,7 +161,13 @@ func OrganizeByFolders(baseFolder string,
 
 			from = filepath.Join(updateInfo.ExtendedInfo.BaseFolder, updateInfo.ExtendedInfo.FileName)
 			if options.CreateFolderPerGame {
-				to = filepath.Join(destinationPath, getFileName(options, updateInfo.ExtendedInfo.FileName, templateData, 0))
+				if options.UpdatesFolder != "" {
+					to = filepath.Join(destinationPath, options.UpdatesFolder)
+					createFolder(to, logger)
+					to = filepath.Join(to, getFileName(options, updateInfo.ExtendedInfo.FileName, templateData, 0))
+				} else {
+					to = filepath.Join(destinationPath, getFileName(options, updateInfo.ExtendedInfo.FileName, templateData, 0))
+				}
 			} else {
 				to = filepath.Join(updateInfo.ExtendedInfo.BaseFolder, getFileName(options, updateInfo.ExtendedInfo.FileName, templateData, 0))
 			}
@@ -190,7 +192,13 @@ func OrganizeByFolders(baseFolder string,
 			dlcNameTry := 0
 			for {
 				if options.CreateFolderPerGame {
-					to = filepath.Join(destinationPath, getFileName(options, dlc.ExtendedInfo.FileName, templateData, dlcNameTry))
+					if options.DlcFolder != "" {
+						to = filepath.Join(destinationPath, options.DlcFolder)
+						createFolder(to, logger)
+						to = filepath.Join(to, getFileName(options, dlc.ExtendedInfo.FileName, templateData, dlcNameTry))
+					} else {
+						to = filepath.Join(destinationPath, getFileName(options, dlc.ExtendedInfo.FileName, templateData, dlcNameTry))
+					}
 				} else {
 					to = filepath.Join(dlc.ExtendedInfo.BaseFolder, getFileName(options, dlc.ExtendedInfo.FileName, templateData, dlcNameTry))
 				}
@@ -357,6 +365,17 @@ func applyTemplate(templateData map[string]string, useSafeNames bool, template s
 
 	result = strings.TrimSpace(result)
 	return folderIllegalCharsRegex.ReplaceAllString(result, "")
+}
+
+func createFolder(path string, logger *zap.SugaredLogger) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		err = os.Mkdir(path, os.ModePerm)
+		if err != nil {
+			logger.Errorf("Failed to create folder %v - %v\n", path, err)
+			return err
+		}
+	}
+	return nil
 }
 
 func deleteEmptyFolders(path string) error {

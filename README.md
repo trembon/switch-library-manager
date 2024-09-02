@@ -56,6 +56,8 @@ You can customize the folder/file re-naming, as well as turn on/off features, an
  "hide_demo_games": false, # hide demo games from the list on the missing games tab
  "organize_options": {
   "create_folder_per_game": false,
+  "dlc_folder": "", # ex change to DLC to place DLC files in a separate folder
+  "updates_folder": "", # ex change to Updates to place update folder in a separate folder
   "rename_files": false,
   "delete_empty_folders": false,
   "delete_old_update_files": false,
