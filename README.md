@@ -69,8 +69,9 @@ You can customize the folder/file re-naming, as well as turn on/off features, an
  "scan_recursively": true,
  "gui_page_size": 100,
  "ignore_dlc_updates": false,
- "ignore_dlc_title_ids": [], # Enter as a list of string, e.g. ["1234567890ABCDEF". "1234567890ABCDEE", "1234567890ABCDFF"]
- "ignore_update_title_ids": [] # Enter as a list of string, e.g. ["1234567890ABCDEF". "1234567890ABCDEE", "1234567890ABCDFF"]
+ "ignore_dlc_title_ids": [], # Enter as a list of string, e.g. ["1234567890ABCDEF", "1234567890ABCDEE", "1234567890ABCDFF"]
+ "ignore_update_title_ids": [] # Enter as a list of string, e.g. ["1234567890ABCDEF", "1234567890ABCDEE", "1234567890ABCDFF"]
+ "ignore_file_types": [] # List of file types that should ignore the 'file type is not supported message', e.g. ["txt"]
 }
 ```
 
