@@ -69,6 +69,7 @@ type AppSettings struct {
 	IgnoreDLCUpdates       bool            `json:"ignore_dlc_updates"`
 	IgnoreDLCTitleIds      []string        `json:"ignore_dlc_title_ids"`
 	IgnoreUpdateTitleIds   []string        `json:"ignore_update_title_ids"`
+	IgnoreFileTypes        []string        `json:"ignore_file_types"`
 }
 
 func ReadSettingsAsJSON(baseFolder string) string {
@@ -135,6 +136,7 @@ func saveDefaultSettings(baseFolder string) *AppSettings {
 		IgnoreUpdateTitleIds:   []string{},
 		IgnoreDLCTitleIds:      []string{},
 		IgnoreDLCUpdates:       false,
+		IgnoreFileTypes:        []string{},
 		GUI:                    true,
 		GuiPagingSize:          100,
 		CheckForMissingUpdates: true,

@@ -157,6 +157,17 @@ func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,
 	progress ProgressUpdater,
 	titles map[string]*SwitchGameFiles,
 	skipped map[ExtendedFileInfo]SkippedFile) {
+
+	settings := settings.ReadSettings("") // use empty path, as it will use existing settings instance
+	ignoreFileTypes := map[string]struct{}{}
+	for _, ext := range settings.IgnoreFileTypes {
+		if strings.HasPrefix(ext, ".") {
+			ignoreFileTypes[strings.ToLower(ext)] = struct{}{}
+		} else {
+			ignoreFileTypes["."+strings.ToLower(ext)] = struct{}{}
+		}
+	}
+
 	ind := 0
 	total := len(files)
 	for _, file := range files {
@@ -180,17 +191,14 @@ func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,
 			} else {
 				continue
 			}
-
 		}
 
-		//only handle NSZ and NSP files
-
-		if !isSplit &&
-			!strings.HasSuffix(fileName, "xci") &&
-			!strings.HasSuffix(fileName, "nsp") &&
-			!strings.HasSuffix(fileName, "nsz") &&
-			!strings.HasSuffix(fileName, "xcz") {
-			skipped[file] = SkippedFile{ReasonCode: REASON_UNSUPPORTED_TYPE, ReasonText: "file type is not supported"}
+		// only handle XCI/XCZ and NSP/NSZ files
+		fileExtension := filepath.Ext(fileName)
+		if !isSplit && fileExtension != ".xci" && fileExtension != ".xcz" && fileExtension != ".nsp" && fileExtension != ".nsz" {
+			if _, ok := ignoreFileTypes[fileExtension]; !ok {
+				skipped[file] = SkippedFile{ReasonCode: REASON_UNSUPPORTED_TYPE, ReasonText: "file type is not supported"}
+			}
 			continue
 		}
 
