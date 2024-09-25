@@ -258,7 +258,11 @@ $(function () {
                                     shell.showItemInFolder(cell.getData().key)
                                 }
                             },
-                            {title: "Issue", field: "value",width:350}
+                            {
+                                title: "Issue", field: "value", width: 350, formatter: function (cell) {
+                                    return cell.getValue().replaceAll("\n", "<br/>");
+                                }
+                            }
                         ],
                     });
                 }
