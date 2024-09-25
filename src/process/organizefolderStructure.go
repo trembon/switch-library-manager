@@ -169,7 +169,11 @@ func OrganizeByFolders(baseFolder string,
 					to = filepath.Join(destinationPath, getFileName(options, updateInfo.ExtendedInfo.FileName, templateData, 0))
 				}
 			} else {
-				to = filepath.Join(updateInfo.ExtendedInfo.BaseFolder, getFileName(options, updateInfo.ExtendedInfo.FileName, templateData, 0))
+				if options.UpdatesFolder != "" {
+					to = filepath.Join(options.UpdatesFolder, getFileName(options, updateInfo.ExtendedInfo.FileName, templateData, 0))
+				} else {
+					to = filepath.Join(updateInfo.ExtendedInfo.BaseFolder, getFileName(options, updateInfo.ExtendedInfo.FileName, templateData, 0))
+				}
 			}
 			err := moveFile(from, to)
 			if err != nil {
@@ -200,7 +204,11 @@ func OrganizeByFolders(baseFolder string,
 						to = filepath.Join(destinationPath, getFileName(options, dlc.ExtendedInfo.FileName, templateData, dlcNameTry))
 					}
 				} else {
-					to = filepath.Join(dlc.ExtendedInfo.BaseFolder, getFileName(options, dlc.ExtendedInfo.FileName, templateData, dlcNameTry))
+					if options.DlcFolder != "" {
+						to = filepath.Join(options.DlcFolder, getFileName(options, dlc.ExtendedInfo.FileName, templateData, dlcNameTry))
+					} else {
+						to = filepath.Join(dlc.ExtendedInfo.BaseFolder, getFileName(options, dlc.ExtendedInfo.FileName, templateData, dlcNameTry))
+					}
 				}
 
 				// check if dlc will generate a duplicate name as a previous dlc, but not have the same id
