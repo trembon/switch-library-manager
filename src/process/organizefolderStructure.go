@@ -148,6 +148,12 @@ func OrganizeByFolders(baseFolder string,
 
 		//process updates
 		for update, updateInfo := range v.Updates {
+			// if the current title is multi content and the update is contained in the main file, skip
+			if v.MultiContent && v.BaseExist && v.File.ExtendedInfo == updateInfo.ExtendedInfo {
+				logger.Infof("Skipping organizing %v update %v, reason: Update is multi-part with main file", title.Attributes.Name, update)
+				continue
+			}
+
 			if updateInfo.Metadata != nil {
 				templateData[settings.TEMPLATE_TITLE_ID] = updateInfo.Metadata.TitleId
 			}
@@ -185,6 +191,12 @@ func OrganizeByFolders(baseFolder string,
 		//process DLC
 		existingDlcs := map[string]string{}
 		for id, dlc := range v.Dlc {
+			// if the current title is multi content and the dlc is contained in the main file, skip
+			if v.MultiContent && v.BaseExist && v.File.ExtendedInfo == dlc.ExtendedInfo {
+				logger.Infof("Skipping organizing %v dlc %v, reason: DLC is multi-part with main file", title.Attributes.Name, dlc)
+				continue
+			}
+
 			if dlc.Metadata != nil {
 				templateData[settings.TEMPLATE_VERSION] = strconv.Itoa(dlc.Metadata.Version)
 			}
