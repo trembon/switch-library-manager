@@ -247,11 +247,13 @@ func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,
 				switchTitle.Updates[metadata.Version] = SwitchFileInfo{ExtendedInfo: file, Metadata: metadata}
 				if metadata.Version > switchTitle.LatestUpdate {
 					if switchTitle.LatestUpdate != 0 {
-						skipped[switchTitle.Updates[switchTitle.LatestUpdate].ExtendedInfo] = SkippedFile{ReasonCode: REASON_OLD_UPDATE, ReasonText: "old update file, newer update exist locally"}
+						oldUpdate := switchTitle.Updates[switchTitle.LatestUpdate]
+						skipped[switchTitle.Updates[switchTitle.LatestUpdate].ExtendedInfo] = SkippedFile{ReasonCode: REASON_OLD_UPDATE, ReasonText: "old update file, newer update exist locally\nnew: " + filepath.Join(file.BaseFolder, file.FileName) + "\nold:" + filepath.Join(oldUpdate.ExtendedInfo.BaseFolder, oldUpdate.ExtendedInfo.FileName)}
 					}
 					switchTitle.LatestUpdate = metadata.Version
 				} else {
-					skipped[file] = SkippedFile{ReasonCode: REASON_OLD_UPDATE, ReasonText: "old update file, newer update exist locally"}
+					newerUpdate := switchTitle.Updates[switchTitle.LatestUpdate]
+					skipped[file] = SkippedFile{ReasonCode: REASON_OLD_UPDATE, ReasonText: "old update file, newer update exist locally\nnew: " + filepath.Join(newerUpdate.ExtendedInfo.BaseFolder, newerUpdate.ExtendedInfo.FileName) + "\nold:" + filepath.Join(file.BaseFolder, file.FileName)}
 				}
 				continue
 			}
@@ -272,7 +274,7 @@ func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,
 
 			if dlc, ok := switchTitle.Dlc[metadata.TitleId]; ok {
 				if metadata.Version < dlc.Metadata.Version {
-					skipped[file] = SkippedFile{ReasonCode: REASON_OLD_UPDATE, ReasonText: "old DLC file, newer version exist locally"}
+					skipped[file] = SkippedFile{ReasonCode: REASON_OLD_UPDATE, ReasonText: "old DLC file, newer version exist locally\nnew: " + filepath.Join(dlc.ExtendedInfo.BaseFolder, dlc.ExtendedInfo.FileName) + "\nold:" + filepath.Join(file.BaseFolder, file.FileName)}
 					zap.S().Warnf("-->Old DLC file found [%v] and [%v]", file.FileName, dlc.ExtendedInfo.FileName)
 					continue
 				} else if metadata.Version == dlc.Metadata.Version {
