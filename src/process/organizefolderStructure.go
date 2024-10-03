@@ -80,15 +80,24 @@ func OrganizeByFolders(baseFolder string,
 			updateProgress.UpdateProgress(i, tasksSize, k)
 		}
 
-		title := titlesDB.TitlesMap[k]
+		title, titleExist := titlesDB.TitlesMap[k]
 		titleName := getTitleName(title, v)
 
 		templateData := map[string]string{}
 
-		templateData[settings.TEMPLATE_TITLE_ID] = title.Attributes.Id
+		if titleExist {
+			templateData[settings.TEMPLATE_TITLE_ID] = title.Attributes.Id
+		} else if v.File.Metadata != nil {
+			templateData[settings.TEMPLATE_TITLE_ID] = v.File.Metadata.TitleId
+		}
+
 		templateData[settings.TEMPLATE_TITLE_NAME] = titleName
 		templateData[settings.TEMPLATE_VERSION_TXT] = ""
-		templateData[settings.TEMPLATE_REGION] = title.Attributes.Region
+
+		if titleExist {
+			templateData[settings.TEMPLATE_REGION] = title.Attributes.Region
+		}
+
 		templateData[settings.TEMPLATE_VERSION] = "0"
 
 		if v.File.Metadata != nil && v.File.Metadata.Ncap != nil {
@@ -150,7 +159,7 @@ func OrganizeByFolders(baseFolder string,
 		for update, updateInfo := range v.Updates {
 			// if the current title is multi content and the update is contained in the main file, skip
 			if v.MultiContent && v.BaseExist && v.File.ExtendedInfo == updateInfo.ExtendedInfo {
-				logger.Infof("Skipping organizing %v update %v, reason: Update is multi-part with main file", title.Attributes.Name, update)
+				logger.Infof("Skipping organizing %v update %v, reason: Update is multi-part with main file", titleName, update)
 				continue
 			}
 
@@ -193,7 +202,7 @@ func OrganizeByFolders(baseFolder string,
 		for id, dlc := range v.Dlc {
 			// if the current title is multi content and the dlc is contained in the main file, skip
 			if v.MultiContent && v.BaseExist && v.File.ExtendedInfo == dlc.ExtendedInfo {
-				logger.Infof("Skipping organizing %v dlc %v, reason: DLC is multi-part with main file", title.Attributes.Name, dlc)
+				logger.Infof("Skipping organizing %v dlc %v, reason: DLC is multi-part with main file", titleName, dlc)
 				continue
 			}
 
