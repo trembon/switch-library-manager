@@ -247,7 +247,7 @@ func (g *GUI) handleMessage(m *astilectron.EventMessage) interface{} {
 						LibraryTemplateData{
 							Icon:    title.Attributes.IconUrl,
 							Name:    name,
-							TitleId: v.File.Metadata.TitleId,
+							TitleId: title.Attributes.Id,
 							Update:  v.LatestUpdate,
 							Version: version,
 							Region:  title.Attributes.Region,
@@ -454,7 +454,7 @@ func (g *GUI) getMissingGames() []SwitchTitle {
 		if v.Attributes.Name == "" || v.Attributes.Id == "" {
 			continue
 		}
-		
+
 		options := settings.ReadSettings(g.baseFolder)
 		if options.HideDemoGames && v.Attributes.IsDemo {
 			continue
