@@ -385,6 +385,10 @@ func applyTemplate(templateData map[string]string, useSafeNames bool, template s
 
 	if useSafeNames {
 		result = nihongo.RomajiString(result)
+
+		// handle known characters that have safe variants
+		result = strings.ReplaceAll(result, "ō", "o")
+
 		safe := nonAscii.FindAllString(result, -1)
 		result = strings.Join(safe, "")
 	}
