@@ -1,3 +1,5 @@
+#!/bin/sh
+
 git clone https://github.com/blawar/nut
 cd nut
 
