@@ -3,17 +3,16 @@ name: Verify PR
 on:
   pull_request:
     branches:
-     - "master"
+      - "master"
 
 jobs:
-
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-    - name: Setup environment
-      uses: ./.github/actions/setup-environment
+      - name: Setup environment
+        uses: ./.github/actions/setup-environment
 
-    - name: Build app
-      uses: ./.github/actions/build-app
+      - name: Build app
+        uses: ./.github/actions/build-app
