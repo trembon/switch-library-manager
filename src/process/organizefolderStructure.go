@@ -318,6 +318,7 @@ func getDlcName(switchTitle *db.SwitchTitle, file db.SwitchFileInfo) string {
 }
 
 func getTitleName(switchTitle *db.SwitchTitle, v *db.SwitchGameFiles) string {
+	// Check if switchTitle is not nil and contains a name
 	if switchTitle != nil && switchTitle.Attributes.Name != "" {
 		res := cjk.FindAllString(switchTitle.Attributes.Name, -1)
 		if len(res) == 0 {
@@ -325,15 +326,22 @@ func getTitleName(switchTitle *db.SwitchTitle, v *db.SwitchGameFiles) string {
 		}
 	}
 
-	if v.File.Metadata.Ncap != nil {
+	// Check if v and its Metadata are present
+	if v != nil && v.File.Metadata != nil && v.File.Metadata.Ncap != nil {
+		// Check if the title name exists
 		name := v.File.Metadata.Ncap.TitleName["AmericanEnglish"].Title
 		if name != "" {
 			return name
 		}
 	}
 
-	//for non eshop games (cartridge only), grab the name from the file
-	return db.ParseTitleNameFromFileName(v.File.ExtendedInfo.FileName)
+	// For non-eShop games, get the name from the file
+	if v != nil {
+		return db.ParseTitleNameFromFileName(v.File.ExtendedInfo.FileName)
+	}
+
+	// Default return if no valid name is found
+	return "Unknown Title"
 }
 
 func getFolderName(options settings.OrganizeOptions, templateData map[string]string) string {
