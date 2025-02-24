@@ -98,7 +98,17 @@ func OrganizeByFolders(baseFolder string,
 			templateData[settings.TEMPLATE_REGION] = title.Attributes.Region
 		}
 
-		templateData[settings.TEMPLATE_VERSION] = "0"
+		if v.MultiContent && len(v.Updates) > 0 {
+			var latestUpdate = 0
+			for update := range v.Updates {
+				if update > latestUpdate {
+					latestUpdate = update
+				}
+			}
+			templateData[settings.TEMPLATE_VERSION] = strconv.Itoa(latestUpdate)
+		} else {
+			templateData[settings.TEMPLATE_VERSION] = "0"
+		}
 
 		if v.File.Metadata != nil && v.File.Metadata.Ncap != nil {
 			templateData[settings.TEMPLATE_VERSION_TXT] = v.File.Metadata.Ncap.DisplayVersion
