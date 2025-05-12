@@ -106,12 +106,16 @@ func OrganizeByFolders(baseFolder string,
 				}
 			}
 			templateData[settings.TEMPLATE_VERSION] = strconv.Itoa(latestUpdate)
+
+			if latestUpdate > 0 && v.Updates[latestUpdate].Metadata != nil && v.Updates[latestUpdate].Metadata.Ncap != nil {
+				templateData[settings.TEMPLATE_VERSION_TXT] = v.Updates[latestUpdate].Metadata.Ncap.DisplayVersion
+			}
 		} else {
 			templateData[settings.TEMPLATE_VERSION] = "0"
-		}
 
-		if v.File.Metadata != nil && v.File.Metadata.Ncap != nil {
-			templateData[settings.TEMPLATE_VERSION_TXT] = v.File.Metadata.Ncap.DisplayVersion
+			if v.File.Metadata != nil && v.File.Metadata.Ncap != nil {
+				templateData[settings.TEMPLATE_VERSION_TXT] = v.File.Metadata.Ncap.DisplayVersion
+			}
 		}
 
 		var destinationPath = v.File.ExtendedInfo.BaseFolder
