@@ -171,6 +171,7 @@ func OrganizeByFolders(baseFolder string,
 
 		//process base title
 		if v.BaseExist {
+			templateData[settings.TEMPLATE_TYPE] = "BASE"
 			from = filepath.Join(v.File.ExtendedInfo.BaseFolder, v.File.ExtendedInfo.FileName)
 			to = filepath.Join(destinationPath, getFileName(options, v.File.ExtendedInfo.FileName, templateData, 0))
 			err = moveFile(from, to)
