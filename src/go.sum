@@ -5,6 +5,8 @@ github.com/asticode/go-astikit v0.15.0/go.mod h1:h4ly7idim1tNhaVkdVBeXQZEE3L0xbl
 github.com/asticode/go-astikit v0.29.1/go.mod h1:h4ly7idim1tNhaVkdVBeXQZEE3L0xblP7fCWbgwipF0=
 github.com/asticode/go-astikit v0.57.1 h1:fEykwH98Nny08kcRbk4uer+S8h0rKveCIpG9F6NVLuA=
 github.com/asticode/go-astikit v0.57.1/go.mod h1:fV43j20UZYfXzP9oBn33udkvCvDvCDhzjVqoLFuuYZE=
+github.com/asticode/go-astikit v0.58.0 h1:WXNpaxCPNFReikHiXvzyDv49NpV/GMD6PV80iem6WGo=
+github.com/asticode/go-astikit v0.58.0/go.mod h1:fV43j20UZYfXzP9oBn33udkvCvDvCDhzjVqoLFuuYZE=
 github.com/asticode/go-astilectron v0.25.0/go.mod h1:Tx+aS0IvbV0cO4TlQbOO1NFA/lATj11vEStydyIjMjM=
 github.com/asticode/go-astilectron v0.30.0 h1:flnbc7XKzvG5pKqvQr25hHEsXj2QoJP9kM0YHpq5LnQ=
 github.com/asticode/go-astilectron v0.30.0/go.mod h1:o7wZ7KDr3XH3xcEwcxfpWzNVf63JsMKtif/6IP4mpHk=

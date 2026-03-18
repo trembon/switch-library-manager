@@ -3,7 +3,7 @@ module github.com/trembon/switch-library-manager
 go 1.25.5
 
 require (
-	github.com/asticode/go-astikit v0.57.1
+	github.com/asticode/go-astikit v0.58.0
 	github.com/asticode/go-astilectron v0.30.0
 	github.com/asticode/go-astilectron-bootstrap v0.4.14
 	github.com/avast/retry-go v3.0.0+incompatible
