@@ -128,6 +128,17 @@ NOTE: parameters are only usable in command line mode, except the parameter -m (
 
 ## Building
 
+### Windows
+- Install and setup Go
+- Clone the repo: `git clone https://github.com/trembon/switch-library-manager.git`
+- Move into the src folder `cd src`
+- Get the bundler `go get -u github.com/asticode/go-astilectron-bundler/...`
+- Install bundler `go install github.com/asticode/go-astilectron-bundler/astilectron-bundler`
+- Copy bundler binary to the src folder `copy %USERPROFILE%\go\bin\astilectron-bundler.exe .`
+- Execute `astilectron-bundler.exe`
+- Binaries will be available under output
+
+### macOS or Linux
 - Install and setup Go
 - Clone the repo: `git clone https://github.com/trembon/switch-library-manager.git`
 - Move into the src folder `cd src`
