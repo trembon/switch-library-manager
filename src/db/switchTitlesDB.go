@@ -3,10 +3,11 @@ package db
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"strconv"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 type TitleAttributes struct {
@@ -56,7 +57,8 @@ func CreateSwitchTitleDB(titlesFile, versionsFile io.Reader) (*SwitchTitlesDB, e
 		id = strings.ToLower(id)
 		idPrefix, err := titleIDPrefix(id)
 		if err != nil {
-			return nil, fmt.Errorf("invalid title ID %q: %w", id, err)
+			zap.S().Warnf("skipping unsupported title ID %q: %v", id, err)
+			continue
 		}
 
 		//TitleAttributes id rules:

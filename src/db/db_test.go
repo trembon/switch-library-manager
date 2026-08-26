@@ -66,7 +66,6 @@ func TestCreateSwitchTitleDBRejectsInvalidInput(t *testing.T) {
 	}{
 		{name: "bad titles JSON", titles: "{"},
 		{name: "bad versions JSON", titles: `{"0100000000010000":{}}`},
-		{name: "bad ID", titles: `{"not-an-id":{"name":"bad"}}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -82,6 +81,24 @@ func TestCreateSwitchTitleDBRejectsInvalidInput(t *testing.T) {
 	}
 	if _, err := titleIDPrefix("0100000000010001"); err == nil {
 		t.Fatal("expected invalid DLC group nibble error")
+	}
+}
+
+func TestCreateSwitchTitleDBSkipsUnsupportedTitleIDs(t *testing.T) {
+	titles := `{
+		"0100000000000816":{"name":"Unsupported system item"},
+		"0100000000010000":{"name":"Game"}
+	}`
+
+	db, err := CreateSwitchTitleDB(strings.NewReader(titles), strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := db.TitlesMap["010000000000"]; ok {
+		t.Fatal("unsupported title ID was added to the database")
+	}
+	if game, ok := db.TitlesMap["0100000000010"]; !ok || game.Attributes.Name != "Game" {
+		t.Fatalf("valid title was not loaded: %#v", db.TitlesMap)
 	}
 }
 
