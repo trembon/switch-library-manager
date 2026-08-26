@@ -18,4 +18,6 @@
 - Do not commit generated outputs, the local bundler executable, embedded bindata, or platform-specific local build products.
 - Keep setup and build commands reproducible; prefer pinned or module-resolved versions when changing dependencies.
 - If adding tests or vet checks, ensure they run from `src` because the repository root is not a Go module.
+- Every PR verification must run `go test ./...` from `src` before the build step.
+- `workflows/verify-pr.yml` must analyze aggregate statement coverage for `db`, `fileio`, `process`, `settings`, `switchfs`, and `switchfs/_crypto`, and fail when coverage is below 90%.
 - For workflow edits, validate YAML structure and reason about missing artifact behavior (`if-no-files-found: error`) before merging.

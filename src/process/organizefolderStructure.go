@@ -182,7 +182,7 @@ func OrganizeByFolders(baseFolder string,
 			}
 			templateData[settings.TEMPLATE_VERSION] = strconv.Itoa(update)
 			templateData[settings.TEMPLATE_TYPE] = "UPD"
-			if updateInfo.Metadata.Ncap != nil {
+			if updateInfo.Metadata != nil && updateInfo.Metadata.Ncap != nil {
 				templateData[settings.TEMPLATE_VERSION_TXT] = updateInfo.Metadata.Ncap.DisplayVersion
 			} else {
 				templateData[settings.TEMPLATE_VERSION_TXT] = ""
@@ -220,6 +220,8 @@ func OrganizeByFolders(baseFolder string,
 				continue
 			}
 
+			templateData[settings.TEMPLATE_VERSION] = "0"
+			templateData[settings.TEMPLATE_VERSION_TXT] = ""
 			if dlc.Metadata != nil {
 				templateData[settings.TEMPLATE_VERSION] = strconv.Itoa(dlc.Metadata.Version)
 			}
@@ -320,7 +322,7 @@ func IsOptionsValid(options settings.OrganizeOptions) bool {
 }
 
 func getDlcName(switchTitle *db.SwitchTitle, file db.SwitchFileInfo) string {
-	if switchTitle == nil {
+	if switchTitle == nil || file.Metadata == nil {
 		return ""
 	}
 	if dlcAttributes, ok := switchTitle.Dlc[file.Metadata.TitleId]; ok {
@@ -381,12 +383,12 @@ func moveFile(from string, to string) error {
 }
 
 func applyTemplate(templateData map[string]string, useSafeNames bool, template string, nameTry int) string {
-	result := strings.Replace(template, "{"+settings.TEMPLATE_TITLE_NAME+"}", templateData[settings.TEMPLATE_TITLE_NAME], 1)
-	result = strings.Replace(result, "{"+settings.TEMPLATE_TITLE_ID+"}", strings.ToUpper(templateData[settings.TEMPLATE_TITLE_ID]), 1)
-	result = strings.Replace(result, "{"+settings.TEMPLATE_VERSION+"}", templateData[settings.TEMPLATE_VERSION], 1)
-	result = strings.Replace(result, "{"+settings.TEMPLATE_TYPE+"}", templateData[settings.TEMPLATE_TYPE], 1)
-	result = strings.Replace(result, "{"+settings.TEMPLATE_VERSION_TXT+"}", templateData[settings.TEMPLATE_VERSION_TXT], 1)
-	result = strings.Replace(result, "{"+settings.TEMPLATE_REGION+"}", templateData[settings.TEMPLATE_REGION], 1)
+	result := strings.ReplaceAll(template, "{"+settings.TEMPLATE_TITLE_NAME+"}", templateData[settings.TEMPLATE_TITLE_NAME])
+	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_TITLE_ID+"}", strings.ToUpper(templateData[settings.TEMPLATE_TITLE_ID]))
+	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_VERSION+"}", templateData[settings.TEMPLATE_VERSION])
+	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_TYPE+"}", templateData[settings.TEMPLATE_TYPE])
+	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_VERSION_TXT+"}", templateData[settings.TEMPLATE_VERSION_TXT])
+	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_REGION+"}", templateData[settings.TEMPLATE_REGION])
 
 	//remove title name from dlc name
 	dlcName := strings.Replace(templateData[settings.TEMPLATE_DLC_NAME], templateData[settings.TEMPLATE_TITLE_NAME], "", 1)
@@ -394,7 +396,7 @@ func applyTemplate(templateData map[string]string, useSafeNames bool, template s
 	dlcName = strings.TrimPrefix(dlcName, "-")
 	dlcName = strings.TrimSpace(dlcName)
 
-	result = strings.Replace(result, "{"+settings.TEMPLATE_DLC_NAME+"}", dlcName, 1)
+	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_DLC_NAME+"}", dlcName)
 	result = strings.ReplaceAll(result, "[]", "")
 	result = strings.ReplaceAll(result, "()", "")
 	result = strings.ReplaceAll(result, "<>", "")
@@ -437,6 +439,7 @@ func deleteEmptyFolders(path string) error {
 	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			zap.S().Error("Error while deleting empty folders", err)
+			return err
 		}
 		if info != nil && info.IsDir() {
 			err = deleteEmptyFolder(path)
@@ -461,7 +464,5 @@ func deleteEmptyFolder(path string) error {
 	}
 
 	zap.S().Infof("\nDeleting empty folder [%v]", path)
-	_ = os.Remove(path)
-
-	return nil
+	return os.Remove(path)
 }

@@ -14,5 +14,38 @@ jobs:
       - name: Setup environment
         uses: ./.github/actions/setup-environment
 
+      - name: Run Go tests
+        working-directory: ./src
+        shell: bash
+        run: go test ./...
+
+      - name: Analyze core coverage
+        working-directory: ./src
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          packages=(./db ./fileio ./process ./settings ./switchfs ./switchfs/_crypto)
+          coverage_file="$(mktemp)"
+          trap 'rm -f "$coverage_file"' EXIT
+          first_profile=true
+
+          for package in "${packages[@]}"; do
+            package_profile="$(mktemp)"
+            go test -count=1 -covermode=atomic -coverprofile="$package_profile" "$package"
+            if [[ "$first_profile" == true ]]; then
+              cat "$package_profile" > "$coverage_file"
+              first_profile=false
+            else
+              tail -n +2 "$package_profile" >> "$coverage_file"
+            fi
+            rm -f "$package_profile"
+          done
+
+          go tool cover -func="$coverage_file"
+          coverage="$(go tool cover -func="$coverage_file" | awk '/^total:/ {gsub(/%/, "", $3); print $3}')"
+          echo "Core logic statement coverage: ${coverage}%"
+          awk -v coverage="$coverage" 'BEGIN { if (coverage < 90) exit 1 }'
+
       - name: Build app
         uses: ./.github/actions/build-app

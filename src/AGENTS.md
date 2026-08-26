@@ -43,4 +43,6 @@ go test ./...
 go vet ./...
 ```
 
-The repository currently has very limited tests. A successful `go test -vet=off ./...` is only a compile/basic-test signal until parser, cache, and organization behavior has focused coverage.
+- Always run `go test ./...` when verifying a Go task; a task is not complete until the tests pass.
+- Core logic coverage is required to be at least 90% in aggregate across `db`, `fileio`, `process`, `settings`, `switchfs`, and `switchfs/_crypto`. The GUI, CLI orchestration, and generated bindata are not part of that threshold.
+- The repository uses synthetic fixtures and temporary directories for tests. Report whether verification used filename fallback, synthetic parser/filesystem fixtures, or real encrypted Switch files.

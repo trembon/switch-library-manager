@@ -39,7 +39,7 @@ type Nacp struct {
 }
 
 func (l Language) String() string {
-	return [...]string{
+	names := [...]string{
 		"AmericanEnglish",
 		"BritishEnglish",
 		"Japanese",
@@ -55,7 +55,11 @@ func (l Language) String() string {
 		"Korean",
 		"Taiwanese",
 		"Chinese",
-		"Chinese"}[l]
+		"Chinese"}
+	if l < 0 || int(l) >= len(names) {
+		return "Unknown"
+	}
+	return names[l]
 }
 
 func ExtractNacp(cnmt *ContentMetaAttributes, file io.ReaderAt, securePartition *PFS0, securePartitionOffset int64) (*Nacp, error) {
@@ -96,7 +100,16 @@ func ExtractNacp(cnmt *ContentMetaAttributes, file io.ReaderAt, securePartition 
 
 /*https://switchbrew.org/wiki/NACP_Format*/
 func readNacp(data []byte, romFsHeader RomfsHeader, fileEntry RomfsFileEntry) (Nacp, error) {
+	if romFsHeader.DataOffset > uint64(len(data)) || fileEntry.offset > uint64(len(data))-romFsHeader.DataOffset {
+		return Nacp{}, errors.New("NACP file is outside RomFS data")
+	}
 	offset := romFsHeader.DataOffset + fileEntry.offset
+	if fileEntry.size < 0x3080 {
+		return Nacp{}, errors.New("NACP file is too small")
+	}
+	if fileEntry.size > uint64(len(data))-offset || uint64(0x3080) > fileEntry.size {
+		return Nacp{}, errors.New("NACP file is truncated")
+	}
 	titles := map[string]NacpTitle{}
 	for i := 0; i < 16; i++ {
 		//lang := i
@@ -107,7 +120,7 @@ func readNacp(data []byte, romFsHeader RomfsHeader, fileEntry RomfsFileEntry) (N
 
 	isbn := readBytesUntilZero(data[offset+0x3000 : offset+0x3000+0x25])
 	displayVersion := readBytesUntilZero(data[offset+0x3060 : offset+0x3060+0x10])
-	supportedLanguageFlag := binary.BigEndian.Uint32(data[offset+0x302C : offset+0x302C+0x4])
+	supportedLanguageFlag := binary.LittleEndian.Uint32(data[offset+0x302C : offset+0x302C+0x4])
 
 	return Nacp{TitleName: titles, Isbn: string(isbn), DisplayVersion: string(displayVersion), SupportedLanguageFlag: supportedLanguageFlag}, nil
 	/*

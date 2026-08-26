@@ -2,6 +2,7 @@ package db
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -53,6 +54,10 @@ func CreateSwitchTitleDB(titlesFile, versionsFile io.Reader) (*SwitchTitlesDB, e
 	result := SwitchTitlesDB{TitlesMap: map[string]*SwitchTitle{}}
 	for id, attr := range titles {
 		id = strings.ToLower(id)
+		idPrefix, err := titleIDPrefix(id)
+		if err != nil {
+			return nil, fmt.Errorf("invalid title ID %q: %w", id, err)
+		}
 
 		//TitleAttributes id rules:
 		//main TitleAttributes ends with 000
@@ -60,12 +65,6 @@ func CreateSwitchTitleDB(titlesFile, versionsFile io.Reader) (*SwitchTitlesDB, e
 		//Dlc adds 1 to 4th char starting from the right (always odd) and
 		//have a running counter (starting with 001) in the 3 last chars
 		switchTitle := &SwitchTitle{Dlc: map[string]TitleAttributes{}}
-		idPrefix := id[0 : len(id)-3]
-		if !(strings.HasSuffix(id, "000") || strings.HasSuffix(id, "800")) {
-			intVar, _ := strconv.ParseUint(id[len(id)-4:len(id)-3], 16, 64)
-			h := fmt.Sprintf("%x", intVar-1)
-			idPrefix = id[0:len(id)-4] + h
-		}
 
 		if t, ok := result.TitlesMap[idPrefix]; ok {
 			switchTitle = t
@@ -99,4 +98,23 @@ func CreateSwitchTitleDB(titlesFile, versionsFile io.Reader) (*SwitchTitlesDB, e
 	}
 
 	return &result, nil
+}
+
+// titleIDPrefix returns the normalized title group key used by remote and local data.
+func titleIDPrefix(id string) (string, error) {
+	id = strings.ToLower(id)
+	if len(id) != 16 {
+		return "", errors.New("title ID must contain 16 hexadecimal characters")
+	}
+	if _, err := strconv.ParseUint(id, 16, 64); err != nil {
+		return "", errors.New("title ID must contain 16 hexadecimal characters")
+	}
+	if strings.HasSuffix(id, "000") || strings.HasSuffix(id, "800") {
+		return id[:len(id)-3], nil
+	}
+	value, _ := strconv.ParseUint(id[len(id)-4:len(id)-3], 16, 4)
+	if value == 0 {
+		return "", errors.New("DLC title ID has an invalid group nibble")
+	}
+	return id[:len(id)-4] + strconv.FormatUint(value-1, 16), nil
 }

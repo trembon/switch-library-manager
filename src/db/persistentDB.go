@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	"log"
 	"path/filepath"
+	"time"
 
 	"github.com/boltdb/bolt"
 	"github.com/trembon/switch-library-manager/settings"
@@ -23,14 +23,13 @@ type PersistentDB struct {
 func NewPersistentDB(baseFolder string) (*PersistentDB, error) {
 	// Open the my.db data file in your current directory.
 	// It will be created if it doesn't exist.
-	db, err := bolt.Open(filepath.Join(baseFolder, "slm.db"), 0600, &bolt.Options{Timeout: 1 * 60})
+	db, err := bolt.Open(filepath.Join(baseFolder, "slm.db"), 0600, &bolt.Options{Timeout: time.Minute})
 	if err != nil {
-		log.Fatal(err)
 		return nil, err
 	}
 
 	//set DB version
-	err = db.View(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(DB_INTERNAL_TABLENAME))
 		if b == nil {
 			b, err := tx.CreateBucket([]byte(DB_INTERNAL_TABLENAME))
@@ -45,6 +44,10 @@ func NewPersistentDB(baseFolder string) (*PersistentDB, error) {
 		}
 		return nil
 	})
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
 
 	return &PersistentDB{db: db}, nil
 }

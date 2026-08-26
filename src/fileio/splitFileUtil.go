@@ -2,7 +2,7 @@ package fileio
 
 import (
 	"errors"
-	"os"
+	"io"
 
 	"github.com/trembon/switch-library-manager/switchfs"
 )
@@ -27,7 +27,7 @@ func ReadSplitFileMetadata(filePath string) (map[string]*switchfs.ContentMetaAtt
 }
 
 func readXciHeader(filePath string) ([]byte, error) {
-	file, err := os.Open(filePath)
+	file, err := switchfs.OpenFile(filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -35,9 +35,12 @@ func readXciHeader(filePath string) ([]byte, error) {
 	defer file.Close()
 
 	header := make([]byte, 0x200)
-	_, err = file.Read(header)
-	if err != nil {
+	n, err := file.ReadAt(header, 0)
+	if err != nil && err != io.EOF {
 		return nil, err
+	}
+	if n != len(header) {
+		return nil, errors.New("truncated XCI header")
 	}
 
 	if string(header[0x100:0x104]) != "HEAD" {

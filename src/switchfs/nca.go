@@ -43,6 +43,9 @@ func openMetaNcaDataSection(reader io.ReaderAt, ncaOffset int64) (*fsHeader, []b
 	if err != nil {
 		return nil, nil, err
 	}
+	if keys == nil {
+		return nil, nil, errors.New("switch keys are not initialized")
+	}
 	headerKey := keys.GetKey("header_key")
 	if headerKey == "" {
 		return nil, nil, errors.New("missing key - header_key")
@@ -71,7 +74,10 @@ func openMetaNcaDataSection(reader io.ReaderAt, ncaOffset int64) (*fsHeader, []b
 	entry := getFsEntry(ncaHeader, dataSectionIndex)
 
 	if entry.Size == 0 {
-		return nil, nil, errors.New("empty section")
+		return nil, nil, errors.New("empty or invalid section")
+	}
+	if uint64(entry.StartOffset) > uint64(^uint64(0)>>1) || ncaOffset > int64(^uint64(0)>>1)-int64(entry.StartOffset) {
+		return nil, nil, errors.New("NCA section offset overflows")
 	}
 
 	encodedEntryContent := make([]byte, entry.Size)
@@ -81,7 +87,7 @@ func openMetaNcaDataSection(reader io.ReaderAt, ncaOffset int64) (*fsHeader, []b
 		return nil, nil, err
 	}
 	if fsHeader.encType != 3 {
-		return nil, nil, errors.New("non supported encryption type [encryption type:" + string(fsHeader.encType))
+		return nil, nil, fmt.Errorf("non supported encryption type [encryption type:%d]", fsHeader.encType)
 	}
 
 	/*if fsHeader.hashType != 2 { //Sha256 (FS_TYPE_PFS0)
@@ -100,29 +106,47 @@ func openMetaNcaDataSection(reader io.ReaderAt, ncaOffset int64) (*fsHeader, []b
 }
 
 func decryptAesCtr(ncaHeader *ncaHeader, fsHeader *fsHeader, offset uint32, size uint32, encoded []byte) ([]byte, error) {
-	keyRevision := string(ncaHeader.getKeyRevision())
+	keyRevision := fmt.Sprintf("%x", ncaHeader.getKeyRevision())
 	cryptoType := ncaHeader.cryptoType
 
 	if cryptoType != 0 {
 		return []byte{}, errors.New("unsupported crypto type")
 	}
 
-	keys, _ := settings.SwitchKeys()
+	keys, err := settings.SwitchKeys()
+	if err != nil {
+		return nil, err
+	}
+	if keys == nil {
+		return nil, errors.New("switch keys are not initialized")
+	}
 
-	keyName := fmt.Sprintf("key_area_key_application_%x", keyRevision)
+	keyName := fmt.Sprintf("key_area_key_application_%s", keyRevision)
 	KeyString := keys.GetKey(keyName)
 	if KeyString == "" {
-		return nil, errors.New(fmt.Sprintf("missing Key_area_key[%v]", keyName))
+		return nil, fmt.Errorf("missing Key_area_key[%v]", keyName)
 	}
 	key, _ := hex.DecodeString(KeyString)
 
+	if len(ncaHeader.encryptedKeys) < 0x30 {
+		return nil, errors.New("truncated encrypted NCA keys")
+	}
 	decKey := _crypto.DecryptAes128Ecb(ncaHeader.encryptedKeys[0x20:0x30], key)
+	if len(decKey) != 16 {
+		return nil, errors.New("invalid key area key")
+	}
 
 	counter := make([]byte, 0x10)
 	binary.BigEndian.PutUint64(counter, uint64(fsHeader.generation))
 	binary.BigEndian.PutUint64(counter[8:], uint64(offset/0x10))
 
-	c, _ := aes.NewCipher(decKey)
+	c, err := aes.NewCipher(decKey)
+	if err != nil {
+		return nil, err
+	}
+	if uint64(size) > uint64(len(encoded)) {
+		return nil, errors.New("encoded NCA section is truncated")
+	}
 
 	decContent := make([]byte, size)
 

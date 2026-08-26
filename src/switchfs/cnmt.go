@@ -2,6 +2,7 @@ package switchfs
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -63,15 +64,26 @@ func readBinaryCnmt(pfs0 *PFS0, data []byte) (*ContentMetaAttributes, error) {
 		return nil, errors.New("unexpected pfs0")
 	}
 	cnmtFile := pfs0.Files[0]
-	cnmt := data[int64(cnmtFile.StartOffset):]
+	if cnmtFile.StartOffset > uint64(len(data)) || cnmtFile.Size > uint64(len(data))-cnmtFile.StartOffset {
+		return nil, errors.New("CNMT file is outside its container")
+	}
+	cnmt := data[cnmtFile.StartOffset : cnmtFile.StartOffset+cnmtFile.Size]
+	if len(cnmt) < 0x20 {
+		return nil, errors.New("CNMT header is truncated")
+	}
 	titleId := binary.LittleEndian.Uint64(cnmt[0:0x8])
 	version := binary.LittleEndian.Uint32(cnmt[0x8:0xC])
 	tableOffset := binary.LittleEndian.Uint16(cnmt[0xE:0x10])
 	contentEntryCount := binary.LittleEndian.Uint16(cnmt[0x10:0x12])
+	entriesOffset := uint64(0x20) + uint64(tableOffset)
+	entriesSize := uint64(contentEntryCount) * 0x38
+	if entriesOffset > uint64(len(cnmt)) || entriesSize > uint64(len(cnmt))-entriesOffset {
+		return nil, errors.New("CNMT content table is truncated")
+	}
 	//metaEntryCount := binary.LittleEndian.Uint16(cnmt[0x12:0x14])
 	contents := map[string]Content{}
 	for i := uint16(0); i < contentEntryCount; i++ {
-		position := 0x20 /*size of cnmt header*/ + tableOffset + (i * uint16(0x38))
+		position := entriesOffset + uint64(i)*0x38
 		ncaId := cnmt[position+0x20 : position+0x20+0x10]
 		//fmt.Println(fmt.Sprintf("0%x", ncaId))
 		contentType := ""
@@ -103,7 +115,7 @@ func readBinaryCnmt(pfs0 *PFS0, data []byte) (*ContentMetaAttributes, error) {
 		metaType = "UPD"
 	}
 
-	return &ContentMetaAttributes{Contents: contents, Version: int(version), TitleId: fmt.Sprintf("0%x", titleId), Type: metaType}, nil
+	return &ContentMetaAttributes{Contents: contents, Version: int(version), TitleId: fmt.Sprintf("%016x", titleId), Type: metaType}, nil
 }
 
 func readXmlCnmt(xmlBytes []byte) (*ContentMetaAttributes, error) {
@@ -113,5 +125,13 @@ func readXmlCnmt(xmlBytes []byte) (*ContentMetaAttributes, error) {
 		return nil, err
 	}
 	titleId := strings.Replace(cmt.ID, "0x", "", 1)
+	titleId = strings.TrimPrefix(titleId, "0X")
+	if len(titleId) != 16 {
+		return nil, errors.New("invalid CNMT title ID")
+	}
+	if _, err := hex.DecodeString(titleId); err != nil {
+		return nil, errors.New("invalid CNMT title ID")
+	}
+	titleId = strings.ToLower(titleId)
 	return &ContentMetaAttributes{Version: cmt.Version, TitleId: titleId, Type: cmt.Type}, nil
 }

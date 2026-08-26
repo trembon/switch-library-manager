@@ -54,7 +54,10 @@ go test ./...
 go vet ./...
 ```
 
-- At the time this guide was created, `go test ./...` and `go vet ./...` fail on the existing vet diagnostic in `switchfs/nca.go` (`int` to `string` conversion). `go test -vet=off ./...` passes the current tests, but does not replace fixing vet.
+- Every task that changes Go code must run `go test ./...` before it is considered complete. Report the test command and result in the task summary.
+- Core logic coverage is measured for `db`, `fileio`, `process`, `settings`, `switchfs`, and `switchfs/_crypto`; presentation packages and generated bindata are excluded from the coverage threshold.
+- The required aggregate core-logic statement coverage is 90%. The `verify-pr` workflow generates and analyzes the combined coverage profile.
+
 - For parser, filesystem, persistence, or shared-state changes, add focused tests and run `go test -race ./...` when practical.
 - Report whether tests used synthetic fixtures, filename-only fallback data, or real encrypted Switch files. Do not add proprietary keys or large game images to the repository.
 - For packaging changes, run `./astilectron-bundler` from `src` and verify every configured output directory. The CI build also runs `go get`, installs the bundler, copies it into `src`, and then invokes it.

@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"go.uber.org/zap"
 	"io"
+	"math"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 func ReadXciMetadata(filePath string) (map[string]*ContentMetaAttributes, error) {
@@ -18,8 +20,7 @@ func ReadXciMetadata(filePath string) (map[string]*ContentMetaAttributes, error)
 	defer file.Close()
 
 	header := make([]byte, 0x200)
-	_, err = file.ReadAt(header, 0)
-	if err != nil {
+	if err := readAtFull(file, header, 0); err != nil {
 		return nil, err
 	}
 
@@ -28,6 +29,9 @@ func ReadXciMetadata(filePath string) (map[string]*ContentMetaAttributes, error)
 	}
 
 	rootPartitionOffset := binary.LittleEndian.Uint64(header[0x130:0x138])
+	if rootPartitionOffset > math.MaxInt64 {
+		return nil, errors.New("XCI root partition offset overflows")
+	}
 	//rootPartitionSize := binary.LittleEndian.Uint64(header[0x138:0x140])
 
 	rootHfs0, err := readPfs0(file, int64(rootPartitionOffset))
@@ -38,6 +42,9 @@ func ReadXciMetadata(filePath string) (map[string]*ContentMetaAttributes, error)
 	secureHfs0, secureOffset, err := readSecurePartition(file, rootHfs0, rootPartitionOffset)
 	if err != nil {
 		return nil, err
+	}
+	if secureHfs0 == nil {
+		return nil, errors.New("XCI secure partition not found")
 	}
 
 	contentMap := map[string]*ContentMetaAttributes{}
@@ -98,7 +105,13 @@ func getNcaById(hfs0 *PFS0, id string) *fileEntry {
 }
 
 func readSecurePartition(file io.ReaderAt, hfs0 *PFS0, rootPartitionOffset uint64) (*PFS0, int64, error) {
+	if file == nil || hfs0 == nil || rootPartitionOffset > math.MaxInt64 {
+		return nil, 0, errors.New("invalid XCI secure partition")
+	}
 	for _, hfs0File := range hfs0.Files {
+		if hfs0File.StartOffset > math.MaxInt64-rootPartitionOffset {
+			return nil, 0, errors.New("XCI secure partition offset overflows")
+		}
 		offset := int64(rootPartitionOffset) + int64(hfs0File.StartOffset)
 
 		if hfs0File.Name == "secure" {

@@ -2,6 +2,7 @@ package settings
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -26,10 +27,12 @@ func SwitchKeys() (*switchKeys, error) {
 }
 
 func InitSwitchKeys(baseFolder string) (*switchKeys, error) {
+	// A failed lookup must not leave keys from a previous base folder active.
+	keysInstance = nil
 	var (
 		path string
-		p *properties.Properties
-		err error
+		p    *properties.Properties
+		err  error
 	)
 	logger := zap.S()
 
@@ -37,13 +40,13 @@ func InitSwitchKeys(baseFolder string) (*switchKeys, error) {
 	settings := ReadSettings(baseFolder)
 	if settings.Prodkeys != "" {
 		path = settings.Prodkeys
-		if !strings.HasSuffix(path, ".keys") {
+		if !strings.EqualFold(filepath.Ext(path), ".keys") {
 			path = filepath.Join(path, "prod.keys")
 		}
 
 		logger.Infof("Trying to load prod.keys based on settings.json: %v", path)
 		p, err = properties.LoadFile(path, properties.UTF8)
-	}else{
+	} else {
 		err = errors.New("prod.keys not defined in settings.json")
 	}
 
@@ -57,10 +60,15 @@ func InitSwitchKeys(baseFolder string) (*switchKeys, error) {
 
 	// third, if not found in current, look in home directory
 	if err != nil {
-		path = "${HOME}/.switch/prod.keys"
+		home, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			err = homeErr
+		} else {
+			path = filepath.Join(home, ".switch", "prod.keys")
 
-		logger.Infof("Trying to load prod.keys based on home directory: %v", path)
-		p, err = properties.LoadFile(path, properties.UTF8)
+			logger.Infof("Trying to load prod.keys based on home directory: %v", path)
+			p, err = properties.LoadFile(path, properties.UTF8)
+		}
 	}
 
 	if err != nil {
