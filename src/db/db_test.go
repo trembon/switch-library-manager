@@ -9,9 +9,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/boltdb/bolt"
 	"github.com/trembon/switch-library-manager/settings"
 	"github.com/trembon/switch-library-manager/switchfs"
+	bolt "go.etcd.io/bbolt"
 )
 
 type progressRecorder struct {

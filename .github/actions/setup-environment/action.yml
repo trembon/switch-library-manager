@@ -4,19 +4,14 @@ runs:
   using: composite
   steps:
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v7
       with:
-        go-version: "1.24"
-
-    - name: Get bundler
-      working-directory: ./src
-      shell: bash
-      run: go get -u github.com/asticode/go-astilectron-bundler/
+        go-version: "1.27"
 
     - name: Install bundler
       working-directory: ./src
       shell: bash
-      run: go install github.com/asticode/go-astilectron-bundler/astilectron-bundler
+      run: go install github.com/asticode/go-astilectron-bundler/astilectron-bundler@v0.7.12
 
     - name: Move bundler
       working-directory: ./src

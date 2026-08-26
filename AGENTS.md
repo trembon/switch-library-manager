@@ -3,7 +3,7 @@
 ## Project Shape
 
 - This is a cross-platform Go desktop application for scanning and organizing Nintendo Switch backup files.
-- The Go module is `src/go.mod`. Run Go commands from `src`, not from the repository root.
+- The Go module is `src/go.mod`. Run Go commands from `src`, not from the repository root. The project targets Go `1.27`.
 - Runtime state is stored beside the executable: `settings.json`, `titles.json`, `versions.json`, `slm.db`, and `slm.log`.
 - The application has two modes: an Astilectron GUI and a command-line workflow. Both use the same `db`, `settings`, `switchfs`, and `process` packages.
 - `src/resources/app` is the embedded HTML/CSS/JavaScript frontend.

@@ -8,7 +8,7 @@
 
 ## Build Contract
 
-- CI uses Go `1.24`, installs `github.com/asticode/go-astilectron-bundler/astilectron-bundler`, copies it to `src`, and runs `./astilectron-bundler`.
+- CI uses Go `1.27`, installs the pinned `github.com/asticode/go-astilectron-bundler/astilectron-bundler@v0.7.12`, copies it to `src`, and runs `./astilectron-bundler`.
 - The bundler generates ignored platform bindata files and writes outputs under `src/output`.
 - Any change to `src/bundler.json` must be checked against artifact paths in `actions/publish-artifacts/action.yml`.
 - The release action currently requires all three paths: `src/output/windows-amd64/*`, `src/output/linux-amd64/*`, and `src/output/darwin-amd64/*`. Restricting bundler environments without updating publication will make the release fail.

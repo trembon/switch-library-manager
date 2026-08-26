@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/boltdb/bolt"
 	"github.com/trembon/switch-library-manager/settings"
+	bolt "go.etcd.io/bbolt"
 	"go.uber.org/zap"
 )
 
