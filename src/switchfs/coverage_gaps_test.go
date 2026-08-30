@@ -66,7 +66,7 @@ func TestOpenMetaNcaDataSectionValidationBranches(t *testing.T) {
 		t.Fatal("expected empty NCA section error")
 	}
 	unsupportedEncryption := mutateSyntheticNCAHeader(t, validNCA, func(header []byte) {
-		header[0x404] = 1
+		header[0x404] = 2
 	})
 	if _, _, err := openMetaNcaDataSection(bytes.NewReader(unsupportedEncryption), 0); err == nil {
 		t.Fatal("expected unsupported encryption error")

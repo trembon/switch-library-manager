@@ -86,16 +86,20 @@ func openMetaNcaDataSection(reader io.ReaderAt, ncaOffset int64) (*fsHeader, []b
 	if err != nil {
 		return nil, nil, err
 	}
-	if fsHeader.encType != 3 {
-		return nil, nil, fmt.Errorf("non supported encryption type [encryption type:%d]", fsHeader.encType)
-	}
-
 	/*if fsHeader.hashType != 2 { //Sha256 (FS_TYPE_PFS0)
 		return nil, errors.New("non FS_TYPE_PFS0")
 	}*/
-	decoded, err := decryptAesCtr(ncaHeader, fsHeader, entry.StartOffset, entry.Size, encodedEntryContent)
-	if err != nil {
-		return nil, nil, err
+	var decoded []byte
+	switch fsHeader.encType {
+	case 1:
+		decoded = encodedEntryContent
+	case 3:
+		decoded, err = decryptAesCtr(ncaHeader, fsHeader, entry.StartOffset, entry.Size, encodedEntryContent)
+		if err != nil {
+			return nil, nil, err
+		}
+	default:
+		return nil, nil, fmt.Errorf("non supported encryption type [encryption type:%d]", fsHeader.encType)
 	}
 	hashInfo, err := fsHeader.getHashInfo()
 	if err != nil {

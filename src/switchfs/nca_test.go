@@ -179,6 +179,22 @@ func TestDecryptAesCtrErrorPaths(t *testing.T) {
 	}
 }
 
+func TestOpenMetaNcaDataSectionSupportsUnencryptedSections(t *testing.T) {
+	section := makePFS0(pfs0Magic, []string{"meta.cnmt"}, [][]byte{makeCNMT(1, 0, ContentMetaType_Application)})
+	section = append(section, make([]byte, (-len(section))&0x1ff)...)
+	nca := mutateSyntheticNCAHeader(t, makeSyntheticNCA(t, section, 0), func(header []byte) {
+		header[0x404] = 1
+	})
+	copy(nca[0xc00:], section)
+	_, decoded, err := openMetaNcaDataSection(bytes.NewReader(nca), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(decoded[:4]) != "PFS0" {
+		t.Fatalf("unexpected unencrypted section: %q", decoded[:4])
+	}
+}
+
 func TestDecryptAesCtrSuccessAndTruncation(t *testing.T) {
 	initTestKeys(t)
 	plain := bytes.Repeat([]byte("ctr"), 32)

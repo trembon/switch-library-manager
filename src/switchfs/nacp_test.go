@@ -2,6 +2,7 @@ package switchfs
 
 import (
 	"bytes"
+	"compress/flate"
 	"encoding/binary"
 	"testing"
 )
@@ -52,6 +53,39 @@ func TestExtractNacpBranches(t *testing.T) {
 		"Control": {ID: "control-id"},
 	}}, bytes.NewReader(noNacpNca), control, 0); err == nil {
 		t.Fatal("expected missing control.nacp error")
+	}
+}
+
+func TestReadNacpCompressedTitles(t *testing.T) {
+	const nacpSize = 0x4000
+	const titleDataSize = 0x6000
+	titleData := make([]byte, titleDataSize)
+	copy(titleData, []byte("Compressed Game"))
+	var compressed bytes.Buffer
+	writer, err := flate.NewWriter(&compressed, flate.BestCompression)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writer.Write(titleData); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if compressed.Len() > 0xffff {
+		t.Fatalf("compressed title data is too large: %d", compressed.Len())
+	}
+
+	data := make([]byte, nacpSize)
+	binary.LittleEndian.PutUint16(data, uint16(compressed.Len()))
+	copy(data[2:], compressed.Bytes())
+	data[0x3215] = 1
+	nacp, err := readNacp(data, RomfsHeader{}, RomfsFileEntry{size: nacpSize})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if nacp.TitleName["AmericanEnglish"].Title != "Compressed Game" {
+		t.Fatalf("unexpected compressed NACP title: %q", nacp.TitleName["AmericanEnglish"].Title)
 	}
 }
 

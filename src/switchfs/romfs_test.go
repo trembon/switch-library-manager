@@ -102,3 +102,35 @@ func TestLanguageStringOutOfRange(t *testing.T) {
 		t.Fatal("unexpected out-of-range language string")
 	}
 }
+
+func TestReadRomfsFileEntrySupportsUTF8NamesAndPadding(t *testing.T) {
+	const tableOffset = 0x50
+	firstName := []byte("control.nacp")
+	secondName := []byte("icon_AmericanEnglish.dat")
+	firstSize := 0x20 + len(firstName)
+	secondOffset := (firstSize + 3) &^ 3
+	entryTableSize := secondOffset + 0x20 + len(secondName)
+	data := make([]byte, tableOffset+entryTableSize)
+	putRomfsHeader(data, RomfsHeader{HeaderSize: 0x50, FileMetaTableOffset: tableOffset, FileMetaTableSize: uint64(entryTableSize), DataOffset: 0x200})
+
+	first := data[tableOffset:]
+	binary.LittleEndian.PutUint32(first[0x4:0x8], uint32(secondOffset))
+	binary.LittleEndian.PutUint32(first[0x1c:0x20], uint32(len(firstName)))
+	copy(first[0x20:], firstName)
+
+	second := first[secondOffset:]
+	binary.LittleEndian.PutUint32(second[0x4:0x8], ^uint32(0))
+	binary.LittleEndian.PutUint32(second[0x1c:0x20], uint32(len(secondName)))
+	copy(second[0x20:], secondName)
+
+	entries, err := readRomfsFileEntry(data, RomfsHeader{FileMetaTableOffset: tableOffset, FileMetaTableSize: uint64(entryTableSize)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := entries[string(firstName)]; !ok {
+		t.Fatalf("missing first UTF-8 entry: %#v", entries)
+	}
+	if _, ok := entries[string(secondName)]; !ok {
+		t.Fatalf("missing padded UTF-8 entry: %#v", entries)
+	}
+}

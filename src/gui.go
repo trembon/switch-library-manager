@@ -265,7 +265,7 @@ func (g *GUI) handleMessage(m *astilectron.EventMessage) interface{} {
 							Version: version,
 							Type:    getType(v),
 							TitleId: v.File.Metadata.TitleId,
-							Path:    v.File.ExtendedInfo.FileName,
+							Path:    filepath.Join(v.File.ExtendedInfo.BaseFolder, v.File.ExtendedInfo.FileName),
 						})
 				}
 

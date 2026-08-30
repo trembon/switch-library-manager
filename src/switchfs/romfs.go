@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"unicode/utf16"
+	"unicode/utf8"
 )
 
 type RomfsHeader struct {
@@ -82,18 +83,50 @@ func readRomfsFileEntry(data []byte, header RomfsHeader) (map[string]RomfsFileEn
 		entry.hash = binary.LittleEndian.Uint32(dirBytes[offset+0x18 : offset+0x1C])
 		entry.name_size = binary.LittleEndian.Uint32(dirBytes[offset+0x1C : offset+0x20])
 		nameEnd := offset + 0x20 + uint64(entry.name_size)
-		if nameEnd < offset || nameEnd > uint64(len(dirBytes)) || entry.name_size%2 != 0 {
+		if nameEnd < offset || nameEnd > uint64(len(dirBytes)) {
 			return nil, fmt.Errorf("invalid RomFS file name at offset %d", offset)
 		}
-		name16 := make([]uint16, entry.name_size/2)
-		for i := range name16 {
-			name16[i] = binary.LittleEndian.Uint16(dirBytes[offset+0x20+uint64(i)*2:])
+		nameBytes := dirBytes[offset+0x20 : nameEnd]
+		var validName bool
+		entry.name, validName = decodeRomfsName(nameBytes)
+		if !validName {
+			return nil, fmt.Errorf("invalid RomFS file name at offset %d", offset)
 		}
-		entry.name = string(utf16.Decode(name16))
 		result[entry.name] = entry
-		offset = nameEnd
+		// RomFS file entries are padded to a four-byte boundary.
+		offset = (nameEnd + 3) &^ 3
 	}
 	return result, nil
 
 	//fmt.Println(string(section[DataOffset+offset+0x3060:DataOffset+offset+0x3060 +0x10]))
+}
+
+func decodeRomfsName(nameBytes []byte) (string, bool) {
+	// Standard RomFS names are UTF-16LE. Some newer generated control NCAs
+	// contain UTF-8 names instead, so retain both representations.
+	if len(nameBytes)%2 == 0 {
+		utf16LE := true
+		for i := 1; i < len(nameBytes); i += 2 {
+			if nameBytes[i] != 0 {
+				utf16LE = false
+				break
+			}
+		}
+		if utf16LE {
+			name16 := make([]uint16, len(nameBytes)/2)
+			for i := range name16 {
+				name16[i] = binary.LittleEndian.Uint16(nameBytes[i*2:])
+			}
+			return string(utf16.Decode(name16)), true
+		}
+	}
+	if !utf8.Valid(nameBytes) {
+		name16 := make([]uint16, len(nameBytes)/2)
+		for i := range name16 {
+			name16[i] = binary.LittleEndian.Uint16(nameBytes[i*2:])
+		}
+		decoded := string(utf16.Decode(name16))
+		return decoded, utf8.ValidString(decoded)
+	}
+	return string(nameBytes), true
 }
