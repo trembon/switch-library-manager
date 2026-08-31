@@ -240,9 +240,7 @@ func (g *GUI) handleMessage(m *astilectron.EventMessage) interface{} {
 					}
 				}
 				if title, ok := g.state.switchDB.TitlesMap[k]; ok {
-					if title.Attributes.Name != "" {
-						name = title.Attributes.Name
-					}
+					name = getLibraryTitleName(title, name, v.File.ExtendedInfo.FileName)
 					libraryData = append(libraryData,
 						LibraryTemplateData{
 							Icon:    title.Attributes.IconUrl,
@@ -329,6 +327,16 @@ func getType(gameFile *db.SwitchGameFiles) string {
 		return ext[1:]
 	}
 	return ""
+}
+
+func getLibraryTitleName(title *db.SwitchTitle, name, fileName string) string {
+	if title != nil && title.Attributes.Name != "" {
+		return title.Attributes.Name
+	}
+	if name != "" {
+		return name
+	}
+	return db.ParseTitleNameFromFileName(fileName)
 }
 
 func (g *GUI) saveSettings(settingsJson string) error {
