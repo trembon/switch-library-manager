@@ -110,7 +110,7 @@ func openMetaNcaDataSection(reader io.ReaderAt, ncaOffset int64) (*fsHeader, []b
 }
 
 func decryptAesCtr(ncaHeader *ncaHeader, fsHeader *fsHeader, offset uint32, size uint32, encoded []byte) ([]byte, error) {
-	keyRevision := fmt.Sprintf("%x", ncaHeader.getKeyRevision())
+	keyRevision := fmt.Sprintf("%02x", ncaHeader.getKeyRevision())
 	cryptoType := ncaHeader.cryptoType
 
 	if cryptoType != 0 {

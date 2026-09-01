@@ -198,7 +198,7 @@ func TestOpenMetaNcaDataSectionSupportsUnencryptedSections(t *testing.T) {
 func TestDecryptAesCtrSuccessAndTruncation(t *testing.T) {
 	initTestKeys(t)
 	plain := bytes.Repeat([]byte("ctr"), 32)
-	nca := &ncaHeader{cryptoType: 0, keyGeneration1: 1, encryptedKeys: make([]byte, 0x40)}
+	nca := &ncaHeader{cryptoType: 0, keyGeneration1: 3, encryptedKeys: make([]byte, 0x40)}
 	areaKey, _ := hex.DecodeString(testAreaKey)
 	contentKey, _ := hex.DecodeString(testNcaKey)
 	block, err := aes.NewCipher(areaKey)
@@ -207,7 +207,7 @@ func TestDecryptAesCtrSuccessAndTruncation(t *testing.T) {
 	}
 	block.Encrypt(nca.encryptedKeys[0x20:0x30], contentKey)
 	fs := &fsHeader{generation: 9}
-	if got := nca.getKeyRevision(); got != 0 {
+	if got := nca.getKeyRevision(); got != 2 {
 		t.Fatalf("unexpected key revision: %d", got)
 	}
 	encrypted := cryptCtr(t, contentKey, fs.generation, 0x30, plain)
@@ -238,7 +238,7 @@ func TestDecryptAesCtrSuccessAndTruncation(t *testing.T) {
 func initTestKeys(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
-	keys := []byte("header_key = " + testHeaderKey + "\nkey_area_key_application_0 = " + testAreaKey + "\n")
+	keys := []byte("header_key = " + testHeaderKey + "\nkey_area_key_application_00 = " + testAreaKey + "\nkey_area_key_application_02 = " + testAreaKey + "\n")
 	if err := os.WriteFile(filepath.Join(dir, "prod.keys"), keys, 0o600); err != nil {
 		t.Fatal(err)
 	}
