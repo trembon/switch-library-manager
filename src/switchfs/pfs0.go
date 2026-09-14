@@ -117,7 +117,11 @@ func readPfs0(reader io.ReaderAt, offset int64) (*PFS0, error) {
 		if fileOffset > math.MaxUint64-p.HeaderLen {
 			return nil, fmt.Errorf("PFS0 file entry %d offset overflows", i)
 		}
-		p.Files = append(p.Files, fileEntry{fileOffset + p.HeaderLen, fileSize, string(nameBytes)})
+		startOffset := fileOffset + p.HeaderLen
+		if fileSize > math.MaxUint64-startOffset {
+			return nil, fmt.Errorf("PFS0 file entry %d range overflows", i)
+		}
+		p.Files = append(p.Files, fileEntry{startOffset, fileSize, string(nameBytes)})
 	}
 
 	return p, nil
