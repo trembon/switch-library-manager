@@ -16,7 +16,7 @@ jobs:
           - os: ubuntu-22.04
             platform: linux/amd64
             artifact: switch-library-manager.linux-amd64
-          - os: macos-latest
+          - os: macos-15-intel
             platform: darwin/amd64
             artifact: switch-library-manager.darwin-amd64
     runs-on: ${{ matrix.os }}

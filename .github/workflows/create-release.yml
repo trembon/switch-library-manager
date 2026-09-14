@@ -6,25 +6,69 @@ on:
       - "*.*.*" # Triggers on tags like 1.0.0 and v1.0.0
 
 jobs:
-  build-and-release:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write # Required to create a release
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows/amd64
+            artifact: switch-library-manager.windows-amd64
+          - os: ubuntu-22.04
+            platform: linux/amd64
+            artifact: switch-library-manager.linux-amd64
+          - os: macos-15-intel
+            platform: darwin/amd64
+            artifact: switch-library-manager.darwin-amd64
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        uses: actions/checkout@v7
 
       - name: Setup environment
         uses: ./.github/actions/setup-environment
 
       - name: Build app
-        id: build
         uses: ./.github/actions/build-app
+        with:
+          platform: ${{ matrix.platform }}
+
+      - name: Publish artifact
+        uses: ./.github/actions/publish-artifacts
+        with:
+          artifact-name: ${{ matrix.artifact }}
+
+  package-and-release:
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: switch-library-manager.windows-amd64
+          path: release_inputs/windows-amd64
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: switch-library-manager.linux-amd64
+          path: release_inputs/linux-amd64
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: switch-library-manager.darwin-amd64
+          path: release_inputs/darwin-amd64
 
       - name: Package artifacts
         id: package
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -38,32 +82,28 @@ jobs:
           release_version="v${version}"
           echo "release_version=${release_version}" >> "$GITHUB_OUTPUT"
 
-          mkdir -p release_packages
+          package_dir="$GITHUB_WORKSPACE/release_packages"
+          mkdir -p "$package_dir"
 
           for platform in windows-amd64 linux-amd64 darwin-amd64; do
-            output_dir="src/output/${platform}"
-            if [[ ! -d "$output_dir" ]] || [[ -z "$(find "$output_dir" -mindepth 1 -print -quit)" ]]; then
-              echo "Build output is missing or empty: $output_dir" >&2
+            artifact_dir="release_inputs/${platform}"
+            if [[ ! -d "$artifact_dir" ]] || [[ -z "$(find "$artifact_dir" -mindepth 1 -print -quit)" ]]; then
+              echo "Downloaded artifact is missing or empty: $artifact_dir" >&2
               exit 1
             fi
           done
 
-          # Package Windows artifact as a zip
           (
-            cd src/output/windows-amd64
-            zip -r "../../../release_packages/switch-library-manager-${release_version}.windows-amd64.zip" .
+            cd release_inputs/windows-amd64
+            zip -r "$package_dir/switch-library-manager-${release_version}.windows-amd64.zip" .
           )
 
-          # Package Linux artifact as a tar.gz
-          (
-            cd src/output/linux-amd64
-            tar -czf "../../../release_packages/switch-library-manager-${release_version}.linux-amd64.tar.gz" .
-          )
+          tar -czf "$package_dir/switch-library-manager-${release_version}.linux-amd64.tar.gz" \
+            -C release_inputs/linux-amd64 .
 
-          # Package Mac artifact as a zip
           (
-            cd src/output/darwin-amd64
-            zip -r "../../../release_packages/switch-library-manager-${release_version}.darwin-amd64.zip" .
+            cd release_inputs/darwin-amd64
+            zip -r "$package_dir/switch-library-manager-${release_version}.darwin-amd64.zip" .
           )
 
       - name: Create Release

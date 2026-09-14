@@ -14,11 +14,6 @@ jobs:
       - name: Setup environment
         uses: ./.github/actions/setup-environment
 
-      - name: Generate embedded assets
-        working-directory: ./src
-        shell: bash
-        run: ./astilectron-bundler
-
       - name: Run Go tests
         working-directory: ./src
         shell: bash

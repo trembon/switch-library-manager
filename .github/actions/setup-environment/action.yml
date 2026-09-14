@@ -18,4 +18,13 @@ runs:
     - name: Install Wails CLI
       working-directory: ./src
       shell: bash
-      run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
+      run: |
+        go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
+        go_bin="$(go env GOPATH)/bin"
+        echo "$go_bin" >> "$GITHUB_PATH"
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          export PATH="$(cygpath -u "$go_bin"):$PATH"
+        else
+          export PATH="$go_bin:$PATH"
+        fi
+        wails version
