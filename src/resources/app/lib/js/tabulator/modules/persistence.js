@@ -167,7 +167,7 @@ Persistence.prototype.load = function (type, current) {
 	return data;
 };
 
-//retreive data from memory
+//retrieve data from memory
 Persistence.prototype.retreiveData = function (type) {
 	return this.readFunc ? this.readFunc(this.id, type) : false;
 };
@@ -363,7 +363,7 @@ Persistence.prototype.parseColumns = function (columns) {
 	return definitions;
 };
 
-// read peristence information from storage
+// read persistence information from storage
 Persistence.prototype.readers = {
 	local: function local(id, type) {
 		var data = localStorage.getItem(id + "-" + type);

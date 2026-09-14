@@ -709,7 +709,7 @@ Page.prototype.footerRedraw = function () {
 	}
 };
 
-//set the paramter names for pagination requests
+//set the parameter names for pagination requests
 Page.prototype.paginationDataSentNames = {
 	"page": "page",
 	"size": "size",

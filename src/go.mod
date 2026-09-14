@@ -1,16 +1,16 @@
 module github.com/trembon/switch-library-manager
 
-go 1.27.0
+go 1.25.5
 
 require (
 	github.com/avast/retry-go/v5 v5.0.0
 	github.com/jedib0t/go-pretty/v6 v6.8.3
-	github.com/magiconair/properties v1.18.11
+	github.com/magiconair/properties v1.8.10
 	github.com/mcuadros/go-version v0.0.0-20190830083331-035f6764e8d2
 	github.com/schollz/progressbar/v3 v3.19.1
 	github.com/wailsapp/wails/v2 v2.15.0
 	go.etcd.io/bbolt v1.5.0
-	go.uber.org/zap v1.28.0
+	go.uber.org/zap v1.27.1
 	robpike.io/nihongo v0.0.0-20230705220025-ab7f6184a918
 )
 

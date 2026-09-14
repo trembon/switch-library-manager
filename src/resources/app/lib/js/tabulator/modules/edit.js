@@ -5,7 +5,7 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
 var Edit = function Edit(table) {
 	this.table = table; //hold Tabulator object
 	this.currentCell = false; //hold currently editing cell
-	this.mouseClick = false; //hold mousedown state to prevent click binding being overriden by editor opening
+	this.mouseClick = false; //hold mousedown state to prevent click binding being overridden by editor opening
 	this.recursionBlock = false; //prevent focus recursion
 	this.invalidEdit = false;
 	this.editedCells = [];
@@ -204,7 +204,7 @@ Edit.prototype.edit = function (cell, e, forceEdit) {
 		return;
 	}
 
-	//handle successfull value change
+	//handle successful value change
 	function success(value) {
 		if (self.currentCell === cell) {
 			var valid = true;
@@ -498,7 +498,7 @@ Edit.prototype.editors = {
 		function onChange(e) {
 			if ((cellValue === null || typeof cellValue === "undefined") && input.value !== "" || input.value !== cellValue) {
 				if (success(input.value)) {
-					cellValue = input.value; //persist value if successfully validated incase editor is used as header filter
+					cellValue = input.value; //persist value if successfully validated in case editor is used as header filter
 				}
 			} else {
 				cancel();
@@ -572,7 +572,7 @@ Edit.prototype.editors = {
 			if ((cellValue === null || typeof cellValue === "undefined") && input.value !== "" || input.value !== cellValue) {
 
 				if (success(input.value)) {
-					cellValue = input.value; //persist value if successfully validated incase editor is used as header filter
+					cellValue = input.value; //persist value if successfully validated in case editor is used as header filter
 				}
 
 				setTimeout(function () {
@@ -697,7 +697,7 @@ Edit.prototype.editors = {
 
 			if (value !== cellValue) {
 				if (success(value)) {
-					cellValue = value; //persist value if successfully validated incase editor is used as header filter
+					cellValue = value; //persist value if successfully validated in case editor is used as header filter
 				}
 			} else {
 				cancel();
@@ -786,7 +786,7 @@ Edit.prototype.editors = {
 
 			if (value != cellValue) {
 				if (success(value)) {
-					cellValue = value; //persist value if successfully validated incase editor is used as header filter
+					cellValue = value; //persist value if successfully validated in case editor is used as header filter
 				}
 			} else {
 				cancel();

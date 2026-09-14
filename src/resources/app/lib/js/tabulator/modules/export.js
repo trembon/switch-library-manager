@@ -187,7 +187,7 @@ Export.prototype.headersToExportRows = function (columns) {
 		}
 	}
 
-	//calculate maximum header debth
+	//calculate maximum header depth
 	columns.forEach(function (column) {
 		if (column.depth > headerDepth) {
 			headerDepth = column.depth;

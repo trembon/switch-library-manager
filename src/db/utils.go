@@ -45,7 +45,7 @@ func LoadAndUpdateFile(url string, filePath string, etag string) (*os.File, stri
 			file, err = saveFile(bytes, filePath)
 			etag = newEtag
 		} else {
-			zap.S().Infof("ignoring new update [%v], reason - [mailformed json file]", url)
+			zap.S().Infof("ignoring new update [%v], reason - [malformed json file]", url)
 		}
 	} else {
 		zap.S().Infof("file [%v] was not downloaded, reason - [%v]", url, err)
@@ -55,7 +55,7 @@ func LoadAndUpdateFile(url string, filePath string, etag string) (*os.File, stri
 		//load file
 		file, err = os.Open(filePath)
 		if err != nil {
-			zap.S().Infof("ignoring new update [%v], reason - [mailformed json file]", url)
+			zap.S().Infof("ignoring new update [%v], reason - [malformed json file]", url)
 			return nil, "", err
 		}
 

@@ -294,7 +294,7 @@ ColumnCalcs.prototype.generateRow = function (pos, data) {
 				};
 			}
 
-			//ensure css class defintion is replicated to calculation cell
+			//ensure css class definition is replicated to calculation cell
 			self.genColumn.definition.cssClass = column.definition.cssClass;
 
 			//generate cell and assign to correct column

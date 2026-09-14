@@ -36,12 +36,14 @@ func getFsEntry(ncaHeader *ncaHeader, index int) fsEntry {
 	fsEntryOffset := 0x240 + 0x10*index
 	fsEntryBytes := ncaHeader.headerBytes[fsEntryOffset : fsEntryOffset+0x10]
 
-	entryStartOffset := binary.LittleEndian.Uint32(fsEntryBytes[0x0:0x4]) * 0x200
-	entryEndOffset := binary.LittleEndian.Uint32(fsEntryBytes[0x4:0x8]) * 0x200
-
-	if entryEndOffset < entryStartOffset {
+	startSector := binary.LittleEndian.Uint32(fsEntryBytes[0x0:0x4])
+	endSector := binary.LittleEndian.Uint32(fsEntryBytes[0x4:0x8])
+	if startSector > ^uint32(0)/0x200 || endSector > ^uint32(0)/0x200 || endSector < startSector {
 		return fsEntry{}
 	}
+
+	entryStartOffset := startSector * 0x200
+	entryEndOffset := endSector * 0x200
 	return fsEntry{StartOffset: entryStartOffset, EndOffset: entryEndOffset, Size: entryEndOffset - entryStartOffset}
 }
 

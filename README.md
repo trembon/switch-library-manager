@@ -1,3 +1,11 @@
+# Update 2026-01-06
+
+As seen there havent been much activity in this repo lately which is because the motivation from my side has been low as I dont use this application that much anymore.
+
+I have no problem to continue to keep this repo alive, with viewing/closing issues/pull requests and creating releases, but I have seen some forks created with some continued work that maybe will get more active by time.
+
+So, if any of the forks mature more and seems like the more go-to version, create an issue and I can edit the readme to refer to that repo instead.
+
 # Switch library manager
 
 Fork of [Switch Library Manager](https://github.com/giwty/switch-library-manager) created by giwty with continued improvements and changes
@@ -43,7 +51,7 @@ You can customize the folder/file re-naming, as well as turn on/off features, an
 {
  "versions_json_url": "https://raw.githubusercontent.com/blawar/titledb/master/versions.json",
  "versions_etag": "W/\"c3f5ecb3392d61:0\"",
- "titles_json_url": "https://tinfoil.media/repo/db/titles.json",
+ "titles_json_url": "https://tinfoil.io/repo/db/titles.json",
  "titles_etag": "W/\"4a4fcc163a92d61:0\"",
  "prod_keys": "",
  "folder": "",
@@ -109,7 +117,7 @@ The following template elements are supported:
 
 ### Console parameters
 
-NOTE: parameters are only usable in command line mode, exept the parameter -m (mode) which will override the gui setting.
+NOTE: parameters are only usable in command line mode, except the parameter -m (mode) which will override the gui setting.
 
 | Name           | Flag | Value       | Description                                                                                          |
 | -------------- | ---- | ----------- | ---------------------------------------------------------------------------------------------------- |
@@ -120,6 +128,17 @@ NOTE: parameters are only usable in command line mode, exept the parameter -m (m
 
 ## Building
 
+### Windows
+- Install and setup Go
+- Clone the repo: `git clone https://github.com/trembon/switch-library-manager.git`
+- Move into the src folder `cd src`
+- Get the bundler `go get -u github.com/asticode/go-astilectron-bundler/...`
+- Install bundler `go install github.com/asticode/go-astilectron-bundler/astilectron-bundler`
+- Copy bundler binary to the src folder `copy %USERPROFILE%\go\bin\astilectron-bundler.exe .`
+- Execute `astilectron-bundler.exe`
+- Binaries will be available under output
+
+### macOS or Linux
 - Install and setup Go
 - Install the Wails CLI: `go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0`
 - Clone the repo: `git clone https://github.com/trembon/switch-library-manager.git`

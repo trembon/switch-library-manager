@@ -21,8 +21,8 @@ const (
 	SETTINGS_FILENAME         = "settings.json"
 	TITLE_JSON_FILENAME       = "titles.json"
 	VERSIONS_JSON_FILENAME    = "versions.json"
-	SLM_VERSION               = "1.9.0"
-	DEFAULT_TITLES_JSON_URL   = "https://tinfoil.media/repo/db/titles.json"
+	SLM_VERSION               = "1.10.0"
+	DEFAULT_TITLES_JSON_URL   = "https://tinfoil.io/repo/db/titles.json"
 	DEFAULT_VERSIONS_JSON_URL = "https://raw.githubusercontent.com/blawar/titledb/master/versions.json"
 	SLM_VERSION_URL           = "https://raw.githubusercontent.com/trembon/switch-library-manager/master/version.json"
 )

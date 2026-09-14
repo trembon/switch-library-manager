@@ -50,7 +50,7 @@ func (c *Console) Start() {
 	}
 
 	//1. load the titles JSON object
-	fmt.Println("Downlading latest switch titles json file")
+	fmt.Println("Downloading latest switch titles json file")
 	progressBar = progressbar.New(2)
 
 	filename := filepath.Join(c.baseFolder, settings.TITLE_JSON_FILENAME)

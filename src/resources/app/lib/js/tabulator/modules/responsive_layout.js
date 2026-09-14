@@ -11,7 +11,7 @@ var ResponsiveLayout = function ResponsiveLayout(table) {
 	this.collapseHandleColumn = false;
 };
 
-//generate resposive columns list
+//generate responsive columns list
 ResponsiveLayout.prototype.initialize = function () {
 	var self = this,
 	    columns = [];
@@ -21,7 +21,7 @@ ResponsiveLayout.prototype.initialize = function () {
 	this.collapseStartOpen = this.table.options.responsiveLayoutCollapseStartOpen;
 	this.hiddenColumns = [];
 
-	//detemine level of responsivity for each column
+	//determine level of responsivity for each column
 	this.table.columnManager.columnsByIndex.forEach(function (column, i) {
 		if (column.modules.responsive) {
 			if (column.modules.responsive.order && column.modules.responsive.visible) {

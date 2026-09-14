@@ -437,7 +437,7 @@ Sort.prototype.sorters = {
 
 			return emptyAlign;
 		} else {
-			console.error("Sort Error - 'datetime' sorter is dependant on moment.js");
+			console.error("Sort Error - 'datetime' sorter is dependent on moment.js");
 		}
 	},
 
