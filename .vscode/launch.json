@@ -1,0 +1,27 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Wails: Debug Switch Library Manager",
+      "type": "go",
+      "request": "launch",
+      "mode": "exec",
+      "program": "${workspaceFolder}/src/build/bin/switch-library-manager.exe",
+      "preLaunchTask": "build",
+      "cwd": "${workspaceFolder}/src",
+      "args": ["-m", "gui"],
+      "env": {}
+    },
+    {
+      "name": "Debug Switch Library Manager CLI",
+      "type": "go",
+      "request": "launch",
+      "mode": "exec",
+      "program": "${workspaceFolder}/src/build/bin/switch-library-manager.exe",
+      "preLaunchTask": "build",
+      "cwd": "${workspaceFolder}/src",
+      "args": ["-m", "console"],
+      "env": {}
+    }
+  ]
+}

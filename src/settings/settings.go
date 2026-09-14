@@ -176,10 +176,22 @@ func saveDefaultSettings(baseFolder string) *AppSettings {
 }
 
 func SaveSettings(settings *AppSettings, baseFolder string) *AppSettings {
-	file, _ := json.MarshalIndent(settings, "", " ")
-	_ = os.WriteFile(filepath.Join(baseFolder, SETTINGS_FILENAME), file, 0644)
+	if err := SaveSettingsWithError(settings, baseFolder); err != nil {
+		zap.S().Errorf("Failed to save settings: %v", err)
+	}
 	settingsInstance = settings
 	return settings
+}
+
+func SaveSettingsWithError(settings *AppSettings, baseFolder string) error {
+	file, err := json.MarshalIndent(settings, "", " ")
+	if err != nil {
+		return fmt.Errorf("marshal settings: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(baseFolder, SETTINGS_FILENAME), file, 0644); err != nil {
+		return fmt.Errorf("write settings: %w", err)
+	}
+	return nil
 }
 
 func CheckForUpdates() (bool, error) {

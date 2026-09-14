@@ -7,7 +7,19 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows/amd64
+            artifact: switch-library-manager.windows-amd64
+          - os: ubuntu-22.04
+            platform: linux/amd64
+            artifact: switch-library-manager.linux-amd64
+          - os: macos-latest
+            platform: darwin/amd64
+            artifact: switch-library-manager.darwin-amd64
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
 
@@ -16,6 +28,10 @@ jobs:
 
       - name: Build app
         uses: ./.github/actions/build-app
+        with:
+          platform: ${{ matrix.platform }}
 
       - name: Publish artifacts
         uses: ./.github/actions/publish-artifacts
+        with:
+          artifact-name: ${{ matrix.artifact }}

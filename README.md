@@ -93,7 +93,7 @@ The following template elements are supported:
 
 - Extract the zip file
 - Double click the Exe file
-- If you want to use command line mode, update the settings.json with `'GUI':false`
+- If you want to use command line mode, update `settings.json` with `"gui": false`, or pass `-m console`
   - Open `cmd`
   - Run `switch-library-manager.exe`
 
@@ -101,7 +101,7 @@ The following template elements are supported:
 
 - Extract the zip file
 - Double click the App file
-- If you want to use command line mode, update the settings.json with `'GUI':false`
+- If you want to use command line mode, update `settings.json` with `"gui": false`, or pass `-m console`
   - Open your Terminal
   - `cd` to the folder containing `switch-library-manager`
   - `chmod +x switch-library-manager` to make it executable
@@ -121,12 +121,20 @@ NOTE: parameters are only usable in command line mode, exept the parameter -m (m
 ## Building
 
 - Install and setup Go
+- Install the Wails CLI: `go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0`
 - Clone the repo: `git clone https://github.com/trembon/switch-library-manager.git`
 - Move into the src folder `cd src`
-- Install the bundler `go install github.com/asticode/go-astilectron-bundler/astilectron-bundler@v0.7.12`
-- Copy bundler binary to the source folder `cd switch-library-manager` and then `mv $HOME/go/bin/astilectron-bundler .`
-- Execute `./astilectron-bundler`
-- Binaries will be available under output
+- Generate the Wails bindings: `wails generate module`
+- Build the application: `wails build`
+- Binaries will be available under `src/build/bin`
+
+### Visual Studio Code debugging
+
+- Install the Go and Wails extensions and ensure `wails` is available on `PATH`.
+- Open the repository root in VS Code and press `F5`.
+- Select `Wails: Debug Switch Library Manager`. The launch configuration builds with debug symbols and starts the combined executable in GUI mode.
+
+The same executable still supports the console workflow. Run `src/build/bin/switch-library-manager.exe -m console` on Windows, or `./src/build/bin/switch-library-manager -m console` on macOS/Linux.
 
 ## Thanks
 

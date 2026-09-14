@@ -5,7 +5,7 @@
 - `main.go` resolves the executable directory and uses it as the application base folder. It is not the current working directory. macOS app bundles have special path handling.
 - Startup loads settings, creates `slm.log`, initializes CLI flags, and selects GUI or console mode. `-m console` and `-m gui` override `settings.json`.
 - The console flow downloads/loads remote titles and versions, scans the library, reports issues, optionally deletes old updates, organizes files, and checks missing updates/DLC.
-- The GUI flow starts Astilectron, loads `resources/app/app.html`, and exchanges messages with `app.js`. It maintains mutable local and remote DB state in `GUI.state`.
+- The GUI flow starts Wails, loads the embedded `resources/app/index.html`, and exposes typed methods from `GUI` to `app.js`. It maintains mutable local and remote DB state in `GUI.state`.
 - `db.ProgressUpdater` is the progress callback used by both CLI and GUI. Do not assume progress totals are always nonzero or that callbacks are synchronous unless the caller guarantees it.
 
 ## Package Boundaries
@@ -23,8 +23,8 @@ When adding reusable logic, put it in the narrowest package that owns the behavi
 ## Shared State and JSON Contracts
 
 - `settings.ReadSettings` and `settings.SwitchKeys` currently use process-global singletons. A later `baseFolder` is ignored after initialization. Tests that need isolation must use separate processes or first refactor toward explicit state.
-- GUI message names and payload shapes are an API between `gui.go` and `resources/app/app.js`. Update both sides together and preserve the asynchronous callback behavior.
-- Important messages include `loadSettings`, `saveSettings`, `isKeysFileAvailable`, `checkUpdate`, `updateDB`, `updateLocalLibrary`, `missingGames`, `missingUpdates`, `missingDlc`, `organize`, `rescan`, `libraryLoaded`, `updateProgress`, and `error`.
+- Wails method signatures and event names are an API between `gui.go` and `resources/app/app.js`. Update both sides together and preserve the asynchronous callback behavior.
+- Important bindings include settings/key/update/database/library/organization methods. Important events are `updateProgress`, `error`, and `rescan`.
 - Keep JSON field names stable unless a coordinated frontend change or migration is included.
 
 ## Error and Concurrency Rules

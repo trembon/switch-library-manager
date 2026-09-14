@@ -5,7 +5,7 @@
 - This is a cross-platform Go desktop application for scanning and organizing Nintendo Switch backup files.
 - The Go module is `src/go.mod`. Run Go commands from `src`, not from the repository root. The project targets Go `1.27`.
 - Runtime state is stored beside the executable: `settings.json`, `titles.json`, `versions.json`, `slm.db`, and `slm.log`.
-- The application has two modes: an Astilectron GUI and a command-line workflow. Both use the same `db`, `settings`, `switchfs`, and `process` packages.
+- The application has two modes: a Wails GUI and a command-line workflow. Both use the same `db`, `settings`, `switchfs`, and `process` packages. The combined executable selects the mode with `-m gui` or `-m console`.
 - `src/resources/app` is the embedded HTML/CSS/JavaScript frontend.
 
 ## Important Paths
@@ -18,7 +18,7 @@
 - `src/fileio`: split-file metadata dispatch.
 - `src/process`: missing-content calculations and file-moving/deletion operations.
 - `src/settings`: JSON settings, prod.keys discovery, and update checks.
-- `.github`: bundler setup, build, and artifact publication.
+- `.github`: Wails setup, build, and artifact publication.
 
 ## Development Rules
 
@@ -40,9 +40,9 @@
 
 ## Generated Files and Assets
 
-- Do not hand-edit `src/bind_*_amd64.go`, `src/windows.syso`, `src/output`, or `src/astilectron-bundler.exe`; they are generated or build artifacts and are ignored.
-- Changes under `src/resources/app` require running the Astilectron bundler before a packaged build. The bundler regenerates platform bindata.
-- Keep `src/bundler.json` environment targets synchronized with `.github/actions/publish-artifacts/action.yml`.
+- Do not hand-edit `src/resources/app/wailsjs`, `src/windows.syso`, `src/output`, or local build products; they are generated artifacts and are ignored where appropriate.
+- Changes under `src/resources/app` require running `wails generate module` before a packaged build when Go bindings change. `wails build` embeds the frontend assets.
+- Keep Wails platform targets in `.github/workflows/build-master.yml` synchronized with artifact publication.
 
 ## Verification
 
@@ -60,4 +60,4 @@ go vet ./...
 
 - For parser, filesystem, persistence, or shared-state changes, add focused tests and run `go test -race ./...` when practical.
 - Report whether tests used synthetic fixtures, filename-only fallback data, or real encrypted Switch files. Do not add proprietary keys or large game images to the repository.
-- For packaging changes, run `./astilectron-bundler` from `src` and verify every configured output directory. The CI build also runs `go get`, installs the bundler, copies it into `src`, and then invokes it.
+- For packaging changes, run `wails build` from `src` and verify the generated output under `src/build/bin`. The CI build installs the pinned Wails CLI and builds each configured platform on its native runner.

@@ -1,4 +1,20 @@
-const { shell, dialog } = require('electron').remote
+import {
+    CheckUpdate,
+    ConfirmOrganization,
+    GetMissingDLC,
+    GetMissingGames,
+    GetMissingUpdates,
+    IsKeysFileAvailable,
+    LoadSettings,
+    OrganizeLibrary,
+    SaveSettings,
+    SelectFolder,
+    ShowInFolder,
+    ShowMessage,
+    UpdateDB,
+    UpdateLocalLibrary,
+} from './wailsjs/go/main/GUI.js'
+import { EventsOn } from './wailsjs/runtime/runtime.js'
 
 $(function () {
 
@@ -13,102 +29,71 @@ $(function () {
     $('.tabgroup > div').hide();
     // loadTab($('.tabgroup > div:first-of-type'));
 
-    // This will wait for the astilectron namespace to be ready
-    document.addEventListener('astilectron-ready', function () {
-        let sendMessage = function (name, payload, callback) {
-            astilectron.sendMessage({name: name, payload: payload}, callback)
-        };
+    let showError = function (detail) {
+        ShowMessage("error", "Error", "An unexpected error occurred", detail || "")
+            .catch(error => console.error(error));
+        state.settings.folder = undefined;
+        $(".progress-container").hide();
+        loadTab("#library");
+    };
 
-        sendMessage("loadSettings", "", function (message) {
-            state.settings = JSON.parse(message);
+        EventsOn("updateProgress", function (message) {
+            let pcg = 0
+            let count = message.curr;
+            let total = message.total;
+            $('.progress-msg').text(message.message + " ...");
+            if (count !== -1 && total !== -1){
+                pcg = Math.floor(count / total * 100);
+                $('.progress-bar').attr('aria-valuenow', pcg);
+                $('.progress-bar').attr('style', 'width:' + Number(pcg) + '%');
+                $('.progress-bar').text(pcg + "%");
+            }
+            if (pcg === 100){
+                $(".progress-container").hide();
+            }else{
+                $(".progress-container").show();
+            }
+        });
+
+        EventsOn("error", showError);
+        EventsOn("rescan", function (hard) {
+            state.library = undefined;
+            state.updates = undefined;
+            state.dlc = undefined;
+            state.missingGames = undefined;
+            scanLocalFolder(Boolean(hard));
+        });
+
+        LoadSettings().then(function (message) {
+            state.settings = message;
 
             if(state.settings.hide_missing_games){
                 document.getElementById("tab_btns").classList.add("hide_missing_games");
             }
-        });
+        }).catch(error => showError(error.message));
 
-        sendMessage("isKeysFileAvailable", "", function (message) {
+        IsKeysFileAvailable().then(function (message) {
             state.keys = message
-        });
+        }).catch(error => showError(error.message));
 
-        sendMessage("checkUpdate", "", function (message) {
-            if (message === "false"){
+        CheckUpdate().then(function (message) {
+            if (!message){
                 return
             }
-            dialog.showMessageBox(null, {
-                type: 'info',
-                buttons: ['Ok'],
-                defaultId: 0,
-                title: 'New update available',
-                message: 'There is a new update available, please download from Github',
-                detail: message.payload
-            });
-        });
+            return ShowMessage("info", "New update available", "There is a new update available, please download from Github", "");
+        }).catch(error => showError(error.message));
 
         $(".progress-container").show();
         $(".progress-type").text("Downloading latest Switch titles/versions ...");
 
-        sendMessage("updateDB", "", function (message) {
-            scanLocalFolder();
-        });
-
-        astilectron.onMessage(function (message) {
-            // Process message
-            // console.log(message)
-            let pcg = 0
-            if (message.name === "updateProgress") {
-                let pp = JSON.parse(message.payload);
-                let count = pp.curr;
-                let total = pp.total;
-                $('.progress-msg').text(pp.message + " ...");
-                if (count !== -1 && total !== -1){
-                    pcg = Math.floor(count / total * 100);
-                    $('.progress-bar').attr('aria-valuenow', pcg);
-                    $('.progress-bar').attr('style', 'width:' + Number(pcg) + '%');
-                    $('.progress-bar').text(pcg + "%");
-                }
-                if (pcg === 100){
-                    $(".progress-container").hide();
-                }else{
-                    $(".progress-container").show();
-                }
-            }
-            else if (message.name === "libraryLoaded") {
-                state.library = JSON.parse(message.payload);
-                loadTab("#library")
-            }
-            else if (message.name === "missingGames") {
-                state.missingGames = JSON.parse(message.payload);
-                loadTab("#missing")
-            }
-            else if (message.name === "error") {
-                dialog.showMessageBox(null, {
-                    type: 'error',
-                    buttons: ['Ok'],
-                    defaultId: 0,
-                    title: 'Error',
-                    message: 'An unexpected error occurred',
-                    detail: message.payload
-                });
-                state.settings.folder = undefined;
-                $(".progress-container").hide();
-                loadTab("#library")
-            }
-            else if (message.name === "rescan") {
-                state.library = undefined;
-                state.updates = undefined;
-                state.dlc = undefined;
-                scanLocalFolder(true)
-            }
-        });
+        UpdateDB().then(function () {
+            scanLocalFolder(false);
+        }).catch(error => showError(error.message));
 
         let openFolderPicker = function (mode) {
-            //show info
-            dialog.showOpenDialog({
-                properties: ['openDirectory'],
-                message:"Select games folder"
-            }).then(partial(updateFolder,mode))
-                .catch(error => console.log(error))
+            SelectFolder()
+                .then(path => updateFolder(mode, path))
+                .catch(error => showError(error.message));
         };
 
         let scanLocalFolder = function(mode){
@@ -120,35 +105,38 @@ $(function () {
             $(".progress-container").show();
             $(".progress-type").text("Scanning local library...");
 
-            sendMessage("updateLocalLibrary", ""+mode, (r => {}))
+            UpdateLocalLibrary(Boolean(mode))
+                .then(result => {
+                    state.library = result;
+                    loadTab("#library");
+                })
+                .catch(error => showError(error.message));
         };
 
-        let updateFolder = function (mode,result) {
-            if (result.canceled) {
-                console.log("user aborted");
-                return
-            }
-            if (!result.filePaths || !result.filePaths.length){
+        let updateFolder = function (mode,path) {
+            if (!path) {
                 return
             }
 
             if (mode === "add"){
                 state.settings.scan_folders = state.settings.scan_folders || []
-                if (!state.settings.scan_folders.includes(result.filePaths[0])){
-                    state.settings.scan_folders.push(result.filePaths[0]);
+                if (!state.settings.scan_folders.includes(path)){
+                    state.settings.scan_folders.push(path);
                 }else{
                     return;
                 }
 
             }else{
-                state.settings.folder = result.filePaths[0];
+                state.settings.folder = path;
             }
             $('.tabgroup > div').hide();
-            console.log("selected folder:"+result.filePaths[0]);
+            console.log("selected folder:"+path);
             state.library = undefined;
             state.updates = undefined;
             state.dlc = undefined;
-            sendMessage("saveSettings", JSON.stringify(state.settings), scanLocalFolder);
+            SaveSettings(state.settings)
+                .then(() => scanLocalFolder(false))
+                .catch(error => showError(error.message));
         };
 
 
@@ -171,10 +159,10 @@ $(function () {
                     return
                 }
                 if (state.library && !state.updates){
-                    sendMessage("missingUpdates", "", (r => {
-                        state.updates = JSON.parse(r)
+                    GetMissingUpdates().then(r => {
+                        state.updates = r
                         loadTab("#updates")
-                    }));
+                    }).catch(error => showError(error.message));
                     return
                 }
                 let html = $(target + "Template").render({folder: state.settings.folder,updates:state.updates})
@@ -205,10 +193,10 @@ $(function () {
                     return
                 }
                 if (state.library && !state.dlc){
-                    sendMessage("missingDlc", "", (r => {
-                        state.dlc = JSON.parse(r)
+                    GetMissingDLC().then(r => {
+                        state.dlc = r
                         loadTab("#dlc")
-                    }));
+                    }).catch(error => showError(error.message));
                     return
                 }
                 let html = $(target + "Template").render({folder: state.settings.folder,dlc:state.dlc});
@@ -255,7 +243,7 @@ $(function () {
                             {title: "File name",width:500, headerSort:false, field: "key",formatter:"textarea",cellClick:function(e, cell){
                                     //e - the click event object
                                     //cell - cell component
-                                    shell.showItemInFolder(cell.getData().key)
+                                    ShowInFolder(cell.getData().key).catch(error => showError(error.message))
                                 }
                             },
                             {
@@ -301,7 +289,7 @@ $(function () {
                             {title: "File name", headerSort:false, field: "path",formatter:"textarea",cellClick:function(e, cell){
                                     //e - the click event object
                                     //cell - cell component
-                                    shell.showItemInFolder(cell.getData().path)
+                                    ShowInFolder(cell.getData().path).catch(error => showError(error.message))
                                 }
                             }
                         ],
@@ -312,10 +300,10 @@ $(function () {
                     return
                 }
                 if (state.library && !state.missingGames){
-                    sendMessage("missingGames", "", (r => {
-                        state.missingGames = JSON.parse(r)
+                    GetMissingGames().then(r => {
+                        state.missingGames = r
                         loadTab("#missing")
-                    }));
+                    }).catch(error => showError(error.message));
                     return
                 }
                 let html = $(target + "Template").render({folder: state.settings.folder,missingGames:state.missingGames});
@@ -354,50 +342,29 @@ $(function () {
             e.preventDefault();
             if (state.settings.organize_options.create_folder_per_game === false &&
                 state.settings.organize_options.rename_files === false){
-                dialog.showMessageBox(null, {
-                    type: 'info',
-                    buttons: ['Ok'],
-                    defaultId: 0,
-                    title: 'Library organization is turned off',
-                    message: 'Please update settings.json to enable this feature',
-                    detail: "You should set 'rename_files' and/or 'create_folder_per_game' to 'true' "
-                });
+                ShowMessage("info", "Library organization is turned off", "Please update settings.json to enable this feature", "You should set 'rename_files' and/or 'create_folder_per_game' to 'true'")
+                    .catch(error => showError(error.message));
                 return
             }
-            const options = {
-                type: 'warning',
-                buttons: ['Yes', 'No'],
-                defaultId: 0,
-                title: 'Confirmation',
-                message: 'Are you sure you want to begin library organization?',
-                detail: 'This action will modify your local library files',
-            };
-
-            dialog.showMessageBox(null, options).then( (r) => {
-
-                if (r.response === 0) {
+            ConfirmOrganization().then(confirmed => {
+                if (confirmed) {
                     //show progress
                     $('.tabgroup > div').hide();
                     $(".progress-container").show();
                     $(".progress-type").text("Organizing local library...");
 
-                    sendMessage("organize", "", (r => {
+                    OrganizeLibrary().then(() => {
                         $(".progress-container").hide();
                         state.library = undefined;
                         state.updates = undefined;
                         state.dlc = undefined;
                         loadTab("#library");
-                        scanLocalFolder(true)
-                        dialog.showMessageBox(null, {
-                            type: 'info',
-                            buttons: ['Ok'],
-                            defaultId: 0,
-                            title: 'Success',
-                            message: 'Operation completed successfully'
-                        })
-                    }))
+                        scanLocalFolder(true);
+                        ShowMessage("info", "Success", "Operation completed successfully", "")
+                            .catch(error => showError(error.message));
+                    }).catch(error => showError(error.message));
                 }
-            });
+            }).catch(error => showError(error.message));
 
         });
 
@@ -412,14 +379,5 @@ $(function () {
             let tabgroup = $("#tab_btns").data('tabgroup');
             $("#" + tabgroup).children('div').hide();
         }
-
-        function partial(func /*, 0..n args */) {
-            var args = Array.prototype.slice.call(arguments, 1);
-            return function() {
-                var allArguments = args.concat(Array.prototype.slice.call(arguments));
-                return func.apply(this, allArguments);
-            };
-        }
-    })
 
 });

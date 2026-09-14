@@ -41,11 +41,6 @@ func main() {
 	sugar.Infof("[Executable: %v]", exePath)
 	sugar.Infof("[Working directory: %v]", workingFolder)
 
-	files, err := AssetDir(workingFolder)
-	if files == nil && err == nil {
-		appSettings.GUI = false
-	}
-
 	console.InitializeFlags()
 	console.LogFlags(sugar)
 
@@ -61,7 +56,9 @@ func main() {
 	}
 
 	if useGUI {
-		CreateGUI(workingFolder, sugar).Start()
+		if err := CreateGUI(workingFolder, sugar).Start(); err != nil {
+			sugar.Error("GUI startup failed", err)
+		}
 	} else {
 		console.FixConsoleOutput()
 		CreateConsole(workingFolder, sugar, consoleFlags).Start()
