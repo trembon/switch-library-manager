@@ -19,7 +19,7 @@ var Ajax = function Ajax(table) {
 	this.progressiveLoad = false;
 	this.loading = false;
 
-	this.requestOrder = 0; //prevent requests comming out of sequence if overridden by another load request
+	this.requestOrder = 0; //prevent requests coming out of sequence if overridden by another load request
 };
 
 //initialize setup options

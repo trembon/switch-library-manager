@@ -435,10 +435,10 @@ func (g *GUI) organizeLibrary() {
 		g.state.window.SendMessage(Message{Name: "error", Payload: "the organize options in settings.json are not valid, please check that the template contains file/folder name"}, func(m *astilectron.EventMessage) {})
 		return
 	}
-	process.OrganizeByFolders(folderToScan, g.state.localDB, g.state.switchDB, g)
 	if settings.ReadSettings(g.baseFolder).OrganizeOptions.DeleteOldUpdateFiles {
 		process.DeleteOldUpdates(g.baseFolder, g.state.localDB, g)
 	}
+	process.OrganizeByFolders(folderToScan, g.state.localDB, g.state.switchDB, g)
 }
 
 func (g *GUI) UpdateProgress(curr int, total int, message string) {

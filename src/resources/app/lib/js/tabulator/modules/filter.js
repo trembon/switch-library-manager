@@ -22,7 +22,7 @@ Filter.prototype.initializeColumn = function (column, value) {
 	    field = column.getField(),
 	    params;
 
-	//handle successfull value change
+	//handle successful value change
 	function success(value) {
 		var filterType = column.modules.filter.tagType == "input" && column.modules.filter.attrType == "text" || column.modules.filter.tagType == "textarea" ? "partial" : "match",
 		    type = "",
@@ -289,7 +289,7 @@ Filter.prototype.generateHeaderFilterElement = function (column, initialValue, r
 					}
 				}
 
-				//prevent input and select elements from propegating click to column sorters etc
+				//prevent input and select elements from propagating click to column sorters etc
 				if (column.modules.filter.tagType == "input" || column.modules.filter.tagType == "select" || column.modules.filter.tagType == "textarea") {
 					editorElement.addEventListener("mousedown", function (e) {
 						e.stopPropagation();
@@ -328,7 +328,7 @@ Filter.prototype.showHeaderFilterElements = function () {
 	});
 };
 
-//programatically set focus of header filter
+//programmatically set focus of header filter
 Filter.prototype.setHeaderFilterFocus = function (column) {
 	if (column.modules.filter && column.modules.filter.headerElement) {
 		column.modules.filter.headerElement.focus();
@@ -346,7 +346,7 @@ Filter.prototype.getHeaderFilterValue = function (column) {
 	}
 };
 
-//programatically set value of header filter
+//programmatically set value of header filter
 Filter.prototype.setHeaderFilterValue = function (column, value) {
 	if (column) {
 		if (column.modules.filter && column.modules.filter.headerElement) {

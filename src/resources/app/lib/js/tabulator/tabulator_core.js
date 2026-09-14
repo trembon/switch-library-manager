@@ -742,7 +742,7 @@ ColumnManager.prototype.traverse = function (callback) {
 	});
 };
 
-//get defintions of actual columns
+//get definitions of actual columns
 
 ColumnManager.prototype.getDefinitions = function (active) {
 
@@ -1763,7 +1763,7 @@ Column.prototype._buildColumnHeader = function () {
 		table.modules.edit.initializeColumn(self);
 	}
 
-	//set colum validator
+	//set column validator
 	if (typeof def.validator != "undefined" && table.modExists("validate")) {
 		table.modules.validate.initializeColumn(self);
 	}
@@ -1792,7 +1792,7 @@ Column.prototype._buildColumnHeader = function () {
 		}
 	}
 
-	//asign additional css classes to column header
+	//assign additional css classes to column header
 	if (def.cssClass) {
 		var classeNames = def.cssClass.split(" ");
 		classeNames.forEach(function (className) {
@@ -1934,7 +1934,7 @@ Column.prototype._buildGroupHeader = function () {
 	this.element.setAttribute("role", "columngroup");
 	this.element.setAttribute("aria-title", this.definition.title);
 
-	//asign additional css classes to column header
+	//assign additional css classes to column header
 	if (this.definition.cssClass) {
 		var classeNames = this.definition.cssClass.split(" ");
 		classeNames.forEach(function (className) {
@@ -2046,7 +2046,7 @@ Column.prototype.verticalAlign = function (alignment, height) {
 	});
 };
 
-//clear vertical alignmenet
+//clear vertical alignment
 Column.prototype.clearVerticalAlign = function () {
 	this.element.style.paddingTop = "";
 	this.element.style.height = "";
@@ -2065,14 +2065,14 @@ Column.prototype.bindModuleColumns = function () {
 	}
 };
 
-//// Retreive Column Information ////
+//// Retrieve Column Information ////
 
 //return column header element
 Column.prototype.getElement = function () {
 	return this.element;
 };
 
-//return colunm group element
+//return column group element
 Column.prototype.getGroupElement = function () {
 	return this.groupElement;
 };
@@ -2118,7 +2118,7 @@ Column.prototype.getCells = function () {
 	return this.cells;
 };
 
-//retreive the top column in a group of columns
+//retrieve the top column in a group of columns
 Column.prototype.getTopColumn = function () {
 	if (this.parent.isGroup) {
 		return this.parent.getTopColumn();
@@ -2551,7 +2551,7 @@ var RowManager = function RowManager(table) {
 	this.vDomRowHeight = 20; //approximation of row heights for padding
 
 	this.vDomTop = 0; //hold position for first rendered row in the virtual DOM
-	this.vDomBottom = 0; //hold possition for last rendered row in the virtual DOM
+	this.vDomBottom = 0; //hold position for last rendered row in the virtual DOM
 
 	this.vDomScrollPosTop = 0; //last scroll position of the vDom top;
 	this.vDomScrollPosBottom = 0; //last scroll position of the vDom bottom;
@@ -2658,7 +2658,7 @@ RowManager.prototype.initialize = function () {
 			var top = self.element.scrollTop;
 			var dir = self.scrollTop > top;
 
-			//handle verical scrolling
+			//handle vertical scrolling
 			if (self.scrollTop != top) {
 				self.scrollTop = top;
 				self.scrollVertical(dir);
@@ -3665,7 +3665,7 @@ RowManager.prototype.getVisibleRows = function (viewable) {
 	return rows.slice(topRow, bottomRow + 1);
 };
 
-//repeat action accross display rows
+//repeat action across display rows
 RowManager.prototype.displayRowIterator = function (callback) {
 	this.displayRows.forEach(callback);
 
@@ -4531,7 +4531,7 @@ var Row = function Row(data, parent) {
 	this.height = 0; //hold element height
 	this.heightStyled = ""; //hold element height prestyled to improve render efficiency
 	this.manualHeight = false; //user has manually set row height
-	this.outerHeight = 0; //holde lements outer height
+	this.outerHeight = 0; //hold element outer height
 	this.initialized = false; //element has been rendered
 	this.heightInitialized = false; //element has resized cells to fit
 
@@ -4581,7 +4581,7 @@ Row.prototype.generateElement = function () {
 		self.table.modules.dataTree.initializeRow(this);
 	}
 
-	//setup column colapse container
+	//setup column collapse container
 	if (self.table.options.responsiveLayout === "collapse" && self.table.modExists("responsiveLayout")) {
 		self.table.modules.responsiveLayout.initializeRow(this);
 	}
@@ -4736,7 +4736,7 @@ Row.prototype.initialize = function (force) {
 			self.table.modules.dataTree.layoutRow(this);
 		}
 
-		//setup column colapse container
+		//setup column collapse container
 		if (self.table.options.responsiveLayout === "collapse" && self.table.modExists("responsiveLayout")) {
 			self.table.modules.responsiveLayout.layoutRow(this);
 		}
@@ -4900,7 +4900,7 @@ Row.prototype.updateData = function (updatedData) {
 			_this15.table.modules.reactiveData.block();
 		}
 
-		//mutate incomming data if needed
+		//mutate incoming data if needed
 		if (_this15.table.modExists("mutator")) {
 
 			tempData = Object.assign(tempData, _this15.data);
@@ -6110,7 +6110,7 @@ var Tabulator = function Tabulator(element, options) {
 	this.footerManager = null; //holder Footer Manager
 	this.browser = ""; //hold current browser type
 	this.browserSlow = false; //handle reduced functionality for slower browsers
-	this.browserMobile = false; //check if running on moble, prevent resize cancelling edit on keyboard appearence
+	this.browserMobile = false; //check if running on moble, prevent resize cancelling edit on keyboard appearance
 
 	this.modules = {}; //hold all modules bound to this table
 
@@ -6139,7 +6139,7 @@ Tabulator.prototype.defaultOptions = {
 	resizableRows: false, //resizable rows
 	autoResize: true, //auto resize table
 
-	columns: [], //store for colum header info
+	columns: [], //store for column header info
 
 	cellHozAlign: "", //horizontal align columns
 	cellVertAlign: "", //certical align columns
@@ -6181,7 +6181,7 @@ Tabulator.prototype.defaultOptions = {
 	clipboard: false, //enable clipboard
 	clipboardCopyStyled: true, //formatted table data
 	clipboardCopyConfig: false, //clipboard config
-	clipboardCopyFormatter: false, //DEPRICATED - REMOVE in 5.0
+	clipboardCopyFormatter: false, //DEPRECATED - REMOVE in 5.0
 	clipboardCopyRowRange: "active", //restrict clipboard to visible rows only
 	clipboardPasteParser: "table", //convert pasted clipboard data to rows
 	clipboardPasteAction: "insert", //how to insert pasted data into the table
@@ -6202,22 +6202,22 @@ Tabulator.prototype.defaultOptions = {
 	dataTreeElementColumn: false,
 	dataTreeBranchElement: true, //show data tree branch element
 	dataTreeChildIndent: 9, //data tree child indent in px
-	dataTreeChildField: "_children", //data tre column field to look for child rows
+	dataTreeChildField: "_children", //data tree column field to look for child rows
 	dataTreeCollapseElement: false, //data tree row collapse element
 	dataTreeExpandElement: false, //data tree row expand element
 	dataTreeStartExpanded: false,
 	dataTreeRowExpanded: function dataTreeRowExpanded() {}, //row has been expanded
 	dataTreeRowCollapsed: function dataTreeRowCollapsed() {}, //row has been collapsed
 	dataTreeChildColumnCalcs: false, //include visible data tree rows in column calculations
-	dataTreeSelectPropagate: false, //seleccting a parent row selects its children
+	dataTreeSelectPropagate: false, //selecting a parent row selects its children
 
 	printAsHtml: false, //enable print as html
 	printFormatter: false, //printing page formatter
 	printHeader: false, //page header contents
 	printFooter: false, //page footer contents
-	printCopyStyle: true, //DEPRICATED - REMOVE in 5.0
+	printCopyStyle: true, //DEPRECATED - REMOVE in 5.0
 	printStyled: true, //enable print as html styling
-	printVisibleRows: true, //DEPRICATED - REMOVE in 5.0
+	printVisibleRows: true, //DEPRECATED - REMOVE in 5.0
 	printRowRange: "visible", //restrict print to visible rows only
 	printConfig: {}, //print config options
 
@@ -6229,7 +6229,7 @@ Tabulator.prototype.defaultOptions = {
 	selectablePersistence: true, // maintain selection when table view is updated
 	selectableCheck: function selectableCheck(data, row) {
 		return true;
-	}, //check wheather row is selectable
+	}, //check whether row is selectable
 
 	headerFilterLiveFilterDelay: 300, //delay before updating column after user types in header filter
 	headerFilterPlaceholder: false, //placeholder text to display in header filters
@@ -6244,9 +6244,9 @@ Tabulator.prototype.defaultOptions = {
 	virtualDom: true, //enable DOM virtualization
 	virtualDomBuffer: 0, // set virtual DOM buffer size
 
-	persistentLayout: false, //DEPRICATED - REMOVE in 5.0
-	persistentSort: false, //DEPRICATED - REMOVE in 5.0
-	persistentFilter: false, //DEPRICATED - REMOVE in 5.0
+	persistentLayout: false, //DEPRECATED - REMOVE in 5.0
+	persistentSort: false, //DEPRECATED - REMOVE in 5.0
+	persistentFilter: false, //DEPRECATED - REMOVE in 5.0
 	persistenceID: "", //key for persistent storage
 	persistenceMode: true, //mode for storing persistence information
 	persistenceReaderFunc: false, //function for handling persistence data reading
@@ -6261,7 +6261,7 @@ Tabulator.prototype.defaultOptions = {
 
 	pagination: false, //set pagination type
 	paginationSize: false, //set number of rows to a page
-	paginationInitialPage: 1, //initail page to show on load
+	paginationInitialPage: 1, //initial page to show on load
 	paginationButtonCount: 5, // set count of page button
 	paginationSizeSelector: false, //add pagination size selector element
 	paginationElement: false, //element to hold pagination numbers
@@ -6483,10 +6483,10 @@ Tabulator.prototype.initializeElement = function (element) {
 	}
 };
 
-//convert depricated functionality to new functions
+//convert deprecated functionality to new functions
 Tabulator.prototype._mapDepricatedFunctionality = function () {
 
-	//map depricated persistance setup options
+	//map deprecated persistence setup options
 	if (this.options.persistentLayout || this.options.persistentSort || this.options.persistentFilter) {
 		if (!this.options.persistence) {
 			this.options.persistence = {};
@@ -6982,7 +6982,7 @@ Tabulator.prototype._setData = function (data, params, config, inPosition, colum
 		}
 	} else {
 		if (data) {
-			//asume data is already an object
+			//assume data is already an object
 			return self.rowManager.setData(data, inPosition, columnsChanged);
 		} else {
 
@@ -7295,7 +7295,7 @@ Tabulator.prototype.addRow = function (data, pos, index) {
 	});
 };
 
-//update a row if it exitsts otherwise create it
+//update a row if it exists otherwise create it
 Tabulator.prototype.updateOrAddRow = function (index, data) {
 	var _this24 = this;
 
@@ -7927,7 +7927,7 @@ Tabulator.prototype.setGroupStartOpen = function (values) {
 				this.modules.persistence.save("group");
 			}
 		} else {
-			console.warn("Grouping Update - cant refresh view, no groups have been set");
+			console.warn("Grouping Update - can't refresh view, no groups have been set");
 		}
 	} else {
 		return false;
@@ -7945,7 +7945,7 @@ Tabulator.prototype.setGroupHeader = function (values) {
 				this.modules.persistence.save("group");
 			}
 		} else {
-			console.warn("Grouping Update - cant refresh view, no groups have been set");
+			console.warn("Grouping Update - can't refresh view, no groups have been set");
 		}
 	} else {
 		return false;
@@ -8448,7 +8448,7 @@ Layout.prototype.modes = {
 
 		var flexWidth = 0; //total width available to flexible columns
 
-		var flexGrowUnits = 0; //total number of widthGrow blocks accross all columns
+		var flexGrowUnits = 0; //total number of widthGrow blocks across all columns
 
 		var flexColWidth = 0; //desired width of flexible columns
 
@@ -8456,7 +8456,7 @@ Layout.prototype.modes = {
 
 		var fixedShrinkColumns = []; //array of fixed width columns that can shrink
 
-		var flexShrinkUnits = 0; //total number of widthShrink blocks accross all columns
+		var flexShrinkUnits = 0; //total number of widthShrink blocks across all columns
 
 		var overflowWidth = 0; //horizontal overflow width
 
@@ -8624,7 +8624,7 @@ Layout.prototype.modes = {
 			flexColumns[flexColumns.length - 1].width += +gapFill;
 		}
 
-		//caculate space for columns to be shrunk into
+		//calculate space for columns to be shrunk into
 
 		flexColumns.forEach(function (col) {
 
@@ -8668,7 +8668,7 @@ var Localize = function Localize(table) {
 	this.bindings = {}; //update events to call when locale is changed
 };
 
-//set header placehoder
+//set header placeholder
 Localize.prototype.setHeaderFilterPlaceholder = function (placeholder) {
 	this.langs.default.headerFilters.default = placeholder;
 };
@@ -8707,7 +8707,7 @@ Localize.prototype.setLocale = function (desiredLocale) {
 
 	desiredLocale = desiredLocale || "default";
 
-	//fill in any matching languge values
+	//fill in any matching language values
 	function traverseLang(trans, path) {
 		for (var prop in trans) {
 
@@ -8722,7 +8722,7 @@ Localize.prototype.setLocale = function (desiredLocale) {
 		}
 	}
 
-	//determing correct locale to load
+	//determining correct locale to load
 	if (desiredLocale === true && navigator.language) {
 		//get local from system
 		desiredLocale = navigator.language.toLowerCase();
@@ -8814,7 +8814,7 @@ Localize.prototype.bind = function (path, callback) {
 	callback(this.getText(path), this.lang);
 };
 
-//itterate through bindings and trigger updates
+//iterate through bindings and trigger updates
 Localize.prototype._executeBindings = function () {
 	var self = this;
 

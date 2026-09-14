@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -146,6 +147,10 @@ func scanFolder(folder string, recursive bool, files *[]ExtendedFileInfo, progre
 			return nil
 		}
 
+		if runtime.GOOS == "darwin" && strings.EqualFold(info.Name(), ".ds_store") {
+			return nil
+		}
+
 		base := path[0 : len(path)-len(info.Name())]
 		if strings.TrimSuffix(base, string(os.PathSeparator)) != strings.TrimSuffix(folder, string(os.PathSeparator)) &&
 			!recursive {
@@ -178,6 +183,9 @@ func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,
 			ignoreFileTypes["."+strings.ToLower(ext)] = struct{}{}
 		}
 	}
+	if runtime.GOOS == "darwin" {
+		ignoreFileTypes[".ds_store"] = struct{}{}
+	}
 
 	ind := 0
 	total := len(files)
@@ -190,6 +198,10 @@ func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,
 		//scan sub-folders if flag is present
 		filePath := filepath.Join(file.BaseFolder, file.FileName)
 		if file.IsDir {
+			continue
+		}
+
+		if runtime.GOOS == "darwin" && strings.EqualFold(file.FileName, ".ds_store") {
 			continue
 		}
 

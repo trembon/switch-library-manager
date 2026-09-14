@@ -462,7 +462,7 @@ MoveRows.prototype.disconnectFromTables = function () {
 	});
 };
 
-//accept incomming connection
+//accept incoming connection
 MoveRows.prototype.connect = function (table, row) {
 	var self = this;
 	if (!this.connectedTable) {
@@ -490,7 +490,7 @@ MoveRows.prototype.connect = function (table, row) {
 	}
 };
 
-//close incomming connection
+//close incoming connection
 MoveRows.prototype.disconnect = function (table) {
 	var self = this;
 	if (table === this.connectedTable) {

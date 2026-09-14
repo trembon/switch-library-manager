@@ -317,7 +317,7 @@ Group.prototype.scrollHeader = function (left) {
 
 Group.prototype.getRowIndex = function (row) {};
 
-//update row data to match grouping contraints
+//update row data to match grouping constraints
 Group.prototype.conformRowData = function (data) {
 	if (this.field) {
 		data[this.field] = this.key;
@@ -615,11 +615,11 @@ Group.prototype.getSubGroups = function (component) {
 	return output;
 };
 
-Group.prototype.getRows = function (compoment) {
+Group.prototype.getRows = function (component) {
 	var output = [];
 
 	this.rows.forEach(function (row) {
-		output.push(compoment ? row.getComponent() : row);
+		output.push(component ? row.getComponent() : row);
 	});
 
 	return output;
@@ -875,11 +875,11 @@ GroupRows.prototype.getRows = function (rows) {
 	}
 };
 
-GroupRows.prototype.getGroups = function (compoment) {
+GroupRows.prototype.getGroups = function (component) {
 	var groupComponents = [];
 
 	this.groupList.forEach(function (group) {
-		groupComponents.push(compoment ? group.getComponent() : group);
+		groupComponents.push(component ? group.getComponent() : group);
 	});
 
 	return groupComponents;
