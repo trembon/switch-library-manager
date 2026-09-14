@@ -94,83 +94,88 @@ func (g *GUI) Start() {
 	defer localDbManager.Close()
 
 	// Run bootstrap
-	if err := bootstrap.Run(bootstrap.Options{
-		Asset:    Asset,
-		AssetDir: AssetDir,
-		AstilectronOptions: astilectron.Options{
-			AppName:            "Switch Library Manager (" + settings.SLM_VERSION + ")",
-			AcceptTCPTimeout:   time.Duration(5) * time.Second,
-			AppIconDarwinPath:  "resources/icon.icns",
-			AppIconDefaultPath: "resources/icon.png",
-			SingleInstance:     true,
-		},
-		Debug:         false,
-		Logger:        log.New(log.Writer(), log.Prefix(), log.Flags()),
-		RestoreAssets: RestoreAssets,
-		Windows: []*bootstrap.Window{{
-			Homepage: "app.html",
-			Adapter: func(w *astilectron.Window) {
-				g.state.window = w
-				g.state.window.OnMessage(g.handleMessage)
+	runBootstrap := func() error {
+		return bootstrap.Run(bootstrap.Options{
+			Asset:    Asset,
+			AssetDir: AssetDir,
+			AstilectronOptions: astilectron.Options{
+				AppName:            "Switch Library Manager (" + settings.SLM_VERSION + ")",
+				AcceptTCPTimeout:   time.Duration(5) * time.Second,
+				AppIconDarwinPath:  "resources/icon.icns",
+				AppIconDefaultPath: "resources/icon.png",
+				SingleInstance:     true,
 			},
-			Options: &astilectron.WindowOptions{
-				AlwaysOnTop:     astikit.BoolPtr(true),
-				BackgroundColor: astikit.StrPtr("#333"),
-				Center:          astikit.BoolPtr(true),
-				Height:          astikit.IntPtr(600),
-				Width:           astikit.IntPtr(1200),
-				WebPreferences:  &astilectron.WebPreferences{EnableRemoteModule: astikit.BoolPtr(true)},
-			},
-		}},
-		MenuOptions: []*astilectron.MenuItemOptions{
-			{
-				SubMenu: []*astilectron.MenuItemOptions{
-					{
-						Accelerator: &astilectron.Accelerator{"CommandOrControl", "C"},
-						Role:        astilectron.MenuItemRoleCopy,
-					},
-					{
-						Accelerator: &astilectron.Accelerator{"CommandOrControl", "V"},
-						Role:        astilectron.MenuItemRolePaste,
-					},
-					{Role: astilectron.MenuItemRoleClose},
+			Debug:         false,
+			Logger:        log.New(log.Writer(), log.Prefix(), log.Flags()),
+			RestoreAssets: RestoreAssets,
+			Windows: []*bootstrap.Window{{
+				Homepage: "app.html",
+				Adapter: func(w *astilectron.Window) {
+					g.state.window = w
+					g.state.window.OnMessage(g.handleMessage)
 				},
-			},
-			{
-				Label: astikit.StrPtr("File"),
-				SubMenu: []*astilectron.MenuItemOptions{
-					{
-						Label:       astikit.StrPtr("Rescan"),
-						Accelerator: &astilectron.Accelerator{"CommandOrControl", "R"},
-						OnClick: func(e astilectron.Event) (deleteListener bool) {
-							g.state.window.SendMessage(Message{Name: "rescan", Payload: ""}, func(m *astilectron.EventMessage) {})
-							return
+				Options: &astilectron.WindowOptions{
+					AlwaysOnTop:     astikit.BoolPtr(true),
+					BackgroundColor: astikit.StrPtr("#333"),
+					Center:          astikit.BoolPtr(true),
+					Height:          astikit.IntPtr(600),
+					Width:           astikit.IntPtr(1200),
+					WebPreferences:  &astilectron.WebPreferences{EnableRemoteModule: astikit.BoolPtr(true)},
+				},
+			}},
+			MenuOptions: []*astilectron.MenuItemOptions{
+				{
+					SubMenu: []*astilectron.MenuItemOptions{
+						{
+							Accelerator: &astilectron.Accelerator{"CommandOrControl", "C"},
+							Role:        astilectron.MenuItemRoleCopy,
 						},
-					},
-					{
-						Label: astikit.StrPtr("Hard rescan"),
-						OnClick: func(e astilectron.Event) (deleteListener bool) {
-							_ = localDbManager.ClearScanData()
-							g.state.window.SendMessage(Message{Name: "rescan", Payload: ""}, func(m *astilectron.EventMessage) {})
-							return
+						{
+							Accelerator: &astilectron.Accelerator{"CommandOrControl", "V"},
+							Role:        astilectron.MenuItemRolePaste,
 						},
+						{Role: astilectron.MenuItemRoleClose},
 					},
 				},
-			},
-			{
-				Label: astikit.StrPtr("Debug"),
-				SubMenu: []*astilectron.MenuItemOptions{
-					{
-						Label:       astikit.StrPtr("Open DevTools"),
-						Accelerator: &astilectron.Accelerator{"CommandOrControl", "D"},
-						OnClick: func(e astilectron.Event) (deleteListener bool) {
-							g.state.window.OpenDevTools()
-							return
+				{
+					Label: astikit.StrPtr("File"),
+					SubMenu: []*astilectron.MenuItemOptions{
+						{
+							Label:       astikit.StrPtr("Rescan"),
+							Accelerator: &astilectron.Accelerator{"CommandOrControl", "R"},
+							OnClick: func(e astilectron.Event) (deleteListener bool) {
+								g.state.window.SendMessage(Message{Name: "rescan", Payload: ""}, func(m *astilectron.EventMessage) {})
+								return
+							},
+						},
+						{
+							Label: astikit.StrPtr("Hard rescan"),
+							OnClick: func(e astilectron.Event) (deleteListener bool) {
+								_ = localDbManager.ClearScanData()
+								g.state.window.SendMessage(Message{Name: "rescan", Payload: ""}, func(m *astilectron.EventMessage) {})
+								return
+							},
 						},
 					},
 				},
+				{
+					Label: astikit.StrPtr("Debug"),
+					SubMenu: []*astilectron.MenuItemOptions{
+						{
+							Label:       astikit.StrPtr("Open DevTools"),
+							Accelerator: &astilectron.Accelerator{"CommandOrControl", "D"},
+							OnClick: func(e astilectron.Event) (deleteListener bool) {
+								g.state.window.OpenDevTools()
+								return
+							},
+						},
+					},
+				},
 			},
-		},
+		})
+	}
+	if err := runBootstrapWithRecovery(runBootstrap, func() error {
+		return clearCachedAstilectronArchive(g.baseFolder)
 	}); err != nil {
 		g.sugarLogger.Error(fmt.Errorf("running bootstrap failed: %w", err))
 		log.Fatal(err)

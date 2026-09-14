@@ -23,6 +23,11 @@ jobs:
         id: build
         uses: ./.github/actions/build-app
 
+      - name: Validate embedded runtime assets
+        working-directory: ./src
+        shell: bash
+        run: go test . -run '^TestEmbeddedAstilectronArchive$' -count=1
+
       - name: Package artifacts
         id: package
         run: |
