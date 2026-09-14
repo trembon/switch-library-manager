@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"strconv"
 
 	"github.com/trembon/switch-library-manager/switchfs/_crypto"
@@ -25,6 +26,9 @@ type ncaHeader struct {
 }
 
 func (n *ncaHeader) HasRightsId() bool {
+	if n == nil || len(n.rightsId) < 0x10 {
+		return false
+	}
 	for i := 0; i < 0x10; i++ {
 		if n.rightsId[i] != 0 {
 			return true
@@ -50,7 +54,13 @@ func max(a byte, b byte) byte {
 }
 
 func DecryptNcaHeader(key string, encHeader []byte) (*ncaHeader, error) {
-	headerKey, _ := hex.DecodeString(key)
+	headerKey, err := hex.DecodeString(key)
+	if err != nil {
+		return nil, err
+	}
+	if len(encHeader) < 0x400 || len(encHeader)%0x10 != 0 {
+		return nil, errors.New("encrypted NCA header is truncated or unaligned")
+	}
 	c, err := _crypto.NewCipher(aes.NewCipher, headerKey)
 	if err != nil {
 		return nil, err
@@ -67,7 +77,15 @@ func DecryptNcaHeader(key string, encHeader []byte) (*ncaHeader, error) {
 
 	if magic == "NCA3" {
 		endOffset = 0xC00
+		if len(encHeader) < endOffset {
+			return nil, errors.New("NCA3 header is truncated")
+		}
 		decryptNcaHeader, err = _decryptNcaHeader(c, encHeader, endOffset, sectorSize, sector)
+		if err != nil {
+			return nil, err
+		}
+	} else if magic != "NCA2" {
+		return nil, errors.New("invalid NCA magic")
 	}
 
 	result := ncaHeader{headerBytes: decryptNcaHeader}
@@ -90,6 +108,9 @@ func DecryptNcaHeader(key string, encHeader []byte) (*ncaHeader, error) {
 }
 
 func _decryptNcaHeader(c *_crypto.Cipher, header []byte, end int, sectorSize int, sectorNum int) ([]byte, error) {
+	if c == nil || sectorSize <= 0 || end < 0 || end > len(header) || end%sectorSize != 0 || sectorNum < 0 {
+		return nil, errors.New("invalid NCA header decryption bounds")
+	}
 	decrypted := make([]byte, len(header))
 	for pos := 0; pos < end; pos += sectorSize {
 		/* Workaround for Nintendo's custom sector...manually generate the tweak. */

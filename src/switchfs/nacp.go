@@ -1,6 +1,8 @@
 package switchfs
 
 import (
+	"bytes"
+	"compress/flate"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -39,7 +41,7 @@ type Nacp struct {
 }
 
 func (l Language) String() string {
-	return [...]string{
+	names := [...]string{
 		"AmericanEnglish",
 		"BritishEnglish",
 		"Japanese",
@@ -55,7 +57,11 @@ func (l Language) String() string {
 		"Korean",
 		"Taiwanese",
 		"Chinese",
-		"Chinese"}[l]
+		"Chinese"}
+	if l < 0 || int(l) >= len(names) {
+		return "Unknown"
+	}
+	return names[l]
 }
 
 func ExtractNacp(cnmt *ContentMetaAttributes, file io.ReaderAt, securePartition *PFS0, securePartitionOffset int64) (*Nacp, error) {
@@ -96,18 +102,53 @@ func ExtractNacp(cnmt *ContentMetaAttributes, file io.ReaderAt, securePartition 
 
 /*https://switchbrew.org/wiki/NACP_Format*/
 func readNacp(data []byte, romFsHeader RomfsHeader, fileEntry RomfsFileEntry) (Nacp, error) {
+	if romFsHeader.DataOffset > uint64(len(data)) || fileEntry.offset > uint64(len(data))-romFsHeader.DataOffset {
+		return Nacp{}, errors.New("NACP file is outside RomFS data")
+	}
 	offset := romFsHeader.DataOffset + fileEntry.offset
+	if fileEntry.size < 0x3080 {
+		return Nacp{}, errors.New("NACP file is too small")
+	}
+	if fileEntry.size > uint64(len(data))-offset || uint64(0x3080) > fileEntry.size {
+		return Nacp{}, errors.New("NACP file is truncated")
+	}
+	titleData := data[offset : offset+0x3000]
+	titleStride := uint64(0x300)
+	if fileEntry.size >= 0x3216 && data[offset+0x3215] == 1 {
+		compressedSize := binary.LittleEndian.Uint16(titleData[:2])
+		if compressedSize == 0 || uint64(compressedSize) > uint64(len(titleData)-2) {
+			return Nacp{}, errors.New("compressed NACP title data is invalid")
+		}
+		reader := flate.NewReader(bytes.NewReader(titleData[2 : 2+compressedSize]))
+		decompressed, err := io.ReadAll(io.LimitReader(reader, 0x6001))
+		closeErr := reader.Close()
+		if err != nil {
+			return Nacp{}, errors.New("failed to decompress NACP title data: " + err.Error())
+		}
+		if closeErr != nil {
+			return Nacp{}, errors.New("failed to close NACP title data: " + closeErr.Error())
+		}
+		if len(decompressed) < 0x6000 {
+			return Nacp{}, errors.New("decompressed NACP title data is too small")
+		}
+		if len(decompressed) > 0x6000 {
+			return Nacp{}, errors.New("decompressed NACP title data is too large")
+		}
+		titleData = decompressed[:0x6000]
+		titleStride = 0x600
+	}
 	titles := map[string]NacpTitle{}
 	for i := 0; i < 16; i++ {
 		//lang := i
-		appTitleBytes := data[offset+(uint64(i)*0x300) : offset+(uint64(i)*0x300)+0x200]
+		appTitleOffset := uint64(i) * titleStride
+		appTitleBytes := titleData[appTitleOffset : appTitleOffset+0x200]
 		nameBytes := readBytesUntilZero(appTitleBytes)
 		titles[Language(i).String()] = NacpTitle{Language: Language(i), Title: string(nameBytes)}
 	}
 
 	isbn := readBytesUntilZero(data[offset+0x3000 : offset+0x3000+0x25])
 	displayVersion := readBytesUntilZero(data[offset+0x3060 : offset+0x3060+0x10])
-	supportedLanguageFlag := binary.BigEndian.Uint32(data[offset+0x302C : offset+0x302C+0x4])
+	supportedLanguageFlag := binary.LittleEndian.Uint32(data[offset+0x302C : offset+0x302C+0x4])
 
 	return Nacp{TitleName: titles, Isbn: string(isbn), DisplayVersion: string(displayVersion), SupportedLanguageFlag: supportedLanguageFlag}, nil
 	/*

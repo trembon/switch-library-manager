@@ -14,6 +14,7 @@ import (
 
 var (
 	settingsInstance *AppSettings
+	versionURL       = SLM_VERSION_URL
 )
 
 const (
@@ -76,8 +77,15 @@ func ReadSettingsAsJSON(baseFolder string) string {
 	if _, err := os.Stat(filepath.Join(baseFolder, SETTINGS_FILENAME)); err != nil {
 		saveDefaultSettings(baseFolder)
 	}
-	file, _ := os.Open(filepath.Join(baseFolder, SETTINGS_FILENAME))
-	bytes, _ := io.ReadAll(file)
+	file, err := os.Open(filepath.Join(baseFolder, SETTINGS_FILENAME))
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+	bytes, err := io.ReadAll(file)
+	if err != nil {
+		return ""
+	}
 	return string(bytes)
 }
 
@@ -93,7 +101,12 @@ func ReadSettings(baseFolder string) *AppSettings {
 			zap.S().Warnf("Missing or corrupted config file, creating a new one")
 			return saveDefaultSettings(baseFolder)
 		} else {
-			_ = json.NewDecoder(file).Decode(&settingsInstance)
+			err = json.NewDecoder(file).Decode(settingsInstance)
+			file.Close()
+			if err != nil {
+				zap.S().Warnf("Missing or corrupted config file, creating a new one")
+				return saveDefaultSettings(baseFolder)
+			}
 			settingsInstance = verifySettings(baseFolder, settingsInstance)
 			return settingsInstance
 		}
@@ -173,11 +186,14 @@ func CheckForUpdates() (bool, error) {
 
 	localVer := SLM_VERSION
 
-	res, err := http.Get(SLM_VERSION_URL)
+	res, err := http.Get(versionURL)
 	if err != nil {
 		return false, err
 	}
 	defer res.Body.Close()
+	if res.StatusCode < http.StatusOK || res.StatusCode >= http.StatusMultipleChoices {
+		return false, fmt.Errorf("version check returned %s", res.Status)
+	}
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -191,6 +207,9 @@ func CheckForUpdates() (bool, error) {
 	}
 
 	remoteVer := remoteValues["version"]
+	if remoteVer == "" {
+		return false, fmt.Errorf("version check response does not contain a version")
+	}
 
 	if version.CompareSimple(remoteVer, localVer) > 0 {
 		return true, nil

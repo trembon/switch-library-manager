@@ -21,9 +21,13 @@ func LoadAndUpdateFile(url string, filePath string, etag string) (*os.File, stri
 
 	//create file if not exist
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		_, err = os.Create(filePath)
+		var created *os.File
+		created, err = os.Create(filePath)
 		if err != nil {
 			zap.S().Errorf("Failed to create file %v - %v\n", filePath, err)
+			return nil, "", err
+		}
+		if err = created.Close(); err != nil {
 			return nil, "", err
 		}
 	}
@@ -57,12 +61,13 @@ func LoadAndUpdateFile(url string, filePath string, etag string) (*os.File, stri
 
 		fileInfo, err := os.Stat(filePath)
 		if err != nil || fileInfo.Size() == 0 {
+			file.Close()
 			zap.S().Infof("Local file is empty, or corrupted")
 			return nil, "", errors.New("unable to download switch titles db")
 		}
 	}
 
-	return file, etag, err
+	return file, etag, nil
 }
 
 func decodeToJsonObject(reader io.Reader, target interface{}) error {
@@ -88,11 +93,11 @@ func downloadBytesFromUrl(url string, etag string) ([]byte, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		return nil, "", errors.New("got a non 200 response - " + resp.Status)
 	}
-	defer resp.Body.Close()
 	//getting the new etag
 	etag = resp.Header.Get("Etag")
 

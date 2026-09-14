@@ -27,17 +27,37 @@ type hashInfo struct {
 }
 
 func getFsEntry(ncaHeader *ncaHeader, index int) fsEntry {
+	if ncaHeader == nil || index < 0 || len(ncaHeader.headerBytes) < 0x250 {
+		return fsEntry{}
+	}
+	if index > (len(ncaHeader.headerBytes)-0x250)/0x10 {
+		return fsEntry{}
+	}
 	fsEntryOffset := 0x240 + 0x10*index
 	fsEntryBytes := ncaHeader.headerBytes[fsEntryOffset : fsEntryOffset+0x10]
 
-	entryStartOffset := binary.LittleEndian.Uint32(fsEntryBytes[0x0:0x4]) * 0x200
-	entryEndOffset := binary.LittleEndian.Uint32(fsEntryBytes[0x4:0x8]) * 0x200
+	startSector := binary.LittleEndian.Uint32(fsEntryBytes[0x0:0x4])
+	endSector := binary.LittleEndian.Uint32(fsEntryBytes[0x4:0x8])
+	if startSector > ^uint32(0)/0x200 || endSector > ^uint32(0)/0x200 || endSector < startSector {
+		return fsEntry{}
+	}
 
+	entryStartOffset := startSector * 0x200
+	entryEndOffset := endSector * 0x200
 	return fsEntry{StartOffset: entryStartOffset, EndOffset: entryEndOffset, Size: entryEndOffset - entryStartOffset}
 }
 
 func getFsHeader(ncaHeader *ncaHeader, index int) (*fsHeader, error) {
+	if ncaHeader == nil || index < 0 {
+		return nil, errors.New("invalid FS header index")
+	}
+	if len(ncaHeader.headerBytes) < 0x600 || index > (len(ncaHeader.headerBytes)-0x600)/0x200 {
+		return nil, errors.New("truncated FS header")
+	}
 	fsHeaderHashOffset := /*hash pfs0HeaderOffset*/ 0x280 + /*hash pfs0size*/ 0x20*index
+	if fsHeaderHashOffset < 0 || fsHeaderHashOffset+0x20 > len(ncaHeader.headerBytes) {
+		return nil, errors.New("truncated FS header hash")
+	}
 	fsHeaderHash := ncaHeader.headerBytes[fsHeaderHashOffset : fsHeaderHashOffset+0x20]
 
 	fsHeaderOffset := 0x400 + 0x200*index
@@ -62,6 +82,9 @@ func getFsHeader(ncaHeader *ncaHeader, index int) (*fsHeader, error) {
 }
 
 func (fh *fsHeader) getHashInfo() (*hashInfo, error) {
+	if fh == nil || len(fh.fsHeaderBytes) < 0x100 {
+		return nil, errors.New("truncated FS header")
+	}
 	hashInfoBytes := fh.fsHeaderBytes[0x8:0x100]
 	result := hashInfo{}
 	if fh.hashType == 2 {

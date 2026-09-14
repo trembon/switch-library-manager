@@ -4,21 +4,21 @@ runs:
   using: composite
   steps:
     - name: Upload Windows build
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: switch-library-manager.windows-amd64
         path: src/output/windows-amd64/*
         if-no-files-found: error
       
     - name: Upload Linux build
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: switch-library-manager.linux-amd64
         path: src/output/linux-amd64/*
         if-no-files-found: error
       
     - name: Upload Mac build
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: switch-library-manager.darwin-amd64
         path: src/output/darwin-amd64/*

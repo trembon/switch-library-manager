@@ -18,7 +18,7 @@ import (
 
 var (
 	versionRegex = regexp.MustCompile(`\[[vV]?(?P<version>[0-9]{1,10})]`)
-	titleIdRegex = regexp.MustCompile(`\[(?P<titleId>[A-Za-z0-9]{16})]`)
+	titleIdRegex = regexp.MustCompile(`\[(?P<titleId>[A-Fa-f0-9]{16})]`)
 )
 
 const (
@@ -90,9 +90,15 @@ func (ldb *LocalSwitchDBManager) CreateLocalSwitchFilesDB(folders []string,
 	files := []ExtendedFileInfo{}
 
 	if !ignoreCache {
-		ldb.db.GetEntry(DB_TABLE_LOCAL_LIBRARY, "files", &files)
-		ldb.db.GetEntry(DB_TABLE_LOCAL_LIBRARY, "skipped", &skipped)
-		ldb.db.GetEntry(DB_TABLE_LOCAL_LIBRARY, "titles", &titles)
+		if err := ldb.db.GetEntry(DB_TABLE_LOCAL_LIBRARY, "files", &files); err != nil {
+			return nil, err
+		}
+		if err := ldb.db.GetEntry(DB_TABLE_LOCAL_LIBRARY, "skipped", &skipped); err != nil {
+			return nil, err
+		}
+		if err := ldb.db.GetEntry(DB_TABLE_LOCAL_LIBRARY, "titles", &titles); err != nil {
+			return nil, err
+		}
 	}
 
 	if len(titles) == 0 {
@@ -109,9 +115,15 @@ func (ldb *LocalSwitchDBManager) CreateLocalSwitchFilesDB(folders []string,
 
 		ldb.processLocalFiles(files, progress, titles, skipped)
 
-		ldb.db.AddEntry(DB_TABLE_LOCAL_LIBRARY, "files", files)
-		ldb.db.AddEntry(DB_TABLE_LOCAL_LIBRARY, "skipped", skipped)
-		ldb.db.AddEntry(DB_TABLE_LOCAL_LIBRARY, "titles", titles)
+		if err := ldb.db.AddEntry(DB_TABLE_LOCAL_LIBRARY, "files", files); err != nil {
+			return nil, err
+		}
+		if err := ldb.db.AddEntry(DB_TABLE_LOCAL_LIBRARY, "skipped", skipped); err != nil {
+			return nil, err
+		}
+		if err := ldb.db.AddEntry(DB_TABLE_LOCAL_LIBRARY, "titles", titles); err != nil {
+			return nil, err
+		}
 	}
 
 	if progress != nil {
@@ -122,7 +134,7 @@ func (ldb *LocalSwitchDBManager) CreateLocalSwitchFilesDB(folders []string,
 }
 
 func scanFolder(folder string, recursive bool, files *[]ExtendedFileInfo, progress ProgressUpdater) error {
-	filepath.Walk(folder, func(path string, info os.FileInfo, err error) error {
+	return filepath.Walk(folder, func(path string, info os.FileInfo, err error) error {
 		if path == folder {
 			return nil
 		}
@@ -131,7 +143,7 @@ func scanFolder(folder string, recursive bool, files *[]ExtendedFileInfo, progre
 			return nil
 		}
 
-		if info.IsDir() {
+		if info == nil || info.IsDir() {
 			return nil
 		}
 
@@ -151,7 +163,6 @@ func scanFolder(folder string, recursive bool, files *[]ExtendedFileInfo, progre
 
 		return nil
 	})
-	return nil
 }
 
 func (ldb *LocalSwitchDBManager) ClearScanData() error {
@@ -197,11 +208,14 @@ func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,
 		fileName := strings.ToLower(file.FileName)
 		isSplit := false
 
-		if partNum, err := strconv.Atoi(fileName[len(fileName)-2:]); err == nil {
-			if partNum == 0 {
-				isSplit = true
-			} else {
-				continue
+		if len(fileName) >= 2 {
+			partNum, err := strconv.Atoi(fileName[len(fileName)-2:])
+			if err == nil {
+				if partNum == 0 {
+					isSplit = true
+				} else {
+					continue
+				}
 			}
 		}
 
@@ -225,13 +239,13 @@ func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,
 
 		for _, metadata := range contentMap {
 
-			id := metadata.TitleId
-			idPrefix := id[0 : len(id)-3]
-			if !(strings.HasSuffix(id, "000") || strings.HasSuffix(id, "800")) {
-				intVar, _ := strconv.ParseUint(id[len(id)-4:len(id)-3], 16, 64)
-				h := fmt.Sprintf("%x", intVar-1)
-				idPrefix = id[0:len(id)-4] + h
+			id := strings.ToLower(metadata.TitleId)
+			idPrefix, prefixErr := titleIDPrefix(id)
+			if prefixErr != nil {
+				skipped[file] = SkippedFile{ReasonText: "unable to determine title-Id / version - " + prefixErr.Error(), ReasonCode: REASON_UNRECOGNISED}
+				continue
 			}
+			metadata.TitleId = id
 
 			multiContent := len(contentMap) > 1
 			switchTitle := &SwitchGameFiles{

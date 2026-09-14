@@ -4,3 +4,6 @@ output
 windows.syso
 bind_*_amd64.go
 astilectron-bundler.exe
+games
+build
+prod.keys

@@ -53,13 +53,22 @@ var tweakPool = sync.Pool{
 // block cipher (which must have a block size of 16 bytes). The key must be
 // twice the length of the underlying cipher's key.
 func NewCipher(cipherFunc func([]byte) (cipher.Block, error), key []byte) (c *Cipher, err error) {
+	if cipherFunc == nil {
+		return nil, errors.New("xts: nil cipher function")
+	}
+	if len(key) == 0 || len(key)%2 != 0 {
+		return nil, errors.New("xts: key must contain two equal-length keys")
+	}
 	c = new(Cipher)
 	if c.k1, err = cipherFunc(key[:len(key)/2]); err != nil {
 		return
 	}
 	c.k2, err = cipherFunc(key[len(key)/2:])
 
-	if c.k1.BlockSize() != blockSize {
+	if c.k1 == nil || c.k2 == nil {
+		return nil, errors.New("xts: cipher function returned a nil block")
+	}
+	if c.k1.BlockSize() != blockSize || c.k2.BlockSize() != blockSize {
 		err = errors.New("xts: cipher does not have a block size of 16")
 	}
 
@@ -109,6 +118,9 @@ func (c *Cipher) Encrypt(ciphertext, plaintext []byte, sectorNum uint64) {
 // Plaintext and ciphertext must overlap entirely or not at all.
 // Sectors must be a multiple of 16 bytes and less than 2²⁴ bytes.
 func (c *Cipher) Decrypt(plaintext, ciphertext []byte, tweak *[16]byte) {
+	if tweak == nil {
+		panic("xts: nil tweak")
+	}
 	if len(plaintext) < len(ciphertext) {
 		panic("xts: plaintext is smaller than ciphertext")
 	}
