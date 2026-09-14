@@ -17,7 +17,7 @@ jobs:
       - name: Generate embedded assets
         working-directory: ./src
         shell: bash
-        run: ./astilectron-bundler bd
+        run: ./astilectron-bundler
 
       - name: Run Go tests
         working-directory: ./src
