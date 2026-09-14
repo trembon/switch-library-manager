@@ -190,7 +190,7 @@ func TestOrganizeByFoldersMovesBaseUpdateAndDLC(t *testing.T) {
 	OrganizeByFolders(baseFolder, local, remote, &progress)
 
 	destination := filepath.Join(baseFolder, "Test Game")
-	assertMoved(t, filepath.Join(source, baseName), filepath.Join(destination, baseID+"__0_1.0.0.nsp"), "base")
+	assertMoved(t, filepath.Join(source, baseName), filepath.Join(destination, baseID+"_BASE_0_1.0.0.nsp"), "base")
 	assertMoved(t, filepath.Join(source, updateName), filepath.Join(destination, "updates", updateID+"_UPD_5_5.0.0.nsp"), "update")
 	assertMoved(t, filepath.Join(source, dlcOneName), filepath.Join(destination, "dlc", dlcOneID+"_DLC_1_.nsp"), "first DLC")
 	assertMoved(t, filepath.Join(source, dlcTwoName), filepath.Join(destination, "dlc", dlcTwoID+"_DLC_1_.nsp"), "second DLC")
@@ -367,10 +367,10 @@ func TestDeleteOldUpdates(t *testing.T) {
 	}}
 	DeleteOldUpdates(baseFolder, local, &progress)
 	assertNotExists(t, oldPath)
-	assertExists(t, newPath)
-	assertExists(t, oldFolder)
-	if len(progress.events) != 4 {
-		t.Fatalf("progress events = %d, want 4: %#v", len(progress.events), progress.events)
+	assertNotExists(t, newPath)
+	assertNotExists(t, oldFolder)
+	if len(progress.events) != 5 {
+		t.Fatalf("progress events = %d, want 5: %#v", len(progress.events), progress.events)
 	}
 
 	DeleteOldUpdates(baseFolder, &db.LocalSwitchFilesDB{Skipped: map[db.ExtendedFileInfo]db.SkippedFile{}}, nil)
