@@ -12,6 +12,11 @@ runs:
       shell: bash
       run: wails generate module
 
+    - name: Prepare application icon
+      working-directory: ./src
+      shell: bash
+      run: mkdir -p build && cp assets/icons/icon.png build/appicon.png
+
     - name: Build with Wails
       working-directory: ./src
       shell: bash

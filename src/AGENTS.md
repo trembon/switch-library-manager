@@ -5,25 +5,27 @@
 - `main.go` resolves the executable directory and uses it as the application base folder. It is not the current working directory. macOS app bundles have special path handling.
 - Startup loads settings, creates `slm.log`, initializes CLI flags, and selects GUI or console mode. `-m console` and `-m gui` override `settings.json`.
 - The console flow downloads/loads remote titles and versions, scans the library, reports issues, optionally deletes old updates, organizes files, and checks missing updates/DLC.
-- The GUI flow starts Wails, loads the embedded `resources/app/index.html`, and exposes typed methods from `GUI` to `app.js`. It maintains mutable local and remote DB state in `GUI.state`.
+- The GUI flow starts Wails, loads the embedded `frontend/index.html`, and exposes typed methods from `backend/app.App` to `app.js`. It maintains mutable local and remote DB state in `App.state`.
 - `db.ProgressUpdater` is the progress callback used by both CLI and GUI. Do not assume progress totals are always nonzero or that callbacks are synchronous unless the caller guarantees it.
 
 ## Package Boundaries
 
-- `main` owns orchestration and presentation adapters.
-- `db` owns remote/local models, scanning, cache reads/writes, and persistence.
-- `switchfs` owns parsing and decryption of external binary formats.
-- `fileio` adapts split files to the parser layer.
-- `process` owns content comparisons and destructive organization.
-- `settings` owns JSON configuration and key discovery.
-- `console` owns flags and Windows console attachment.
+- `main` owns executable startup and mode selection.
+- `backend/app` owns Wails lifecycle, GUI state, frontend bindings, and presentation adapters.
+- `backend/consoleapp` owns CLI workflow, progress output, and CSV export.
+- `backend/db` owns remote/local models, scanning, cache reads/writes, and persistence.
+- `backend/switchfs` owns parsing and decryption of external binary formats.
+- `backend/fileio` adapts split files to the parser layer.
+- `backend/process` owns content comparisons and destructive organization.
+- `backend/settings` owns JSON configuration and key discovery.
+- `backend/console` owns flags and Windows console attachment.
 
-When adding reusable logic, put it in the narrowest package that owns the behavior. Do not put parser, database, or file-organization logic in `gui.go` or `console.go` merely because those files call it.
+When adding reusable logic, put it in the narrowest package that owns the behavior. Do not put parser, database, or file-organization logic in `backend/app` or `backend/consoleapp` merely because those adapters call it.
 
 ## Shared State and JSON Contracts
 
 - `settings.ReadSettings` and `settings.SwitchKeys` currently use process-global singletons. A later `baseFolder` is ignored after initialization. Tests that need isolation must use separate processes or first refactor toward explicit state.
-- Wails method signatures and event names are an API between `gui.go` and `resources/app/app.js`. Update both sides together and preserve the asynchronous callback behavior.
+- Wails method signatures and event names are an API between `backend/app` and `frontend/app.js`. Update both sides together and preserve the asynchronous callback behavior.
 - Important bindings include settings/key/update/database/library/organization methods. Important events are `updateProgress`, `error`, and `rescan`.
 - Keep JSON field names stable unless a coordinated frontend change or migration is included.
 
@@ -44,5 +46,5 @@ go vet ./...
 ```
 
 - Always run `go test ./...` when verifying a Go task; a task is not complete until the tests pass.
-- Core logic coverage is required to be at least 90% in aggregate across `db`, `fileio`, `process`, `settings`, `switchfs`, and `switchfs/_crypto`. The GUI, CLI orchestration, and generated bindata are not part of that threshold.
+- Core logic coverage is required to be at least 90% in aggregate across `backend/db`, `backend/fileio`, `backend/process`, `backend/settings`, `backend/switchfs`, and `backend/switchfs/_crypto`. The GUI, CLI orchestration, and generated bindata are not part of that threshold.
 - The repository uses synthetic fixtures and temporary directories for tests. Report whether verification used filename fallback, synthetic parser/filesystem fixtures, or real encrypted Switch files.

@@ -5,19 +5,20 @@
 - This is a cross-platform Go desktop application for scanning and organizing Nintendo Switch backup files.
 - The Go module is `src/go.mod`. Run Go commands from `src`, not from the repository root. The project targets Go `1.27`.
 - Runtime state is stored beside the executable: `settings.json`, `titles.json`, `versions.json`, `slm.db`, and `slm.log`.
-- The application has two modes: a Wails GUI and a command-line workflow. Both use the same `db`, `settings`, `switchfs`, and `process` packages. The combined executable selects the mode with `-m gui` or `-m console`.
-- `src/resources/app` is the embedded HTML/CSS/JavaScript frontend.
+- The application has two modes: a Wails GUI and a command-line workflow. Both use the same backend domain packages. The combined executable selects the mode with `-m gui` or `-m console`.
+- `src/frontend` is the embedded HTML/CSS/JavaScript frontend.
 
 ## Important Paths
 
 - `src/main.go`: executable-relative startup, logging, mode selection, and generated asset entrypoints.
-- `src/gui.go`: GUI lifecycle, state, frontend message handling, and JSON responses.
-- `src/console.go`: CLI workflow, progress output, and CSV export.
-- `src/db`: remote title data, local scan model, BoltDB persistence, and scan/cache orchestration.
-- `src/switchfs`: binary Switch container parsing and decryption.
-- `src/fileio`: split-file metadata dispatch.
-- `src/process`: missing-content calculations and file-moving/deletion operations.
-- `src/settings`: JSON settings, prod.keys discovery, and update checks.
+- `src/backend/app`: Wails lifecycle, state, frontend bindings, and JSON responses.
+- `src/backend/consoleapp`: CLI workflow, progress output, and CSV export.
+- `src/backend/db`: remote title data, local scan model, BoltDB persistence, and scan/cache orchestration.
+- `src/backend/switchfs`: binary Switch container parsing and decryption.
+- `src/backend/fileio`: split-file metadata dispatch.
+- `src/backend/process`: missing-content calculations and file-moving/deletion operations.
+- `src/backend/settings`: JSON settings, prod.keys discovery, and update checks.
+- `src/assets/icons`: tracked source icons used by packaging.
 - `.github`: Wails setup, build, and artifact publication.
 
 ## Development Rules
@@ -40,8 +41,8 @@
 
 ## Generated Files and Assets
 
-- Do not hand-edit `src/resources/app/wailsjs`, `src/windows.syso`, `src/output`, or local build products; they are generated artifacts and are ignored where appropriate.
-- Changes under `src/resources/app` require running `wails generate module` before a packaged build when Go bindings change. `wails build` embeds the frontend assets.
+- Do not hand-edit `src/frontend/wailsjs`, `src/windows.syso`, `src/output`, or local build products; they are generated artifacts and are ignored where appropriate.
+- Changes under `src/frontend` require running `wails generate module` before a packaged build when Go bindings change. `wails build` embeds the frontend assets.
 - Keep Wails platform targets in `.github/workflows/build-master.yml` synchronized with artifact publication.
 
 ## Verification
@@ -55,7 +56,7 @@ go vet ./...
 ```
 
 - Every task that changes Go code must run `go test ./...` before it is considered complete. Report the test command and result in the task summary.
-- Core logic coverage is measured for `db`, `fileio`, `process`, `settings`, `switchfs`, and `switchfs/_crypto`; presentation packages and generated bindata are excluded from the coverage threshold.
+- Core logic coverage is measured for `backend/db`, `backend/fileio`, `backend/process`, `backend/settings`, `backend/switchfs`, and `backend/switchfs/_crypto`; presentation packages and generated bindata are excluded from the coverage threshold.
 - The required aggregate core-logic statement coverage is 90%. The `verify-pr` workflow generates and analyzes the combined coverage profile.
 
 - For parser, filesystem, persistence, or shared-state changes, add focused tests and run `go test -race ./...` when practical.

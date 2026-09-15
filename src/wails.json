@@ -2,8 +2,8 @@
   "$schema": "https://wails.io/schemas/config.v2.json",
   "name": "switch-library-manager",
   "outputfilename": "switch-library-manager",
-  "frontend:dir": "./resources/app",
-  "wailsjsdir": "./resources/app",
+  "frontend:dir": "./frontend",
+  "wailsjsdir": "./frontend",
   "author": {
     "name": "trembon"
   },

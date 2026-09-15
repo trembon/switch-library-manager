@@ -1,5 +1,5 @@
 .idea
-resources/app/vendor
+frontend/vendor
 output
 build
 windows.syso

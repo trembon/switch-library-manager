@@ -128,21 +128,18 @@ NOTE: parameters are only usable in command line mode, except the parameter -m (
 
 ## Building
 
-### Windows
-- Install and setup Go
-- Clone the repo: `git clone https://github.com/trembon/switch-library-manager.git`
-- Move into the src folder `cd src`
-- Get the bundler `go get -u github.com/asticode/go-astilectron-bundler/...`
-- Install bundler `go install github.com/asticode/go-astilectron-bundler/astilectron-bundler`
-- Copy bundler binary to the src folder `copy %USERPROFILE%\go\bin\astilectron-bundler.exe .`
-- Execute `astilectron-bundler.exe`
-- Binaries will be available under output
+### Source layout
 
-### macOS or Linux
-- Install and setup Go
-- Install the Wails CLI: `go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0`
+- `src/frontend` contains the embedded vanilla JavaScript frontend and generated Wails bindings.
+- `src/backend/app` contains Wails GUI orchestration and frontend DTOs.
+- `src/backend/consoleapp` contains the command-line workflow.
+- `src/backend/db`, `fileio`, `process`, `settings`, and `switchfs` contain reusable domain logic.
+- `src/assets/icons` contains source application icons; Wails build assets are generated under `src/build`.
+
+### Windows, macOS, or Linux
+- Install and set up Go and the Wails CLI: `go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0`
 - Clone the repo: `git clone https://github.com/trembon/switch-library-manager.git`
-- Move into the src folder `cd src`
+- Move into the Go/Wails project: `cd switch-library-manager/src`
 - Generate the Wails bindings: `wails generate module`
 - Build the application: `wails build`
 - Binaries will be available under `src/build/bin`

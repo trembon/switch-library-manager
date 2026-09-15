@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"fmt"
 	"net/url"
 	"os"
@@ -8,10 +9,15 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/trembon/switch-library-manager/console"
-	"github.com/trembon/switch-library-manager/settings"
+	"github.com/trembon/switch-library-manager/backend/app"
+	"github.com/trembon/switch-library-manager/backend/console"
+	"github.com/trembon/switch-library-manager/backend/consoleapp"
+	"github.com/trembon/switch-library-manager/backend/settings"
 	"go.uber.org/zap"
 )
+
+//go:embed all:frontend
+var frontendAssets embed.FS
 
 func main() {
 	exePath, err := os.Executable()
@@ -56,12 +62,12 @@ func main() {
 	}
 
 	if useGUI {
-		if err := CreateGUI(workingFolder, sugar).Start(); err != nil {
+		if err := app.Start(workingFolder, sugar, frontendAssets); err != nil {
 			sugar.Error("GUI startup failed", err)
 		}
 	} else {
 		console.FixConsoleOutput()
-		CreateConsole(workingFolder, sugar, consoleFlags).Start()
+		consoleapp.CreateConsole(workingFolder, sugar, consoleFlags).Start()
 	}
 }
 

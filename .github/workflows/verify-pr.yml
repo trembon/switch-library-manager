@@ -25,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          packages=(./db ./fileio ./process ./settings ./switchfs ./switchfs/_crypto)
+          packages=(./backend/db ./backend/fileio ./backend/process ./backend/settings ./backend/switchfs ./backend/switchfs/_crypto)
           coverage_file="$(mktemp)"
           trap 'rm -f "$coverage_file"' EXIT
           first_profile=true
