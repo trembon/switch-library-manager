@@ -139,6 +139,9 @@ NOTE: parameters are only usable in command line mode, except the parameter -m (
 ### Windows, macOS, or Linux
 - Install and set up Go and the Wails CLI: `go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0`
 - Clone the repo: `git clone https://github.com/trembon/switch-library-manager.git`
+- From the repository root, prepare the Wails build assets:
+  - PowerShell: `pwsh -File .\scripts\prepare-wails-build-assets.ps1`
+  - Bash/Git Bash: `bash scripts/prepare-wails-build-assets.sh`
 - Move into the Go/Wails project: `cd switch-library-manager/src`
 - Generate the Wails bindings: `wails generate module`
 - Build the application: `wails build`
