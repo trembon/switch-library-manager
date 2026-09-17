@@ -1,13 +1,16 @@
-<html>
+<!doctype html>
+<html lang="en">
   <head>
-    <link rel="stylesheet" type="text/css" href="app.css" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Switch Library Manager</title>
+    <link href="lib/css/bootstrap/bootstrap.min.css" rel="stylesheet" />
     <link href="lib/css/tabulator/tabulator.min.css" rel="stylesheet" />
-    <link href="lib/css/dark/toggle-bootstrap.min.css" rel="stylesheet" />
-    <link href="lib/css/dark/toggle-bootstrap-dark.min.css" rel="stylesheet" />
     <link
-      href="lib/css/tabulator/semantic-ui/tabulator_semantic-ui.min.css"
+      href="lib/css/tabulator/bootstrap/tabulator_bootstrap.min.css"
       rel="stylesheet"
     />
+    <link rel="stylesheet" type="text/css" href="app.css" />
     <script type="text/javascript" src="lib/js/jquery/jquery-3.5.1.min.js"></script>
     <script type="text/javascript" src="lib/js/moment/moment.min.js"></script>
     <script
@@ -21,18 +24,20 @@
     <script type="module" src="app.js"></script>
   </head>
 
-  <body class="bootstrap">
+  <body>
     <div class="wrapper">
-      <ul id="tab_btns" class="tabs clearfix" data-tabgroup="tab-group">
-        <li><a href="#library" class="active">Library</a></li>
-        <li class="missing_btn"><a href="#missing">Missing games</a></li>
-        <li><a href="#updates">Missing updates</a></li>
-        <li><a href="#dlc">Missing DLC</a></li>
-        <li><a href="#organize">Organize</a></li>
-        <li><a href="#status">Issues</a></li>
-        <li><a href="#settings">Settings</a></li>
-      </ul>
-      <div class="progress-container">
+      <nav id="tab_btns" class="app-nav" data-tabgroup="tab-group" aria-label="Main navigation">
+        <ul class="nav nav-tabs flex-nowrap" role="tablist">
+          <li class="nav-item" role="presentation"><a id="library-tab" href="#library" class="nav-link active" role="tab" aria-controls="library" aria-selected="true">Library</a></li>
+          <li class="nav-item missing_btn" role="presentation"><a id="missing-tab" href="#missing" class="nav-link" role="tab" aria-controls="missing" aria-selected="false">Missing games</a></li>
+          <li class="nav-item" role="presentation"><a id="updates-tab" href="#updates" class="nav-link" role="tab" aria-controls="updates" aria-selected="false">Missing updates</a></li>
+          <li class="nav-item" role="presentation"><a id="dlc-tab" href="#dlc" class="nav-link" role="tab" aria-controls="dlc" aria-selected="false">Missing DLC</a></li>
+          <li class="nav-item" role="presentation"><a id="organize-tab" href="#organize" class="nav-link" role="tab" aria-controls="organize" aria-selected="false">Organize</a></li>
+          <li class="nav-item" role="presentation"><a id="status-tab" href="#status" class="nav-link" role="tab" aria-controls="status" aria-selected="false">Issues</a></li>
+          <li class="nav-item" role="presentation"><a id="settings-tab" href="#settings" class="nav-link" role="tab" aria-controls="settings" aria-selected="false">Settings</a></li>
+        </ul>
+      </nav>
+      <div class="progress-container" aria-live="polite">
         <h5 class="progress-type">Loading...</h5>
         <div class="progress">
           <div
@@ -46,13 +51,13 @@
         <div class="progress-msg"></div>
       </div>
       <section id="tab-group" class="tabgroup">
-        <div id="library"></div>
-        <div id="updates"></div>
-        <div id="missing"></div>
-        <div id="dlc"></div>
-        <div id="organize"></div>
-        <div id="status"></div>
-        <div id="settings"></div>
+        <div id="library" role="tabpanel" aria-labelledby="library-tab"></div>
+        <div id="updates" role="tabpanel" aria-labelledby="updates-tab"></div>
+        <div id="missing" role="tabpanel" aria-labelledby="missing-tab"></div>
+        <div id="dlc" role="tabpanel" aria-labelledby="dlc-tab"></div>
+        <div id="organize" role="tabpanel" aria-labelledby="organize-tab"></div>
+        <div id="status" role="tabpanel" aria-labelledby="status-tab"></div>
+        <div id="settings" role="tabpanel" aria-labelledby="settings-tab"></div>
       </section>
     </div>
 
@@ -101,17 +106,13 @@
               {{if keys === "false"}}
               <div id="missingkeys" class="alert center alert-danger" role="alert" >
                   Prod.keys was not found, deep NSP scan is disabled, library content is based on file names tags.
-                  <button type="button" class="close" data-dismiss="alert" aria-label="Close" onClick='$("#missingkeys").hide()'>
-                     <span aria-hidden="true">&times;</span>
-                  </button>
+                  <button type="button" class="btn-close alert-dismiss" aria-label="Close"></button>
               </div>
               {{/if}}
               {{if num_skipped != 0}}
                    <div id="scan_issues" class="alert center alert-warning" role="alert">
                   {{:num_skipped}} out of {{:num_files}} files were skipped during scan, click on the issues tab to learn more
-                  <button type="button" class="close" data-dismiss="alert" aria-label="Close" onClick='$("#scan_issues").hide()'>
-                     <span aria-hidden="true">&times;</span>
-                  </button>
+                  <button type="button" class="btn-close alert-dismiss" aria-label="Close"></button>
                     </div>
               {{/if}}
               <section id="library-table" class="content"></section>
@@ -224,68 +225,67 @@
        </div>
        <div class="container">
           <form>
-              <div class="form-group row">
+          <div class="row mb-3">
                 <label for="baseFolder" class="col-sm-2 col-form-label">Base folder</label>
                 <div class="col-sm-10">
                   <input type="text" readonly class="form-control-plaintext" id="baseFolder" value="{{:folder}}">
                 </div>
               </div>
-              <div class="form-group row">
+          <div class="row mb-3">
                 <label for="createFolders" class="col-sm-2 col-form-label">Create folders</label>
                 <div class="col-sm-10">
                   <input type="text" readonly class="form-control-plaintext" id="createFolders" value="{{:settings.organization.create_folder_per_game}}">
                 </div>
               </div>
-              <div class="form-group row">
-                <label for="createFolders" class="col-sm-2 col-form-label">Create Updates folders</label>
+              <div class="row mb-3">
+                <label for="createUpdatesFolder" class="col-sm-2 col-form-label">Create Updates folders</label>
                 <div class="col-sm-10">
-                  <input type="text" readonly class="form-control-plaintext" id="createFolders" value="{{:settings.organization.updates_folder}}">
+                  <input type="text" readonly class="form-control-plaintext" id="createUpdatesFolder" value="{{:settings.organization.updates_folder}}">
                 </div>
               </div>
-              <div class="form-group row">
-                <label for="createFolders" class="col-sm-2 col-form-label">Create DLC folders</label>
+              <div class="row mb-3">
+                <label for="createDlcFolder" class="col-sm-2 col-form-label">Create DLC folders</label>
                 <div class="col-sm-10">
-                  <input type="text" readonly class="form-control-plaintext" id="createFolders" value="{{:settings.organization.dlc_folder}}">
+                  <input type="text" readonly class="form-control-plaintext" id="createDlcFolder" value="{{:settings.organization.dlc_folder}}">
                 </div>
               </div>
-              <div class="form-group row">
-                <label for="createFolders" class="col-sm-2 col-form-label">Rename files</label>
+              <div class="row mb-3">
+                <label for="renameFiles" class="col-sm-2 col-form-label">Rename files</label>
                 <div class="col-sm-10">
-                  <input type="text" readonly class="form-control-plaintext" id="createFolders" value="{{:settings.organization.rename_files}}">
+                  <input type="text" readonly class="form-control-plaintext" id="renameFiles" value="{{:settings.organization.rename_files}}">
                 </div>
               </div>
-              <div class="form-group row">
-                <label for="createFolders" class="col-sm-2 col-form-label">Delete empty folders</label>
+              <div class="row mb-3">
+                <label for="deleteEmptyFolders" class="col-sm-2 col-form-label">Delete empty folders</label>
                 <div class="col-sm-10">
-                  <input type="text" readonly class="form-control-plaintext" id="createFolders" value="{{:settings.organization.delete_empty_folders}}">
+                  <input type="text" readonly class="form-control-plaintext" id="deleteEmptyFolders" value="{{:settings.organization.delete_empty_folders}}">
                 </div>
               </div>
-              <div class="form-group row">
-                <label for="createFolders" class="col-sm-2 col-form-label">Delete old update files</label>
+              <div class="row mb-3">
+                <label for="deleteOldUpdateFiles" class="col-sm-2 col-form-label">Delete old update files</label>
                 <div class="col-sm-10">
-                  <input type="text" readonly class="form-control-plaintext" id="createFolders" value="{{:settings.organization.delete_old_update_files}}">
+                  <input type="text" readonly class="form-control-plaintext" id="deleteOldUpdateFiles" value="{{:settings.organization.delete_old_update_files}}">
                 </div>
               </div>
-              <div class="form-group row">
-                <label for="createFolders" class="col-sm-2 col-form-label">Process files when base game is missing</label>
+              <div class="row mb-3">
+                <label for="processMissingBaseGame" class="col-sm-2 col-form-label">Process files when base game is missing</label>
                 <div class="col-sm-10">
-                  <input type="text" readonly class="form-control-plaintext" id="createFolders" value="{{:settings.organization.process_when_missing_base_game}}">
+                  <input type="text" readonly class="form-control-plaintext" id="processMissingBaseGame" value="{{:settings.organization.process_when_missing_base_game}}">
                 </div>
               </div>
-              <div class="form-group row">
-                <label for="createFolders" class="col-sm-2 col-form-label">Folder name template</label>
+              <div class="row mb-3">
+                <label for="folderNameTemplate" class="col-sm-2 col-form-label">Folder name template</label>
                 <div class="col-sm-10">
-                  <input type="text" readonly class="form-control-plaintext" id="createFolders" value="{{:settings.organization.folder_name_template}}">
+                  <input type="text" readonly class="form-control-plaintext" id="folderNameTemplate" value="{{:settings.organization.folder_name_template}}">
                 </div>
               </div>
-              <div class="form-group row">
-                <label for="createFolders" class="col-sm-2 col-form-label">File name template</label>
+              <div class="row mb-3">
+                <label for="fileNameTemplate" class="col-sm-2 col-form-label">File name template</label>
                 <div class="col-sm-10">
-                  <input type="text" readonly class="form-control-plaintext" id="createFolders" value="{{:settings.organization.file_name_template}}">
+                  <input type="text" readonly class="form-control-plaintext" id="fileNameTemplate" value="{{:settings.organization.file_name_template}}">
                 </div>
               </div>
                  <button type="submit" class="btn btn-primary library-organize-action">Begin library organization</button>
-            </div>
           </form>
        </div>
 

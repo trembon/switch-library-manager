@@ -28,7 +28,7 @@ func TestDefaultSettingsAndJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.SchemaVersion != SETTINGS_SCHEMA_VERSION || !s.GUI.Enabled || !s.Scan.Recursive || !s.MissingContent.CheckForUpdates || !s.MissingContent.CheckForDLC || s.GUI.PageSize != 100 {
+	if s.SchemaVersion != SETTINGS_SCHEMA_VERSION || !s.GUI.Enabled || !s.Scan.Recursive || !s.MissingContent.CheckForUpdates || !s.MissingContent.CheckForDLC || s.GUI.PageSize != 100 || s.GUI.Theme != ThemeInherit {
 		t.Fatalf("unexpected defaults: %#v", s)
 	}
 	if s.DataSources.TitlesURL != DEFAULT_TITLES_JSON_URL || s.DataSources.VersionsURL != DEFAULT_VERSIONS_JSON_URL || !s.Organization.SwitchSafeFileNames {
@@ -47,6 +47,53 @@ func TestDefaultSettingsAndJSON(t *testing.T) {
 	}
 	if decoded.SchemaVersion != SETTINGS_SCHEMA_VERSION || decoded.Organization.FileNameTemplate == "" {
 		t.Fatalf("invalid default JSON: %#v", decoded)
+	}
+}
+
+func TestThemeSettingsNormalizeAndRoundTrip(t *testing.T) {
+	isolateSettings(t)
+	base := t.TempDir()
+	custom := &AppSettings{GUI: GUISettings{Theme: ThemeDark}}
+	if err := SaveSettingsWithError(custom, base); err != nil {
+		t.Fatal(err)
+	}
+	if custom.GUI.Theme != ThemeDark {
+		t.Fatalf("dark theme was changed: %q", custom.GUI.Theme)
+	}
+
+	settingsInstance = nil
+	loaded, err := ReadSettings(base)
+	if err != nil || loaded.GUI.Theme != ThemeDark {
+		t.Fatalf("dark theme round-trip: %#v, %v", loaded, err)
+	}
+
+	settingsInstance = nil
+	custom.GUI.Theme = ThemeLight
+	if err := SaveSettingsWithError(custom, base); err != nil {
+		t.Fatal(err)
+	}
+	settingsInstance = nil
+	loaded, err = ReadSettings(base)
+	if err != nil || loaded.GUI.Theme != ThemeLight {
+		t.Fatalf("light theme round-trip: %#v, %v", loaded, err)
+	}
+
+	settingsInstance = nil
+	if err := os.WriteFile(filepath.Join(base, SETTINGS_FILENAME), []byte(`{"schema_version":2}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err = ReadSettings(base)
+	if err != nil || loaded.GUI.Theme != ThemeInherit {
+		t.Fatalf("missing theme compatibility: %#v, %v", loaded, err)
+	}
+
+	settingsInstance = nil
+	if err := os.WriteFile(filepath.Join(base, SETTINGS_FILENAME), []byte(`{"schema_version":2,"gui":{"theme":"invalid"}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err = ReadSettings(base)
+	if err != nil || loaded.GUI.Theme != ThemeInherit {
+		t.Fatalf("invalid theme normalization: %#v, %v", loaded, err)
 	}
 }
 

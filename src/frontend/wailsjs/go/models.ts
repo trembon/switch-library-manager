@@ -301,6 +301,7 @@ export namespace settings {
 	    page_size: number;
 	    hide_missing_games: boolean;
 	    hide_demo_games: boolean;
+	    theme: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new GUISettings(source);
@@ -312,6 +313,7 @@ export namespace settings {
 	        this.page_size = source["page_size"];
 	        this.hide_missing_games = source["hide_missing_games"];
 	        this.hide_demo_games = source["hide_demo_games"];
+	        this.theme = source["theme"];
 	    }
 	}
 	export class AppSettings {

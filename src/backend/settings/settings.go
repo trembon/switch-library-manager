@@ -42,11 +42,18 @@ const (
 	TEMPLATE_TYPE        = "TYPE"
 )
 
+const (
+	ThemeInherit = "inherit"
+	ThemeLight   = "light"
+	ThemeDark    = "dark"
+)
+
 type GUISettings struct {
-	Enabled          bool `json:"enabled"`
-	PageSize         int  `json:"page_size"`
-	HideMissingGames bool `json:"hide_missing_games"`
-	HideDemoGames    bool `json:"hide_demo_games"`
+	Enabled          bool   `json:"enabled"`
+	PageSize         int    `json:"page_size"`
+	HideMissingGames bool   `json:"hide_missing_games"`
+	HideDemoGames    bool   `json:"hide_demo_games"`
+	Theme            string `json:"theme"`
 }
 
 type PathSettings struct {
@@ -262,6 +269,7 @@ func defaultSettings() *AppSettings {
 		GUI: GUISettings{
 			Enabled:  true,
 			PageSize: 100,
+			Theme:    ThemeInherit,
 		},
 		Paths: PathSettings{ScanFolders: []string{}},
 		Scan:  ScanSettings{Recursive: true, IgnoreFileTypes: []string{}},
@@ -284,6 +292,7 @@ func defaultSettings() *AppSettings {
 }
 
 func verifySettings(settings *AppSettings) {
+	settings.GUI.Theme = NormalizeTheme(settings.GUI.Theme)
 	if settings.DataSources.TitlesURL == "" {
 		settings.DataSources.TitlesURL = DEFAULT_TITLES_JSON_URL
 	}
@@ -304,6 +313,17 @@ func verifySettings(settings *AppSettings) {
 	}
 	if settings.MissingContent.IgnoreUpdateIDs == nil {
 		settings.MissingContent.IgnoreUpdateIDs = []string{}
+	}
+}
+
+// NormalizeTheme returns a supported GUI theme value. Empty and unknown
+// values intentionally follow the system preference.
+func NormalizeTheme(theme string) string {
+	switch theme {
+	case ThemeLight, ThemeDark:
+		return theme
+	default:
+		return ThemeInherit
 	}
 }
 
@@ -360,6 +380,7 @@ func SaveSettingsWithError(settings *AppSettings, baseFolder string) error {
 	if settings.SchemaVersion != SETTINGS_SCHEMA_VERSION {
 		return fmt.Errorf("unsupported settings schema_version %d", settings.SchemaVersion)
 	}
+	settings.GUI.Theme = NormalizeTheme(settings.GUI.Theme)
 	data, err := json.MarshalIndent(settings, "", " ")
 	if err != nil {
 		return fmt.Errorf("marshal settings: %w", err)

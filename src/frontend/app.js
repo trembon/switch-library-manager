@@ -18,12 +18,54 @@ import { EventsOn } from './wailsjs/runtime/runtime.js'
 
 $(function () {
 
+    const THEME_INHERIT = "inherit";
+    const THEME_LIGHT = "light";
+    const THEME_DARK = "dark";
+
     let state = {
         settings:{},
         keys:false
     };
 
     let currTable
+    let themeMediaQuery
+    let themeMediaQueryHandler
+
+    function setThemeAttribute(theme) {
+        document.documentElement.dataset.bsTheme = theme;
+    }
+
+    function applyTheme(theme) {
+        if (themeMediaQuery && themeMediaQueryHandler) {
+            if (themeMediaQuery.removeEventListener) {
+                themeMediaQuery.removeEventListener("change", themeMediaQueryHandler);
+            } else if (themeMediaQuery.removeListener) {
+                themeMediaQuery.removeListener(themeMediaQueryHandler);
+            }
+        }
+        themeMediaQuery = undefined;
+        themeMediaQueryHandler = undefined;
+
+        if (theme !== THEME_LIGHT && theme !== THEME_DARK) {
+            if (!window.matchMedia) {
+                setThemeAttribute(THEME_LIGHT);
+                return;
+            }
+            themeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+            themeMediaQueryHandler = event => setThemeAttribute(event.matches ? THEME_DARK : THEME_LIGHT);
+            setThemeAttribute(themeMediaQuery.matches ? THEME_DARK : THEME_LIGHT);
+            if (themeMediaQuery.addEventListener) {
+                themeMediaQuery.addEventListener("change", themeMediaQueryHandler);
+            } else if (themeMediaQuery.addListener) {
+                themeMediaQuery.addListener(themeMediaQueryHandler);
+            }
+            return;
+        }
+
+        setThemeAttribute(theme);
+    }
+
+    applyTheme(THEME_INHERIT);
 
     //handle tabs action
     $('.tabgroup > div').hide();
@@ -68,6 +110,7 @@ $(function () {
 
         LoadSettings().then(function (message) {
             state.settings = message;
+            applyTheme(state.settings.gui && state.settings.gui.theme);
 
             if(state.settings.gui.hide_missing_games){
                 document.getElementById("tab_btns").classList.add("hide_missing_games");
@@ -145,7 +188,7 @@ $(function () {
         function loadTab(target) {
             hideCurrentTab();
 
-            $("#tab_btns a[href='" + target + "']").addClass('active');
+            $("#tab_btns a[href='" + target + "']").addClass('active').attr('aria-selected', 'true');
             $(target).show();
 
             if (target === "#settings") {
@@ -340,6 +383,10 @@ $(function () {
             currTable.download("csv", "export.csv", {}, "all");
         });
 
+        $("body").on("click", ".alert-dismiss", e => {
+            $(e.currentTarget).closest(".alert").hide();
+        });
+
         $("body").on("click", ".library-organize-action", e => {
             e.preventDefault();
             if (state.settings.organization.create_folder_per_game === false &&
@@ -377,7 +424,7 @@ $(function () {
         });
 
         function hideCurrentTab() {
-            $("#tab_btns a").removeClass("active");
+            $("#tab_btns a").removeClass("active").attr('aria-selected', 'false');
             let tabgroup = $("#tab_btns").data('tabgroup');
             $("#" + tabgroup).children('div').hide();
         }

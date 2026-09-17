@@ -11,7 +11,8 @@ Switch Library Manager uses a categorized `settings.json` format. The file is va
     "enabled": true,
     "page_size": 100,
     "hide_missing_games": false,
-    "hide_demo_games": false
+    "hide_demo_games": false,
+    "theme": "inherit"
   },
   "paths": {
     "library_folder": "",
@@ -60,6 +61,7 @@ Switch Library Manager uses a categorized `settings.json` format. The file is va
 | `gui.page_size` | integer | `100` | Number of rows shown per page in GUI tables. Values less than or equal to zero are reset to 100. |
 | `gui.hide_missing_games` | boolean | `false` | Hides the missing-games tab in the GUI. |
 | `gui.hide_demo_games` | boolean | `false` | Excludes demo titles from the GUI missing-games list. |
+| `gui.theme` | string | `"inherit"` | GUI color mode: `inherit` follows the operating system, while `light` and `dark` force a mode. Invalid or missing values use `inherit`. |
 | `paths.library_folder` | string | `""` | Main folder scanned by the GUI and console workflow. The `-f` flag overrides it for a console run. |
 | `paths.scan_folders` | string array | `[]` | Additional folders scanned alongside the main library folder. |
 | `paths.prod_keys` | string | `""` | Optional file or directory containing `prod.keys`. If it does not resolve, the application checks the executable folder and the home `.switch` folder. |
