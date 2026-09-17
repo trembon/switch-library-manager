@@ -109,8 +109,8 @@ type Cache struct {
 	VersionsETag string `json:"versions_etag"`
 }
 
-// MigrationInfo describes a legacy settings file that was preserved while
-// creating a new v2 settings file with defaults.
+// MigrationInfo describes an older settings file that was preserved while
+// creating a current settings file with defaults.
 type MigrationInfo struct {
 	BackupPath string
 }
@@ -142,7 +142,7 @@ func ReadSettings(baseFolder string) (*AppSettings, error) {
 	return prepared.Settings, nil
 }
 
-// PrepareSettings loads v2 settings and reports whether a legacy file was
+// PrepareSettings loads current settings and reports whether an older file was
 // preserved while defaults were generated. It is intended for application
 // startup, where the caller can present the migration notice to the user.
 func PrepareSettings(baseFolder string) (*SettingsPreparation, error) {
@@ -178,7 +178,7 @@ func PrepareSettings(baseFolder string) (*SettingsPreparation, error) {
 
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(contents, &raw); err != nil {
-		return nil, fmt.Errorf("decode settings: %w; the file was not changed, create a v2 settings.json", err)
+		return nil, fmt.Errorf("decode settings: %w; the file was not changed, create a current settings.json", err)
 	}
 	if raw == nil {
 		return nil, errors.New("settings.json must contain a JSON object; the file was not changed")
@@ -188,20 +188,20 @@ func PrepareSettings(baseFolder string) (*SettingsPreparation, error) {
 		SchemaVersion *int `json:"schema_version"`
 	}
 	if err := json.Unmarshal(contents, &envelope); err != nil {
-		return nil, fmt.Errorf("decode settings: %w; the file was not changed, create a v2 settings.json", err)
+		return nil, fmt.Errorf("decode settings: %w; the file was not changed, create a current settings.json", err)
 	}
-	if envelope.SchemaVersion == nil || *envelope.SchemaVersion == 1 {
-		backupPath, err := preserveLegacySettings(filename)
+	if envelope.SchemaVersion == nil || *envelope.SchemaVersion < SETTINGS_SCHEMA_VERSION {
+		backupPath, err := preserveOldSettings(filename)
 		if err != nil {
 			return nil, err
 		}
 
 		defaults := defaultSettings()
 		if err := SaveSettingsWithError(defaults, baseFolder); err != nil {
-			if restoreErr := restoreLegacySettings(filename, backupPath); restoreErr != nil {
-				return nil, fmt.Errorf("create default settings: %w; restore legacy settings: %v", err, restoreErr)
+			if restoreErr := restoreOldSettings(filename, backupPath); restoreErr != nil {
+				return nil, fmt.Errorf("create default settings: %w; restore older settings: %v", err, restoreErr)
 			}
-			return nil, fmt.Errorf("create default settings: %w; the legacy settings were restored", err)
+			return nil, fmt.Errorf("create default settings: %w; the older settings were restored", err)
 		}
 		return &SettingsPreparation{
 			Settings:  defaults,
@@ -209,7 +209,7 @@ func PrepareSettings(baseFolder string) (*SettingsPreparation, error) {
 		}, nil
 	}
 	if *envelope.SchemaVersion != SETTINGS_SCHEMA_VERSION {
-		return nil, fmt.Errorf("unsupported settings schema_version %d; expected %d; the file was not changed", *envelope.SchemaVersion, SETTINGS_SCHEMA_VERSION)
+		return nil, fmt.Errorf("unsupported settings schema_version %d; current schema_version is %d; the file was not changed", *envelope.SchemaVersion, SETTINGS_SCHEMA_VERSION)
 	}
 
 	loaded := defaultSettings()
@@ -221,28 +221,28 @@ func PrepareSettings(baseFolder string) (*SettingsPreparation, error) {
 	return &SettingsPreparation{Settings: settingsInstance}, nil
 }
 
-func preserveLegacySettings(filename string) (string, error) {
+func preserveOldSettings(filename string) (string, error) {
 	directory := filepath.Dir(filename)
-	backupPath := filepath.Join(directory, "settings.v1.json")
+	backupPath := filepath.Join(directory, "settings.old.json")
 	for suffix := 1; ; suffix++ {
 		if suffix > 1 {
-			backupPath = filepath.Join(directory, fmt.Sprintf("settings.v1.%d.json", suffix-1))
+			backupPath = filepath.Join(directory, fmt.Sprintf("settings.old.%d.json", suffix-1))
 		}
 		_, err := os.Stat(backupPath)
 		if errors.Is(err, os.ErrNotExist) {
 			break
 		}
 		if err != nil {
-			return "", fmt.Errorf("check legacy settings backup %q: %w", backupPath, err)
+			return "", fmt.Errorf("check older settings backup %q: %w", backupPath, err)
 		}
 	}
 	if err := os.Rename(filename, backupPath); err != nil {
-		return "", fmt.Errorf("preserve legacy settings as %q: %w", backupPath, err)
+		return "", fmt.Errorf("preserve older settings as %q: %w", backupPath, err)
 	}
 	return backupPath, nil
 }
 
-func restoreLegacySettings(filename, backupPath string) error {
+func restoreOldSettings(filename, backupPath string) error {
 	if _, err := os.Stat(filename); err == nil {
 		if err := os.Remove(filename); err != nil {
 			return fmt.Errorf("remove incomplete settings file: %w", err)

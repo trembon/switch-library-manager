@@ -59,7 +59,7 @@ func main() {
 
 	useGUI := resolveGUIMode(appSettings.GUI.Enabled, consoleFlags.Mode.IsSet(), consoleFlags.Mode.String())
 	if shouldAbortConsoleMigration(useGUI, preparedSettings.Migration) {
-		fmt.Printf("settings migration required: the legacy settings file was preserved as %s; update the new v2 settings.json before using console mode\n", preparedSettings.Migration.BackupPath)
+		fmt.Printf("settings migration required: the older settings file was preserved as %s; update the new settings.json using docs/settings.md before using console mode\n", preparedSettings.Migration.BackupPath)
 		return
 	}
 

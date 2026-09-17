@@ -29,7 +29,7 @@ func TestResolveGUIMode(t *testing.T) {
 }
 
 func TestConsoleMigrationPolicy(t *testing.T) {
-	migration := &settings.MigrationInfo{BackupPath: "settings.v1.json"}
+	migration := &settings.MigrationInfo{BackupPath: "settings.old.json"}
 	if !shouldAbortConsoleMigration(false, migration) {
 		t.Fatal("console mode should stop when migration is pending")
 	}

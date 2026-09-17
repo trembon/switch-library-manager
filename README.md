@@ -35,76 +35,13 @@ Easily manage your switch game backups
 
 Having a prod.keys file will allow you to ensure the files you have a correctly classified.
 The app will look for the "prod.keys" file in the app folder or under ${HOME}/.switch/
-You can also specify a custom location in the settings.json (see below)
+You can also specify a custom location in [`settings.json`](docs/settings.md).
 
 Note: Only the header_key, and the key_area_key_application_XX keys are required.
 
 ## Settings
 
-During the App first launch a v2 `settings.json` file will be created, which allows granular control over the app. See [docs/settings-v2.md](docs/settings-v2.md) for the complete reference and v1 migration guide.
-
-You can customize folder/file renaming, enable or disable features, and set title IDs of DLC or updates to ignore.
-
-```json
-{
- "schema_version": 2,
- "gui": {
-  "enabled": true,
-  "page_size": 100,
-  "hide_missing_games": false,
-  "hide_demo_games": false
- },
- "paths": {
-  "library_folder": "",
-  "scan_folders": [],
-  "prod_keys": ""
- },
- "scan": {
-  "recursive": true,
-  "ignore_file_types": []
- },
- "organization": {
-  "create_folder_per_game": false,
-  "dlc_folder": "",
-  "updates_folder": "",
-  "rename_files": false,
-  "delete_empty_folders": false,
-  "delete_old_update_files": false,
-  "folder_name_template": "{TITLE_NAME}",
-  "switch_safe_file_names": true,
-  "file_name_template": "{TITLE_NAME} ({DLC_NAME})[{TITLE_ID}][v{VERSION}]",
-  "process_when_missing_base_game": false
- },
- "missing_content": {
-  "check_for_updates": true,
-  "check_for_dlc": true,
-  "ignore_dlc_updates": false,
-  "ignore_dlc_title_ids": ["01007F600B135007"],
-  "ignore_update_title_ids": []
- },
- "data_sources": {
-  "titles_url": "https://tinfoil.io/repo/db/titles.json",
-  "versions_url": "https://raw.githubusercontent.com/blawar/titledb/master/versions.json"
- },
- "logging": {
-  "debug": false
- }
-}
-```
-
-ETags are stored in the internal `cache.json` file and are not part of user settings.
-
-## Naming template
-
-The following template elements are supported:
-
-- {TITLE_NAME} - game name
-- {TITLE_ID} - title id
-- {VERSION} - version id (only applicable to files)
-- {VERSION_TXT} - version number (like 1.0.0) (only applicable to files)
-- {REGION} - region
-- {TYPE} - impacts DLCs/updates, will appear as ["UPD","DLC"]
-- {DLC_NAME} - DLC name (only applicable to DLCs)
+The application creates a current `settings.json` on first launch. You can customize paths, scanning, organization, missing-content checks, and GUI behavior there. See the [complete settings reference](docs/settings.md) for the format, templates, cache behavior, and migration instructions.
 
 ## Usage
 

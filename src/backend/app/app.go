@@ -35,8 +35,8 @@ func Start(baseFolder string, sugarLogger *zap.SugaredLogger, assets fs.FS) erro
 	return StartWithMigration(baseFolder, sugarLogger, assets, nil)
 }
 
-// StartWithMigration prepares the application and optionally shows the v1 to
-// v2 settings migration notice after Wails has initialized.
+// StartWithMigration prepares the application and optionally shows the older
+// settings migration notice after Wails has initialized.
 func StartWithMigration(baseFolder string, sugarLogger *zap.SugaredLogger, assets fs.FS, migrationInfo *settings.MigrationInfo) error {
 	localDbManager, err := db.NewLocalSwitchDBManager(baseFolder)
 	if err != nil {

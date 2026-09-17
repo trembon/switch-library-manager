@@ -1,6 +1,6 @@
-# Settings v2
+# Settings
 
-Switch Library Manager 2.0 uses a categorized `settings.json` format. The file is valid JSON and must contain `"schema_version": 2`.
+Switch Library Manager uses a categorized `settings.json` format. The file is valid JSON and must contain the current `"schema_version"` value, which is currently `2`.
 
 ## Example
 
@@ -82,7 +82,7 @@ Switch Library Manager 2.0 uses a categorized `settings.json` format. The file i
 | `missing_content.ignore_update_title_ids` | string array | `[]` | Update title IDs excluded from the missing-updates calculation. IDs are compared case-insensitively. |
 | `data_sources.titles_url` | string | Tinfoil titles URL | URL used to download the title metadata database. |
 | `data_sources.versions_url` | string | Blawar versions URL | URL used to download the version metadata database. |
-| `logging.debug` | boolean | `false` | Enables debug-level logging in `slm.log`. This setting is still active and was incorrectly documented as obsolete in v1. |
+| `logging.debug` | boolean | `false` | Enables debug-level logging in `slm.log`. |
 
 ## Organization templates
 
@@ -111,13 +111,13 @@ When `rename_files` is enabled, `file_name_template` must contain `{TITLE_NAME}`
 
 ETags are runtime cache state rather than user preferences, so they are intentionally excluded from `settings.json`. The cache is recreated with default ETags when absent.
 
-## Migrating v1 to v2
+## Migrating older settings
 
-When the application finds a valid v1 `settings.json`, it preserves the file by renaming it to `settings.v1.json`. If that name already exists, it uses `settings.v1.1.json`, `settings.v1.2.json`, and so on. It then creates a new v2 `settings.json` containing default values and starts the GUI with those defaults. The GUI shows the preserved path and instructions to copy values manually.
+On startup, the application checks the `schema_version` in `settings.json`. If the marker is missing or lower than the current schema, the file is preserved by renaming it to `settings.old.json`. If that name already exists, it uses `settings.old.1.json`, `settings.old.2.json`, and so on. A new `settings.json` containing current default values is then created.
 
-No v1 values are converted automatically. Copy values into the generated v2 file using this mapping:
+Older settings are not converted automatically. Copy values into the generated current settings file using this mapping for the original settings format:
 
-| v1 setting | v2 setting |
+| Older setting | Current setting |
 | --- | --- |
 | `gui` | `gui.enabled` |
 | `gui_page_size` | `gui.page_size` |
@@ -138,8 +138,8 @@ No v1 values are converted automatically. Copy values into the generated v2 file
 | `versions_json_url` | `data_sources.versions_url` |
 | `debug` | `logging.debug` |
 
-The v1 `titles_etag` and `versions_etag` values are not copied into `settings.json`; they belong in `cache.json`. If they are omitted, the application will rebuild the cache and refresh the local metadata as needed.
+The older `titles_etag` and `versions_etag` values are not copied into `settings.json`; they belong in `cache.json`. If they are omitted, the application will rebuild the cache and refresh the local metadata as needed.
 
-Set `schema_version` to `2`. A file marked with an unsupported schema version or containing malformed JSON is rejected without being overwritten so that it can be migrated manually.
+Set `schema_version` to the current value, `2`. A file marked with a future schema version or containing malformed JSON is rejected without being overwritten so that it can be migrated manually.
 
-The exception is a recognized v1 file: a valid JSON object with no `schema_version` or with `schema_version: 1` is preserved and replaced with generated defaults as described above. Malformed JSON, a non-object JSON value, and unsupported future schema versions remain in place and stop startup. Console mode also stops after a v1 migration so it cannot run scans or destructive organization using unreviewed defaults; use the GUI or edit the generated file first.
+The recognized older format is a valid JSON object with no `schema_version` or with a lower value. A non-object JSON value and unsupported future schema versions remain in place and stop startup. Console mode also stops after an older-settings migration so it cannot run scans or destructive organization using unreviewed defaults; use the GUI or edit the generated file first.

@@ -23,7 +23,7 @@ func (a *App) startup(ctx context.Context) {
 
 	_, err := wailsruntime.MessageDialog(ctx, wailsruntime.MessageDialogOptions{
 		Type:    wailsruntime.InfoDialog,
-		Title:   "Settings migrated to v2",
+		Title:   "Settings migration required",
 		Message: settingsMigrationMessage(migrationInfo),
 	})
 	if err != nil {
@@ -32,7 +32,7 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func settingsMigrationMessage(migrationInfo *settings.MigrationInfo) string {
-	return fmt.Sprintf("Your legacy settings.json was preserved as:\n\n%s\n\nA new v2 settings.json was created with default values, which are now active. Manually copy the settings you want into the new file using docs/settings-v2.md, then restart the application.", migrationInfo.BackupPath)
+	return fmt.Sprintf("Your older settings.json was preserved as:\n\n%s\n\nA new settings.json was created with current default values, which are now active. Manually copy the settings you want into the new file using docs/settings.md, then restart the application.", migrationInfo.BackupPath)
 }
 
 func (a *App) shutdown(context.Context) {}

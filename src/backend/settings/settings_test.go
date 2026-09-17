@@ -45,7 +45,7 @@ func TestDefaultSettingsAndJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
 		t.Fatal(err)
 	}
-	if decoded.SchemaVersion != 2 || decoded.Organization.FileNameTemplate == "" {
+	if decoded.SchemaVersion != SETTINGS_SCHEMA_VERSION || decoded.Organization.FileNameTemplate == "" {
 		t.Fatalf("invalid default JSON: %#v", decoded)
 	}
 }
@@ -84,27 +84,27 @@ func TestSettingsSaveRoundTrip(t *testing.T) {
 	}
 }
 
-func TestSettingsMigratesV1WithoutSchemaMarker(t *testing.T) {
+func TestSettingsMigratesOlderSettingsWithoutSchemaMarker(t *testing.T) {
 	isolateSettings(t)
 	base := t.TempDir()
-	legacy := []byte(`{"folder":"legacy","gui":true}`)
+	oldSettings := []byte(`{"folder":"old","gui":true}`)
 	filename := filepath.Join(base, SETTINGS_FILENAME)
-	if err := os.WriteFile(filename, legacy, 0644); err != nil {
+	if err := os.WriteFile(filename, oldSettings, 0644); err != nil {
 		t.Fatal(err)
 	}
 	prepared, err := PrepareSettings(base)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if prepared.Migration == nil || filepath.Base(prepared.Migration.BackupPath) != "settings.v1.json" {
+	if prepared.Migration == nil || filepath.Base(prepared.Migration.BackupPath) != "settings.old.json" {
 		t.Fatalf("unexpected migration info: %#v", prepared.Migration)
 	}
 	contents, readErr := os.ReadFile(prepared.Migration.BackupPath)
 	if readErr != nil {
 		t.Fatal(readErr)
 	}
-	if string(contents) != string(legacy) {
-		t.Fatalf("legacy settings were changed: %s", contents)
+	if string(contents) != string(oldSettings) {
+		t.Fatalf("older settings were changed: %s", contents)
 	}
 	generated, readErr := os.ReadFile(filename)
 	if readErr != nil {
@@ -119,29 +119,29 @@ func TestSettingsMigratesV1WithoutSchemaMarker(t *testing.T) {
 	}
 }
 
-func TestSettingsMigratesExplicitV1AndUsesBackupSuffix(t *testing.T) {
+func TestSettingsMigratesOlderSchemaAndUsesBackupSuffix(t *testing.T) {
 	isolateSettings(t)
 	base := t.TempDir()
-	legacy := []byte(`{"schema_version":1,"folder":"legacy"}`)
+	oldSettings := []byte(`{"schema_version":1,"folder":"old"}`)
 	filename := filepath.Join(base, SETTINGS_FILENAME)
-	if err := os.WriteFile(filename, legacy, 0644); err != nil {
+	if err := os.WriteFile(filename, oldSettings, 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(base, "settings.v1.json"), []byte("existing"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(base, "settings.old.json"), []byte("existing"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	prepared, err := PrepareSettings(base)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filepath.Base(prepared.Migration.BackupPath) != "settings.v1.1.json" {
-		t.Fatalf("backup path = %q, want settings.v1.1.json", prepared.Migration.BackupPath)
+	if filepath.Base(prepared.Migration.BackupPath) != "settings.old.1.json" {
+		t.Fatalf("backup path = %q, want settings.old.1.json", prepared.Migration.BackupPath)
 	}
 	contents, err := os.ReadFile(prepared.Migration.BackupPath)
-	if err != nil || string(contents) != string(legacy) {
-		t.Fatalf("legacy backup = %q, err = %v", contents, err)
+	if err != nil || string(contents) != string(oldSettings) {
+		t.Fatalf("older settings backup = %q, err = %v", contents, err)
 	}
-	existing, err := os.ReadFile(filepath.Join(base, "settings.v1.json"))
+	existing, err := os.ReadFile(filepath.Join(base, "settings.old.json"))
 	if err != nil || string(existing) != "existing" {
 		t.Fatalf("existing backup changed: %q, err = %v", existing, err)
 	}
@@ -159,12 +159,17 @@ func TestSettingsRejectsUnsupportedSchemaAndMalformedJSON(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			isolateSettings(t)
 			base := t.TempDir()
-			if err := os.WriteFile(filepath.Join(base, SETTINGS_FILENAME), []byte(test.body), 0644); err != nil {
+			filename := filepath.Join(base, SETTINGS_FILENAME)
+			if err := os.WriteFile(filename, []byte(test.body), 0644); err != nil {
 				t.Fatal(err)
 			}
 			_, err := ReadSettings(base)
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("error = %v, want %q", err, test.want)
+			}
+			unchanged, readErr := os.ReadFile(filename)
+			if readErr != nil || string(unchanged) != test.body {
+				t.Fatalf("settings changed: %q, err = %v", unchanged, readErr)
 			}
 		})
 	}
@@ -187,21 +192,21 @@ func TestSettingsRejectsNonObjectJSONWithoutChangingFile(t *testing.T) {
 	}
 }
 
-func TestRestoreLegacySettings(t *testing.T) {
+func TestRestoreOldSettings(t *testing.T) {
 	base := t.TempDir()
 	filename := filepath.Join(base, SETTINGS_FILENAME)
-	backup := filepath.Join(base, "settings.v1.json")
-	if err := os.WriteFile(backup, []byte("legacy"), 0644); err != nil {
+	backup := filepath.Join(base, "settings.old.json")
+	if err := os.WriteFile(backup, []byte("old settings"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filename, []byte("incomplete"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := restoreLegacySettings(filename, backup); err != nil {
+	if err := restoreOldSettings(filename, backup); err != nil {
 		t.Fatal(err)
 	}
 	contents, err := os.ReadFile(filename)
-	if err != nil || string(contents) != "legacy" {
+	if err != nil || string(contents) != "old settings" {
 		t.Fatalf("restored settings = %q, err = %v", contents, err)
 	}
 }

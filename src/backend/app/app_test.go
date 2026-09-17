@@ -37,9 +37,12 @@ func TestNormalizeSettingsInitializesFrontendLists(t *testing.T) {
 }
 
 func TestSettingsMigrationMessageIncludesBackupAndDefaultInstructions(t *testing.T) {
-	message := settingsMigrationMessage(&settings.MigrationInfo{BackupPath: "C:\\app\\settings.v1.json"})
-	if !strings.Contains(message, "C:\\app\\settings.v1.json") || !strings.Contains(message, "default values") || !strings.Contains(message, "docs/settings-v2.md") {
+	message := settingsMigrationMessage(&settings.MigrationInfo{BackupPath: "C:\\app\\settings.old.json"})
+	if !strings.Contains(message, "C:\\app\\settings.old.json") || !strings.Contains(message, "current default values") || !strings.Contains(message, "docs/settings.md") {
 		t.Fatalf("migration message = %q", message)
+	}
+	if strings.Contains(message, "v1") || strings.Contains(message, "v2") {
+		t.Fatalf("migration message contains schema-specific wording: %q", message)
 	}
 }
 
