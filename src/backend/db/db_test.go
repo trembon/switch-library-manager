@@ -27,7 +27,7 @@ func (p *progressRecorder) UpdateProgress(_ int, _ int, message string) {
 
 func resetDBSettings(t *testing.T, baseFolder string, configure func(*settings.AppSettings)) {
 	t.Helper()
-	appSettings := &settings.AppSettings{ScanFolders: []string{}, IgnoreFileTypes: []string{}}
+	appSettings := &settings.AppSettings{Paths: settings.PathSettings{ScanFolders: []string{}}, Scan: settings.ScanSettings{IgnoreFileTypes: []string{}}}
 	configure(appSettings)
 	settings.SaveSettings(appSettings, baseFolder)
 }
@@ -137,7 +137,7 @@ func TestScanFolderAndClassifyFilenameFallback(t *testing.T) {
 		t.Fatal(err)
 	}
 	resetDBSettings(t, base, func(s *settings.AppSettings) {
-		s.IgnoreFileTypes = []string{".ignored"}
+		s.Scan.IgnoreFileTypes = []string{".ignored"}
 	})
 	files := []string{
 		"Base [0100000000010000][v1].nsp",
@@ -361,7 +361,7 @@ func TestGetGameMetadataUsesDeepCacheWhenKeysAvailable(t *testing.T) {
 	if err := os.WriteFile(keyPath, []byte("header_key = synthetic\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	settings.SaveSettings(&settings.AppSettings{Prodkeys: keyPath, ScanFolders: []string{}}, base)
+	settings.SaveSettings(&settings.AppSettings{Paths: settings.PathSettings{ProdKeys: keyPath, ScanFolders: []string{}}}, base)
 	if _, err := settings.InitSwitchKeys(base); err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +387,7 @@ func TestGetGameMetadataUsesDeepCacheWhenKeysAvailable(t *testing.T) {
 func TestFilenameFallbackHandlesShortAndInvalidFiles(t *testing.T) {
 	base := t.TempDir()
 	resetDBSettings(t, base, func(s *settings.AppSettings) {})
-	settings.SaveSettings(&settings.AppSettings{Prodkeys: filepath.Join(base, "missing.keys")}, base)
+	settings.SaveSettings(&settings.AppSettings{Paths: settings.PathSettings{ProdKeys: filepath.Join(base, "missing.keys")}}, base)
 	if _, err := settings.InitSwitchKeys(base); err == nil {
 		t.Fatal("expected synthetic key lookup to fail")
 	}
@@ -490,7 +490,7 @@ func TestScannerRecordsInvalidCachedMetadataAndSplitErrors(t *testing.T) {
 	if err := os.WriteFile(keyPath, []byte("header_key = synthetic\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	settings.SaveSettings(&settings.AppSettings{Prodkeys: keyPath, ScanFolders: []string{}}, base)
+	settings.SaveSettings(&settings.AppSettings{Paths: settings.PathSettings{ProdKeys: keyPath, ScanFolders: []string{}}}, base)
 	if _, err := settings.InitSwitchKeys(base); err != nil {
 		t.Fatal(err)
 	}

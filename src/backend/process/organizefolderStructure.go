@@ -53,7 +53,12 @@ func DeleteOldUpdates(baseFolder string, localDB *db.LocalSwitchFilesDB, updateP
 
 	}
 
-	if i != 0 && settings.ReadSettings(baseFolder).OrganizeOptions.DeleteEmptyFolders {
+	settingsObj, err := settings.ReadSettings(baseFolder)
+	if err != nil {
+		zap.S().Errorf("Failed to read settings before deleting old updates: %v", err)
+		return
+	}
+	if i != 0 && settingsObj.Organization.DeleteEmptyFolders {
 		if updateProgress != nil {
 			updateProgress.UpdateProgress(i, i+1, "deleting empty folders... (can take 1-2min)")
 		}
@@ -74,7 +79,12 @@ func OrganizeByFolders(baseFolder string,
 
 	//validate template rules
 	logger := zap.S()
-	options := settings.ReadSettings(baseFolder).OrganizeOptions
+	settingsObj, err := settings.ReadSettings(baseFolder)
+	if err != nil {
+		logger.Errorf("Failed to read settings before organizing files: %v", err)
+		return
+	}
+	options := settingsObj.Organization
 	if !IsOptionsValid(options) {
 		logger.Error("the organize options in settings.json are not valid, please check that the template contains file/folder name")
 		return

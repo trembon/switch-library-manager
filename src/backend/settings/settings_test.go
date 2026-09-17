@@ -24,84 +24,202 @@ func isolateSettings(t *testing.T) {
 func TestDefaultSettingsAndJSON(t *testing.T) {
 	isolateSettings(t)
 	base := t.TempDir()
-	s := ReadSettings(base)
-	if s.GUI != true || !s.ScanRecursively || !s.CheckForMissingUpdates || !s.CheckForMissingDLC || s.GuiPagingSize != 100 {
+	s, err := ReadSettings(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.SchemaVersion != SETTINGS_SCHEMA_VERSION || !s.GUI.Enabled || !s.Scan.Recursive || !s.MissingContent.CheckForUpdates || !s.MissingContent.CheckForDLC || s.GUI.PageSize != 100 {
 		t.Fatalf("unexpected defaults: %#v", s)
 	}
-	if s.TitlesJsonUrl != DEFAULT_TITLES_JSON_URL || s.VersionsJsonUrl != DEFAULT_VERSIONS_JSON_URL || !s.OrganizeOptions.SwitchSafeFileNames {
+	if s.DataSources.TitlesURL != DEFAULT_TITLES_JSON_URL || s.DataSources.VersionsURL != DEFAULT_VERSIONS_JSON_URL || !s.Organization.SwitchSafeFileNames {
 		t.Fatalf("unexpected default URLs/options: %#v", s)
 	}
 	if _, err := os.Stat(filepath.Join(base, SETTINGS_FILENAME)); err != nil {
 		t.Fatal(err)
 	}
-	raw := ReadSettingsAsJSON(base)
+	raw, err := ReadSettingsAsJSON(base)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var decoded AppSettings
 	if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
 		t.Fatal(err)
 	}
-	if decoded.OrganizeOptions.FileNameTemplate == "" {
-		t.Fatal("default JSON omitted organization template")
+	if decoded.SchemaVersion != 2 || decoded.Organization.FileNameTemplate == "" {
+		t.Fatalf("invalid default JSON: %#v", decoded)
 	}
 }
 
-func TestSettingsSaveRoundTripAndVerification(t *testing.T) {
+func TestSettingsSaveRoundTrip(t *testing.T) {
 	isolateSettings(t)
 	base := t.TempDir()
 	custom := &AppSettings{
-		TitlesJsonUrl:   "https://titles.example",
-		VersionsJsonUrl: "https://versions.example",
-		TitlesEtag:      "titles-etag",
-		VersionsEtag:    "versions-etag",
-		Folder:          "library",
-		ScanFolders:     []string{"one", "two"},
-		IgnoreFileTypes: []string{"txt"},
-		GuiPagingSize:   25,
-		OrganizeOptions: OrganizeOptions{FileNameTemplate: "{TITLE_ID}"},
+		SchemaVersion: SETTINGS_SCHEMA_VERSION,
+		DataSources:   DataSourceSettings{TitlesURL: "https://titles.example", VersionsURL: "https://versions.example"},
+		Paths:         PathSettings{LibraryFolder: "library", ScanFolders: []string{"one", "two"}},
+		Scan:          ScanSettings{IgnoreFileTypes: []string{"txt"}},
+		GUI:           GUISettings{PageSize: 25},
+		Organization:  OrganizationSettings{FileNameTemplate: "{TITLE_ID}"},
 	}
-	SaveSettings(custom, base)
+	if err := SaveSettingsWithError(custom, base); err != nil {
+		t.Fatal(err)
+	}
+	current, err := ReadSettings(base)
+	if err != nil || current != custom {
+		t.Fatalf("save did not refresh settings instance: %#v, %v", current, err)
+	}
 	settingsInstance = nil
-	loaded := ReadSettings(base)
-	if loaded.Folder != "library" || loaded.GuiPagingSize != 25 || len(loaded.ScanFolders) != 2 {
+	loaded, err := ReadSettings(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Paths.LibraryFolder != "library" || loaded.GUI.PageSize != 25 || len(loaded.Paths.ScanFolders) != 2 {
 		t.Fatalf("round-trip mismatch: %#v", loaded)
 	}
-	if loaded.TitlesEtag == "" || loaded.VersionsEtag == "" {
-		t.Fatalf("verified ETags should be populated: %#v", loaded)
-	}
-	if loaded.TitlesJsonUrl != custom.TitlesJsonUrl || loaded.VersionsJsonUrl != custom.VersionsJsonUrl {
+	if loaded.DataSources.TitlesURL != custom.DataSources.TitlesURL || loaded.DataSources.VersionsURL != custom.DataSources.VersionsURL {
 		t.Fatal("custom URLs were not retained")
 	}
-	if loaded.OrganizeOptions.FileNameTemplate != "{TITLE_ID}" {
+	if loaded.Organization.FileNameTemplate != "{TITLE_ID}" {
 		t.Fatal("custom organization options were not retained")
-	}
-
-	verified := verifySettings(base, &AppSettings{})
-	if verified.TitlesJsonUrl != DEFAULT_TITLES_JSON_URL || verified.VersionsJsonUrl != DEFAULT_VERSIONS_JSON_URL || verified.TitlesEtag == "" || verified.VersionsEtag == "" {
-		t.Fatalf("verification defaults: %#v", verified)
-	}
-	if err := os.WriteFile(filepath.Join(base, TITLE_JSON_FILENAME), []byte("{}"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(base, VERSIONS_JSON_FILENAME), []byte("{}"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	verified = verifySettings(base, &AppSettings{TitlesEtag: "keep-t", VersionsEtag: "keep-v"})
-	if verified.TitlesEtag != "keep-t" || verified.VersionsEtag != "keep-v" {
-		t.Fatalf("existing data reset etags: %#v", verified)
 	}
 }
 
-func TestMalformedSettingsFallsBackToDefaults(t *testing.T) {
+func TestSettingsMigratesV1WithoutSchemaMarker(t *testing.T) {
 	isolateSettings(t)
 	base := t.TempDir()
-	if err := os.WriteFile(filepath.Join(base, SETTINGS_FILENAME), []byte("{"), 0644); err != nil {
+	legacy := []byte(`{"folder":"legacy","gui":true}`)
+	filename := filepath.Join(base, SETTINGS_FILENAME)
+	if err := os.WriteFile(filename, legacy, 0644); err != nil {
 		t.Fatal(err)
 	}
-	loaded := ReadSettings(base)
-	if loaded.TitlesJsonUrl != DEFAULT_TITLES_JSON_URL || loaded.GuiPagingSize != 100 {
-		t.Fatalf("malformed settings did not reset defaults: %#v", loaded)
+	prepared, err := PrepareSettings(base)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got := ReadSettingsAsJSON(base); !strings.Contains(got, DEFAULT_TITLES_JSON_URL) {
-		t.Fatalf("default settings were not persisted: %s", got)
+	if prepared.Migration == nil || filepath.Base(prepared.Migration.BackupPath) != "settings.v1.json" {
+		t.Fatalf("unexpected migration info: %#v", prepared.Migration)
+	}
+	contents, readErr := os.ReadFile(prepared.Migration.BackupPath)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(contents) != string(legacy) {
+		t.Fatalf("legacy settings were changed: %s", contents)
+	}
+	generated, readErr := os.ReadFile(filename)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	var generatedSettings AppSettings
+	if err := json.Unmarshal(generated, &generatedSettings); err != nil {
+		t.Fatal(err)
+	}
+	if generatedSettings.SchemaVersion != SETTINGS_SCHEMA_VERSION || generatedSettings.DataSources.TitlesURL == "" {
+		t.Fatalf("invalid generated defaults: %#v", generatedSettings)
+	}
+}
+
+func TestSettingsMigratesExplicitV1AndUsesBackupSuffix(t *testing.T) {
+	isolateSettings(t)
+	base := t.TempDir()
+	legacy := []byte(`{"schema_version":1,"folder":"legacy"}`)
+	filename := filepath.Join(base, SETTINGS_FILENAME)
+	if err := os.WriteFile(filename, legacy, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "settings.v1.json"), []byte("existing"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := PrepareSettings(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(prepared.Migration.BackupPath) != "settings.v1.1.json" {
+		t.Fatalf("backup path = %q, want settings.v1.1.json", prepared.Migration.BackupPath)
+	}
+	contents, err := os.ReadFile(prepared.Migration.BackupPath)
+	if err != nil || string(contents) != string(legacy) {
+		t.Fatalf("legacy backup = %q, err = %v", contents, err)
+	}
+	existing, err := os.ReadFile(filepath.Join(base, "settings.v1.json"))
+	if err != nil || string(existing) != "existing" {
+		t.Fatalf("existing backup changed: %q, err = %v", existing, err)
+	}
+}
+
+func TestSettingsRejectsUnsupportedSchemaAndMalformedJSON(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "unsupported", body: `{"schema_version":3}`, want: "unsupported settings schema_version"},
+		{name: "malformed", body: `{`, want: "decode settings"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			isolateSettings(t)
+			base := t.TempDir()
+			if err := os.WriteFile(filepath.Join(base, SETTINGS_FILENAME), []byte(test.body), 0644); err != nil {
+				t.Fatal(err)
+			}
+			_, err := ReadSettings(base)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("error = %v, want %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestSettingsRejectsNonObjectJSONWithoutChangingFile(t *testing.T) {
+	isolateSettings(t)
+	base := t.TempDir()
+	filename := filepath.Join(base, SETTINGS_FILENAME)
+	contents := []byte("null")
+	if err := os.WriteFile(filename, contents, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadSettings(base); err == nil || !strings.Contains(err.Error(), "JSON object") {
+		t.Fatalf("expected object error, got %v", err)
+	}
+	unchanged, err := os.ReadFile(filename)
+	if err != nil || string(unchanged) != string(contents) {
+		t.Fatalf("settings changed: %q, err = %v", unchanged, err)
+	}
+}
+
+func TestRestoreLegacySettings(t *testing.T) {
+	base := t.TempDir()
+	filename := filepath.Join(base, SETTINGS_FILENAME)
+	backup := filepath.Join(base, "settings.v1.json")
+	if err := os.WriteFile(backup, []byte("legacy"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filename, []byte("incomplete"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := restoreLegacySettings(filename, backup); err != nil {
+		t.Fatal(err)
+	}
+	contents, err := os.ReadFile(filename)
+	if err != nil || string(contents) != "legacy" {
+		t.Fatalf("restored settings = %q, err = %v", contents, err)
+	}
+}
+
+func TestCacheRoundTrip(t *testing.T) {
+	base := t.TempDir()
+	cache, err := ReadCache(base)
+	if err != nil || cache.TitlesETag == "" || cache.VersionsETag == "" {
+		t.Fatalf("default cache: %#v, %v", cache, err)
+	}
+	cache.TitlesETag = "titles-etag"
+	cache.VersionsETag = "versions-etag"
+	if err := SaveCacheWithError(cache, base); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := ReadCache(base)
+	if err != nil || loaded.TitlesETag != "titles-etag" || loaded.VersionsETag != "versions-etag" {
+		t.Fatalf("cache round-trip: %#v, %v", loaded, err)
 	}
 }
 
@@ -113,8 +231,8 @@ func TestCheckForUpdates(t *testing.T) {
 		wantUpdate bool
 		wantError  bool
 	}{
-		{name: "newer", body: `{"version":"2.0.0"}`, wantUpdate: true},
-		{name: "same", body: `{"version":"1.10.0"}`},
+		{name: "newer", body: `{"version":"3.0.0"}`, wantUpdate: true},
+		{name: "same", body: `{"version":"2.0.0"}`},
 		{name: "older", body: `{"version":"1.0.0"}`},
 		{name: "malformed", body: "[", wantError: true},
 		{name: "missing version", body: `{}`, wantError: true},
@@ -158,14 +276,14 @@ func TestKeyDiscoveryOrderAndMissingKeys(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(base, "prod.keys"), []byte("header_key = current\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	SaveSettings(&AppSettings{Prodkeys: configuredDir}, base)
+	SaveSettings(&AppSettings{Paths: PathSettings{ProdKeys: configuredDir}}, base)
 	keys, err := InitSwitchKeys(base)
 	if err != nil || keys.GetKey("header_key") != "configured" || keys.GetKey("foo") != "bar" {
 		t.Fatalf("configured key discovery: keys=%v err=%v", keys, err)
 	}
 
 	isolateSettings(t)
-	SaveSettings(&AppSettings{Prodkeys: filepath.Join(base, "missing.keys")}, base)
+	SaveSettings(&AppSettings{Paths: PathSettings{ProdKeys: filepath.Join(base, "missing.keys")}}, base)
 	keys, err = InitSwitchKeys(base)
 	if err != nil || keys.GetKey("header_key") != "current" {
 		t.Fatalf("current-folder fallback: keys=%v err=%v", keys, err)
@@ -209,13 +327,14 @@ func TestKeyFilePathCaseAndReadSettingsSingleton(t *testing.T) {
 	if err := os.WriteFile(keyFile, []byte("header_key = value\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	SaveSettings(&AppSettings{Prodkeys: keyFile}, base)
+	SaveSettings(&AppSettings{Paths: PathSettings{ProdKeys: keyFile}}, base)
 	keys, err := InitSwitchKeys(base)
 	if err != nil || keys.GetKey("header_key") != "value" || keys.GetKey("missing") != "" {
 		t.Fatalf("key file discovery: keys=%v err=%v", keys, err)
 	}
 	other := t.TempDir()
-	if got := ReadSettings(other); got != settingsInstance {
+	got, err := ReadSettings(other)
+	if err != nil || got != settingsInstance {
 		t.Fatal("settings singleton was not retained")
 	}
 }

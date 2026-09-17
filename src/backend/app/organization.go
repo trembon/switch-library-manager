@@ -14,13 +14,16 @@ func (a *App) OrganizeLibrary() error {
 		return errors.New("local and title databases must be loaded")
 	}
 
-	settingsObj := settings.ReadSettings(a.baseFolder)
-	if !process.IsOptionsValid(settingsObj.OrganizeOptions) {
+	settingsObj, err := settings.ReadSettings(a.baseFolder)
+	if err != nil {
+		return err
+	}
+	if !process.IsOptionsValid(settingsObj.Organization) {
 		return errors.New("the organize options in settings.json are not valid, please check that the template contains file/folder name")
 	}
 	progress := progressReporter{app: a}
-	process.OrganizeByFolders(settingsObj.Folder, a.state.localDB, a.state.switchDB, progress)
-	if settingsObj.OrganizeOptions.DeleteOldUpdateFiles {
+	process.OrganizeByFolders(settingsObj.Paths.LibraryFolder, a.state.localDB, a.state.switchDB, progress)
+	if settingsObj.Organization.DeleteOldUpdateFiles {
 		process.DeleteOldUpdates(a.baseFolder, a.state.localDB, progress)
 	}
 	return nil

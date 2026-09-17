@@ -38,25 +38,32 @@ func (a *App) UpdateLocalLibrary(ignoreCache bool) (LocalLibraryData, error) {
 }
 
 func (a *App) buildSwitchDB() (*db.SwitchTitlesDB, error) {
-	settingsObj := settings.ReadSettings(a.baseFolder)
+	settingsObj, err := settings.ReadSettings(a.baseFolder)
+	if err != nil {
+		return nil, err
+	}
+	cache, err := settings.ReadCache(a.baseFolder)
+	if err != nil {
+		return nil, err
+	}
 	a.updateProgress(1, 4, "Downloading titles.json")
 
 	filename := filepath.Join(a.baseFolder, settings.TITLE_JSON_FILENAME)
-	titleFile, titlesETag, err := db.LoadAndUpdateFile(settingsObj.TitlesJsonUrl, filename, settingsObj.TitlesEtag)
+	titleFile, titlesETag, err := db.LoadAndUpdateFile(settingsObj.DataSources.TitlesURL, filename, cache.TitlesETag)
 	if err != nil {
 		return nil, errors.New("failed to download switch titles [reason:" + err.Error() + "]")
 	}
-	settingsObj.TitlesEtag = titlesETag
+	cache.TitlesETag = titlesETag
 
 	a.updateProgress(2, 4, "Downloading versions.json")
 	filename = filepath.Join(a.baseFolder, settings.VERSIONS_JSON_FILENAME)
-	versionsFile, versionsETag, err := db.LoadAndUpdateFile(settingsObj.VersionsJsonUrl, filename, settingsObj.VersionsEtag)
+	versionsFile, versionsETag, err := db.LoadAndUpdateFile(settingsObj.DataSources.VersionsURL, filename, cache.VersionsETag)
 	if err != nil {
 		return nil, errors.New("failed to download switch updates [reason:" + err.Error() + "]")
 	}
-	settingsObj.VersionsEtag = versionsETag
-	if err := settings.SaveSettingsWithError(settingsObj, a.baseFolder); err != nil {
-		return nil, fmt.Errorf("save title database settings: %w", err)
+	cache.VersionsETag = versionsETag
+	if err := settings.SaveCacheWithError(cache, a.baseFolder); err != nil {
+		return nil, fmt.Errorf("save title database cache: %w", err)
 	}
 
 	a.updateProgress(3, 4, "Processing switch titles and updates ...")
@@ -66,13 +73,16 @@ func (a *App) buildSwitchDB() (*db.SwitchTitlesDB, error) {
 }
 
 func (a *App) buildLocalDB(ignoreCache bool) (*db.LocalSwitchFilesDB, error) {
-	settingsObj := settings.ReadSettings(a.baseFolder)
-	scanFolders := append([]string{}, settingsObj.ScanFolders...)
-	scanFolders = append(scanFolders, settingsObj.Folder)
+	settingsObj, err := settings.ReadSettings(a.baseFolder)
+	if err != nil {
+		return nil, err
+	}
+	scanFolders := append([]string{}, settingsObj.Paths.ScanFolders...)
+	scanFolders = append(scanFolders, settingsObj.Paths.LibraryFolder)
 	localDB, err := a.localDbManager.CreateLocalSwitchFilesDB(
 		scanFolders,
 		progressReporter{app: a},
-		settingsObj.ScanRecursively,
+		settingsObj.Scan.Recursive,
 		ignoreCache,
 	)
 	a.state.localDB = localDB

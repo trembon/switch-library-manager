@@ -32,7 +32,9 @@ $(function () {
     let showError = function (detail) {
         ShowMessage("error", "Error", "An unexpected error occurred", detail || "")
             .catch(error => console.error(error));
-        state.settings.folder = undefined;
+        if (state.settings.paths) {
+            state.settings.paths.library_folder = undefined;
+        }
         $(".progress-container").hide();
         loadTab("#library");
     };
@@ -67,7 +69,7 @@ $(function () {
         LoadSettings().then(function (message) {
             state.settings = message;
 
-            if(state.settings.hide_missing_games){
+            if(state.settings.gui.hide_missing_games){
                 document.getElementById("tab_btns").classList.add("hide_missing_games");
             }
         }).catch(error => showError(error.message));
@@ -97,7 +99,7 @@ $(function () {
         };
 
         let scanLocalFolder = function(mode){
-            if (!state.settings.folder){
+            if (!state.settings.paths.library_folder){
                 loadTab("#library")
                 return
             }
@@ -119,15 +121,15 @@ $(function () {
             }
 
             if (mode === "add"){
-                state.settings.scan_folders = state.settings.scan_folders || []
-                if (!state.settings.scan_folders.includes(path)){
-                    state.settings.scan_folders.push(path);
+                state.settings.paths.scan_folders = state.settings.paths.scan_folders || []
+                if (!state.settings.paths.scan_folders.includes(path)){
+                    state.settings.paths.scan_folders.push(path);
                 }else{
                     return;
                 }
 
             }else{
-                state.settings.folder = path;
+                state.settings.paths.library_folder = path;
             }
             $('.tabgroup > div').hide();
             console.log("selected folder:"+path);
@@ -152,10 +154,10 @@ $(function () {
                 $(target).html(settingsHtml);
                 //  asticode.loader.hide()
             } else if (target === "#organize") {
-                let html = $(target + "Template").render({folder: state.settings.folder,settings:state.settings})
+                let html = $(target + "Template").render({folder: state.settings.paths.library_folder,settings:state.settings})
                 $(target).html(html);
             } else if (target === "#updates") {
-                if (state.settings.folder && !state.library){
+                if (state.settings.paths.library_folder && !state.library){
                     return
                 }
                 if (state.library && !state.updates){
@@ -165,7 +167,7 @@ $(function () {
                     }).catch(error => showError(error.message));
                     return
                 }
-                let html = $(target + "Template").render({folder: state.settings.folder,updates:state.updates})
+                let html = $(target + "Template").render({folder: state.settings.paths.library_folder,updates:state.updates})
                 $(target).html(html);
                 if (state.updates && state.updates.length) {
                     currTable = new Tabulator("#updates-table", {
@@ -174,7 +176,7 @@ $(function () {
                             {column:"latest_update_date", dir:"desc"}, //sort by this first
                         ],
                         pagination: "local",
-                        paginationSize: state.settings.gui_page_size,
+                        paginationSize: state.settings.gui.page_size,
                         data: state.updates,
                         columns: [
                             {formatter:"rownum"},
@@ -189,7 +191,7 @@ $(function () {
                     });
                 }
             } else if (target === "#dlc") {
-                if (state.settings.folder && !state.library){
+                if (state.settings.paths.library_folder && !state.library){
                     return
                 }
                 if (state.library && !state.dlc){
@@ -199,7 +201,7 @@ $(function () {
                     }).catch(error => showError(error.message));
                     return
                 }
-                let html = $(target + "Template").render({folder: state.settings.folder,dlc:state.dlc});
+                let html = $(target + "Template").render({folder: state.settings.paths.library_folder,dlc:state.dlc});
                 $(target).html(html);
                 if (state.dlc && state.dlc.length) {
                     currTable = new Tabulator("#dlc-table", {
@@ -208,7 +210,7 @@ $(function () {
                             {column:"Attributes.name", dir:"asc"}, //sort by this first
                         ],
                         pagination: "local",
-                        paginationSize: state.settings.gui_page_size,
+                        paginationSize: state.settings.gui.page_size,
                         data: state.dlc,
                         columns: [
                             {formatter:"rownum"},
@@ -227,16 +229,16 @@ $(function () {
                     });
                 }
             } else if (target === "#status") {
-                if (state.settings.folder && !state.library){
+                if (state.settings.paths.library_folder && !state.library){
                     return
                 }
-                let html = $(target + "Template").render({folder: state.settings.folder,library:state.library ? state.library.issues: undefined,numFiles:state.library ? state.library.num_files:-1});
+                let html = $(target + "Template").render({folder: state.settings.paths.library_folder,library:state.library ? state.library.issues: undefined,numFiles:state.library ? state.library.num_files:-1});
                 $(target).html(html);
                 if (state.library.issues && state.library.issues.length) {
                     currTable = new Tabulator("#status-table", {
                         layout:"fitDataStretch",
                         pagination: "local",
-                        paginationSize: state.settings.gui_page_size,
+                        paginationSize: state.settings.gui.page_size,
                         data: state.library.issues,
                         columns: [
                             {formatter:"rownum"},
@@ -255,17 +257,17 @@ $(function () {
                     });
                 }
             } else if (target === "#library") {
-                if (state.settings.folder && !state.library){
+                if (state.settings.paths.library_folder && !state.library){
                     return
                 }
                 let html = $(target + "Template").render(
                     {
-                        folder: state.settings.folder,
+                        folder: state.settings.paths.library_folder,
                         library: state.library ? state.library.library_data : [] ,
                         num_skipped:state.library ? (state.library.issues ? state.library.issues.length : 0) : 0,
                         num_files:state.library ? state.library.num_files : 0,
                         keys:state.keys,
-                        scanFolders:state.settings.scan_folders
+                        scanFolders:state.settings.paths.scan_folders
                     })
                 $(target).html(html);
                 if (state.library && state.library.library_data.length) {
@@ -275,7 +277,7 @@ $(function () {
                         ],
                         layout:"fitDataStretch",
                         pagination: "local",
-                        paginationSize: state.settings.gui_page_size,
+                        paginationSize: state.settings.gui.page_size,
                         data: state.library.library_data,
                         columns: [
                             {formatter:"rownum"},
@@ -296,7 +298,7 @@ $(function () {
                     });
                 }
             } else if (target === "#missing") {
-                if (state.settings.folder && !state.library){
+                if (state.settings.paths.library_folder && !state.library){
                     return
                 }
                 if (state.library && !state.missingGames){
@@ -306,7 +308,7 @@ $(function () {
                     }).catch(error => showError(error.message));
                     return
                 }
-                let html = $(target + "Template").render({folder: state.settings.folder,missingGames:state.missingGames});
+                let html = $(target + "Template").render({folder: state.settings.paths.library_folder,missingGames:state.missingGames});
                 $(target).html(html);
                 if (state.missingGames && state.missingGames.length) {
                     currTable = new Tabulator("#missingGames-table", {
@@ -315,7 +317,7 @@ $(function () {
                             {column:"name", dir:"asc"}, //sort by this first
                         ],
                         pagination: "local",
-                        paginationSize: state.settings.gui_page_size,
+                        paginationSize: state.settings.gui.page_size,
                         data: state.missingGames,
                         columns: [
                             {formatter:"rownum"},
@@ -340,8 +342,8 @@ $(function () {
 
         $("body").on("click", ".library-organize-action", e => {
             e.preventDefault();
-            if (state.settings.organize_options.create_folder_per_game === false &&
-                state.settings.organize_options.rename_files === false){
+            if (state.settings.organization.create_folder_per_game === false &&
+                state.settings.organization.rename_files === false){
                 ShowMessage("info", "Library organization is turned off", "Please update settings.json to enable this feature", "You should set 'rename_files' and/or 'create_folder_per_game' to 'true'")
                     .catch(error => showError(error.message));
                 return

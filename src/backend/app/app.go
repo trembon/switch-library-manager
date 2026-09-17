@@ -26,11 +26,18 @@ type App struct {
 	baseFolder     string
 	localDbManager *db.LocalSwitchDBManager
 	sugarLogger    *zap.SugaredLogger
+	migrationInfo  *settings.MigrationInfo
 	ctx            context.Context
 }
 
 // Start prepares the application dependencies and starts the Wails event loop.
 func Start(baseFolder string, sugarLogger *zap.SugaredLogger, assets fs.FS) error {
+	return StartWithMigration(baseFolder, sugarLogger, assets, nil)
+}
+
+// StartWithMigration prepares the application and optionally shows the v1 to
+// v2 settings migration notice after Wails has initialized.
+func StartWithMigration(baseFolder string, sugarLogger *zap.SugaredLogger, assets fs.FS, migrationInfo *settings.MigrationInfo) error {
 	localDbManager, err := db.NewLocalSwitchDBManager(baseFolder)
 	if err != nil {
 		sugarLogger.Error("failed to create local files db", err)
@@ -43,6 +50,7 @@ func Start(baseFolder string, sugarLogger *zap.SugaredLogger, assets fs.FS) erro
 		baseFolder:     baseFolder,
 		localDbManager: localDbManager,
 		sugarLogger:    sugarLogger,
+		migrationInfo:  migrationInfo,
 	}
 	return application.run(assets)
 }

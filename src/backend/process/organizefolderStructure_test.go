@@ -427,7 +427,7 @@ func TestFilesystemHelpers(t *testing.T) {
 
 func setProcessSettings(t *testing.T, baseFolder string, options settings.OrganizeOptions) {
 	t.Helper()
-	settings.SaveSettings(&settings.AppSettings{OrganizeOptions: options}, baseFolder)
+	settings.SaveSettings(&settings.AppSettings{Organization: options}, baseFolder)
 }
 
 func contentMetadata(id string, version int, displayVersion string) *switchfs.ContentMetaAttributes {

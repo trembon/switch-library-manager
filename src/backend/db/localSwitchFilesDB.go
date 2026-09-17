@@ -174,9 +174,13 @@ func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,
 	titles map[string]*SwitchGameFiles,
 	skipped map[ExtendedFileInfo]SkippedFile) {
 
-	settings := settings.ReadSettings("") // use empty path, as it will use existing settings instance
+	settingsObj, err := settings.ReadSettings("") // use empty path, as it will use existing settings instance
+	if err != nil {
+		zap.S().Errorf("Failed to read settings while processing local files: %v", err)
+		return
+	}
 	ignoreFileTypes := map[string]struct{}{}
-	for _, ext := range settings.IgnoreFileTypes {
+	for _, ext := range settingsObj.Scan.IgnoreFileTypes {
 		if strings.HasPrefix(ext, ".") {
 			ignoreFileTypes[strings.ToLower(ext)] = struct{}{}
 		} else {

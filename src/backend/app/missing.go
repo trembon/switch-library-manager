@@ -15,7 +15,11 @@ func (a *App) GetMissingGames() ([]SwitchTitle, error) {
 	if a.state.switchDB == nil || a.state.localDB == nil {
 		return nil, errors.New("local and title databases must be loaded")
 	}
-	return getMissingGames(a.state.localDB, a.state.switchDB, settings.ReadSettings(a.baseFolder)), nil
+	settingsObj, err := settings.ReadSettings(a.baseFolder)
+	if err != nil {
+		return nil, err
+	}
+	return getMissingGames(a.state.localDB, a.state.switchDB, settingsObj), nil
 }
 
 func (a *App) GetMissingDLC() ([]process.IncompleteTitle, error) {
@@ -24,8 +28,11 @@ func (a *App) GetMissingDLC() ([]process.IncompleteTitle, error) {
 	if a.state.switchDB == nil || a.state.localDB == nil {
 		return nil, errors.New("local and title databases must be loaded")
 	}
-	settingsObj := settings.ReadSettings(a.baseFolder)
-	ignoreIDs := makeIgnoreIDs(settingsObj.IgnoreDLCTitleIds)
+	settingsObj, err := settings.ReadSettings(a.baseFolder)
+	if err != nil {
+		return nil, err
+	}
+	ignoreIDs := makeIgnoreIDs(settingsObj.MissingContent.IgnoreDLCTitleIDs)
 	missing := process.ScanForMissingDLC(a.state.localDB.TitlesMap, a.state.switchDB.TitlesMap, ignoreIDs)
 	values := make([]process.IncompleteTitle, 0, len(missing))
 	for _, value := range missing {
@@ -40,13 +47,16 @@ func (a *App) GetMissingUpdates() ([]process.IncompleteTitle, error) {
 	if a.state.switchDB == nil || a.state.localDB == nil {
 		return nil, errors.New("local and title databases must be loaded")
 	}
-	settingsObj := settings.ReadSettings(a.baseFolder)
-	ignoreIDs := makeIgnoreIDs(settingsObj.IgnoreUpdateTitleIds)
+	settingsObj, err := settings.ReadSettings(a.baseFolder)
+	if err != nil {
+		return nil, err
+	}
+	ignoreIDs := makeIgnoreIDs(settingsObj.MissingContent.IgnoreUpdateIDs)
 	missing := process.ScanForMissingUpdates(
 		a.state.localDB.TitlesMap,
 		a.state.switchDB.TitlesMap,
 		ignoreIDs,
-		settingsObj.IgnoreDLCUpdates,
+		settingsObj.MissingContent.IgnoreDLCUpdates,
 	)
 	values := make([]process.IncompleteTitle, 0, len(missing))
 	for _, value := range missing {
@@ -72,7 +82,7 @@ func getMissingGames(localDB *db.LocalSwitchFilesDB, switchDB *db.SwitchTitlesDB
 		if title.Attributes.Name == "" || title.Attributes.Id == "" {
 			continue
 		}
-		if settingsObj.HideDemoGames && title.Attributes.IsDemo {
+		if settingsObj.GUI.HideDemoGames && title.Attributes.IsDemo {
 			continue
 		}
 		result = append(result, SwitchTitle{

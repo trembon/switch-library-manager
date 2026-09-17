@@ -33,7 +33,16 @@ func CreateConsole(baseFolder string, sugarLogger *zap.SugaredLogger, consoleFla
 }
 
 func (c *Console) Start() {
-	settingsObj := settings.ReadSettings(c.baseFolder)
+	settingsObj, err := settings.ReadSettings(c.baseFolder)
+	if err != nil {
+		fmt.Printf("Failed to load settings: %v\n", err)
+		return
+	}
+	cache, err := settings.ReadCache(c.baseFolder)
+	if err != nil {
+		fmt.Printf("Failed to load cache: %v\n", err)
+		return
+	}
 
 	// 0. prepare csv export folder
 	csvOutput := ""
@@ -54,21 +63,21 @@ func (c *Console) Start() {
 	progressBar = progressbar.New(2)
 
 	filename := filepath.Join(c.baseFolder, settings.TITLE_JSON_FILENAME)
-	titleFile, titlesEtag, err := db.LoadAndUpdateFile(settingsObj.TitlesJsonUrl, filename, settingsObj.TitlesEtag)
+	titleFile, titlesEtag, err := db.LoadAndUpdateFile(settingsObj.DataSources.TitlesURL, filename, cache.TitlesETag)
 	if err != nil {
 		fmt.Printf("title json file doesn't exist\n")
 		return
 	}
-	settingsObj.TitlesEtag = titlesEtag
+	cache.TitlesETag = titlesEtag
 	progressBar.Add(1)
 	//2. load the versions JSON object
 	filename = filepath.Join(c.baseFolder, settings.VERSIONS_JSON_FILENAME)
-	versionsFile, versionsEtag, err := db.LoadAndUpdateFile(settingsObj.VersionsJsonUrl, filename, settingsObj.VersionsEtag)
+	versionsFile, versionsEtag, err := db.LoadAndUpdateFile(settingsObj.DataSources.VersionsURL, filename, cache.VersionsETag)
 	if err != nil {
 		fmt.Printf("version json file doesn't exist\n")
 		return
 	}
-	settingsObj.VersionsEtag = versionsEtag
+	cache.VersionsETag = versionsEtag
 	progressBar.Add(1)
 	progressBar.Finish()
 	newUpdate, err := settings.CheckForUpdates()
@@ -77,14 +86,17 @@ func (c *Console) Start() {
 		fmt.Printf("\n=== New version available, download from Github ===\n")
 	}
 
-	//3. update the config file with new etag
-	settings.SaveSettings(settingsObj, c.baseFolder)
+	//3. update the internal cache with new etags
+	if err := settings.SaveCacheWithError(cache, c.baseFolder); err != nil {
+		fmt.Printf("Failed to save cache: %v\n", err)
+		return
+	}
 
 	//4. create switch title db
 	titlesDB, err := db.CreateSwitchTitleDB(titleFile, versionsFile)
 
 	//5. read local files
-	folderToScan := settingsObj.Folder
+	folderToScan := settingsObj.Paths.LibraryFolder
 	if c.consoleFlags.NspFolder.IsSet() && c.consoleFlags.NspFolder.String() != "" {
 		folderToScan = c.consoleFlags.NspFolder.String()
 	}
@@ -100,7 +112,7 @@ func (c *Console) Start() {
 		fmt.Printf("\n!!NOTE!!: keys file was not found, deep scan is disabled, library will be based on file tags.\n %v", err)
 	}
 
-	recursiveMode := settingsObj.ScanRecursively
+	recursiveMode := settingsObj.Scan.Recursive
 	if c.consoleFlags.Recursive.IsSet() {
 		recursiveMode = c.consoleFlags.Recursive.Bool()
 	}
@@ -112,7 +124,7 @@ func (c *Console) Start() {
 	}
 	defer localDbManager.Close()
 
-	scanFolders := settingsObj.ScanFolders
+	scanFolders := settingsObj.Paths.ScanFolders
 	scanFolders = append(scanFolders, folderToScan)
 
 	localDB, err := localDbManager.CreateLocalSwitchFilesDB(scanFolders, c, recursiveMode, true)
@@ -132,21 +144,21 @@ func (c *Console) Start() {
 	}
 	c.processIssues(localDB, issuesCsvFile)
 
-	if settingsObj.OrganizeOptions.DeleteOldUpdateFiles {
+	if settingsObj.Organization.DeleteOldUpdateFiles {
 		progressBar = progressbar.New(2000)
 		fmt.Printf("\nDeleting old updates\n")
 		process.DeleteOldUpdates(c.baseFolder, localDB, c)
 		progressBar.Finish()
 	}
 
-	if settingsObj.OrganizeOptions.RenameFiles || settingsObj.OrganizeOptions.CreateFolderPerGame {
+	if settingsObj.Organization.RenameFiles || settingsObj.Organization.CreateFolderPerGame {
 		progressBar = progressbar.New(2000)
 		fmt.Printf("\nStarting library organization\n")
 		process.OrganizeByFolders(folderToScan, localDB, titlesDB, c)
 		progressBar.Finish()
 	}
 
-	if settingsObj.CheckForMissingUpdates {
+	if settingsObj.MissingContent.CheckForUpdates {
 		fmt.Printf("\nChecking for missing updates\n")
 
 		missingUpdatesCsvFile := ""
@@ -157,7 +169,7 @@ func (c *Console) Start() {
 		c.processMissingUpdates(localDB, titlesDB, settingsObj, missingUpdatesCsvFile)
 	}
 
-	if settingsObj.CheckForMissingDLC {
+	if settingsObj.MissingContent.CheckForDLC {
 		fmt.Printf("\nChecking for missing DLC\n")
 
 		missingDlcCsvFile := ""
@@ -199,11 +211,11 @@ func (c *Console) processIssues(localDB *db.LocalSwitchFilesDB, csvOutput string
 
 func (c *Console) processMissingUpdates(localDB *db.LocalSwitchFilesDB, titlesDB *db.SwitchTitlesDB, settingsObj *settings.AppSettings, csvOutput string) {
 	ignoreIds := map[string]struct{}{}
-	for _, id := range settingsObj.IgnoreUpdateTitleIds {
+	for _, id := range settingsObj.MissingContent.IgnoreUpdateIDs {
 		ignoreIds[strings.ToLower(id)] = struct{}{}
 	}
 
-	incompleteTitles := process.ScanForMissingUpdates(localDB.TitlesMap, titlesDB.TitlesMap, ignoreIds, settingsObj.IgnoreDLCUpdates)
+	incompleteTitles := process.ScanForMissingUpdates(localDB.TitlesMap, titlesDB.TitlesMap, ignoreIds, settingsObj.MissingContent.IgnoreDLCUpdates)
 	if len(incompleteTitles) != 0 {
 		fmt.Print("\nFound available updates:\n\n")
 	} else {
@@ -231,9 +243,12 @@ func (c *Console) processMissingUpdates(localDB *db.LocalSwitchFilesDB, titlesDB
 }
 
 func (c *Console) processMissingDLC(localDB *db.LocalSwitchFilesDB, titlesDB *db.SwitchTitlesDB, csvOutput string) {
-	settingsObj := settings.ReadSettings(c.baseFolder)
+	settingsObj, err := settings.ReadSettings(c.baseFolder)
+	if err != nil {
+		return
+	}
 	ignoreIds := map[string]struct{}{}
-	for _, id := range settingsObj.IgnoreDLCTitleIds {
+	for _, id := range settingsObj.MissingContent.IgnoreDLCTitleIDs {
 		ignoreIds[strings.ToLower(id)] = struct{}{}
 	}
 	incompleteTitles := process.ScanForMissingDLC(localDB.TitlesMap, titlesDB.TitlesMap, ignoreIds)

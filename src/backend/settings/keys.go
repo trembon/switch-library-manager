@@ -37,9 +37,12 @@ func InitSwitchKeys(baseFolder string) (*switchKeys, error) {
 	logger := zap.S()
 
 	// first, try to read the prod keys from the settings value
-	settings := ReadSettings(baseFolder)
-	if settings.Prodkeys != "" {
-		path = settings.Prodkeys
+	settings, settingsErr := ReadSettings(baseFolder)
+	if settingsErr != nil {
+		return nil, settingsErr
+	}
+	if settings.Paths.ProdKeys != "" {
+		path = settings.Paths.ProdKeys
 		if !strings.EqualFold(filepath.Ext(path), ".keys") {
 			path = filepath.Join(path, "prod.keys")
 		}

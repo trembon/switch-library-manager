@@ -2,6 +2,7 @@ package settings
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,12 +20,16 @@ var (
 
 const (
 	SETTINGS_FILENAME         = "settings.json"
+	CACHE_FILENAME            = "cache.json"
 	TITLE_JSON_FILENAME       = "titles.json"
 	VERSIONS_JSON_FILENAME    = "versions.json"
-	SLM_VERSION               = "1.10.0"
+	SLM_VERSION               = "2.0.0"
+	SETTINGS_SCHEMA_VERSION   = 2
 	DEFAULT_TITLES_JSON_URL   = "https://tinfoil.io/repo/db/titles.json"
 	DEFAULT_VERSIONS_JSON_URL = "https://raw.githubusercontent.com/blawar/titledb/master/versions.json"
 	SLM_VERSION_URL           = "https://raw.githubusercontent.com/trembon/switch-library-manager/master/version.json"
+	DEFAULT_TITLES_ETAG       = "W/\"a5b02845cf6bd61:0\""
+	DEFAULT_VERSIONS_ETAG     = "W/\"2ef50d1cb6bd61:0\""
 )
 
 const (
@@ -37,7 +42,42 @@ const (
 	TEMPLATE_TYPE        = "TYPE"
 )
 
-type OrganizeOptions struct {
+type GUISettings struct {
+	Enabled          bool `json:"enabled"`
+	PageSize         int  `json:"page_size"`
+	HideMissingGames bool `json:"hide_missing_games"`
+	HideDemoGames    bool `json:"hide_demo_games"`
+}
+
+type PathSettings struct {
+	LibraryFolder string   `json:"library_folder"`
+	ScanFolders   []string `json:"scan_folders"`
+	ProdKeys      string   `json:"prod_keys"`
+}
+
+type ScanSettings struct {
+	Recursive       bool     `json:"recursive"`
+	IgnoreFileTypes []string `json:"ignore_file_types"`
+}
+
+type MissingContentSettings struct {
+	CheckForUpdates   bool     `json:"check_for_updates"`
+	CheckForDLC       bool     `json:"check_for_dlc"`
+	IgnoreDLCUpdates  bool     `json:"ignore_dlc_updates"`
+	IgnoreDLCTitleIDs []string `json:"ignore_dlc_title_ids"`
+	IgnoreUpdateIDs   []string `json:"ignore_update_title_ids"`
+}
+
+type DataSourceSettings struct {
+	TitlesURL   string `json:"titles_url"`
+	VersionsURL string `json:"versions_url"`
+}
+
+type LoggingSettings struct {
+	Debug bool `json:"debug"`
+}
+
+type OrganizationSettings struct {
 	CreateFolderPerGame        bool   `json:"create_folder_per_game"`
 	DlcFolder                  string `json:"dlc_folder"`
 	UpdatesFolder              string `json:"updates_folder"`
@@ -50,129 +90,256 @@ type OrganizeOptions struct {
 	ProcessWhenMissingBaseGame bool   `json:"process_when_missing_base_game"`
 }
 
+// OrganizeOptions is retained as an alias for the process package API.
+type OrganizeOptions = OrganizationSettings
+
 type AppSettings struct {
-	VersionsJsonUrl        string          `json:"versions_json_url"`
-	VersionsEtag           string          `json:"versions_etag"`
-	TitlesJsonUrl          string          `json:"titles_json_url"`
-	TitlesEtag             string          `json:"titles_etag"`
-	Prodkeys               string          `json:"prod_keys"`
-	Folder                 string          `json:"folder"`
-	ScanFolders            []string        `json:"scan_folders"`
-	GUI                    bool            `json:"gui"`
-	Debug                  bool            `json:"debug"`
-	CheckForMissingUpdates bool            `json:"check_for_missing_updates"`
-	CheckForMissingDLC     bool            `json:"check_for_missing_dlc"`
-	HideMissingGames       bool            `json:"hide_missing_games"`
-	HideDemoGames          bool            `json:"hide_demo_games"`
-	OrganizeOptions        OrganizeOptions `json:"organize_options"`
-	ScanRecursively        bool            `json:"scan_recursively"`
-	GuiPagingSize          int             `json:"gui_page_size"`
-	IgnoreDLCUpdates       bool            `json:"ignore_dlc_updates"`
-	IgnoreDLCTitleIds      []string        `json:"ignore_dlc_title_ids"`
-	IgnoreUpdateTitleIds   []string        `json:"ignore_update_title_ids"`
-	IgnoreFileTypes        []string        `json:"ignore_file_types"`
+	SchemaVersion  int                    `json:"schema_version"`
+	GUI            GUISettings            `json:"gui"`
+	Paths          PathSettings           `json:"paths"`
+	Scan           ScanSettings           `json:"scan"`
+	Organization   OrganizationSettings   `json:"organization"`
+	MissingContent MissingContentSettings `json:"missing_content"`
+	DataSources    DataSourceSettings     `json:"data_sources"`
+	Logging        LoggingSettings        `json:"logging"`
 }
 
-func ReadSettingsAsJSON(baseFolder string) string {
-	if _, err := os.Stat(filepath.Join(baseFolder, SETTINGS_FILENAME)); err != nil {
-		saveDefaultSettings(baseFolder)
-	}
-	file, err := os.Open(filepath.Join(baseFolder, SETTINGS_FILENAME))
-	if err != nil {
-		return ""
-	}
-	defer file.Close()
-	bytes, err := io.ReadAll(file)
-	if err != nil {
-		return ""
-	}
-	return string(bytes)
+type Cache struct {
+	TitlesETag   string `json:"titles_etag"`
+	VersionsETag string `json:"versions_etag"`
 }
 
-func ReadSettings(baseFolder string) *AppSettings {
+// MigrationInfo describes a legacy settings file that was preserved while
+// creating a new v2 settings file with defaults.
+type MigrationInfo struct {
+	BackupPath string
+}
+
+// SettingsPreparation contains the settings loaded for this process and any
+// migration notice that should be shown to the user.
+type SettingsPreparation struct {
+	Settings  *AppSettings
+	Migration *MigrationInfo
+}
+
+func ReadSettingsAsJSON(baseFolder string) (string, error) {
+	settings, err := ReadSettings(baseFolder)
+	if err != nil {
+		return "", err
+	}
+	bytes, err := json.MarshalIndent(settings, "", " ")
+	if err != nil {
+		return "", fmt.Errorf("marshal settings: %w", err)
+	}
+	return string(bytes), nil
+}
+
+func ReadSettings(baseFolder string) (*AppSettings, error) {
+	prepared, err := PrepareSettings(baseFolder)
+	if err != nil {
+		return nil, err
+	}
+	return prepared.Settings, nil
+}
+
+// PrepareSettings loads v2 settings and reports whether a legacy file was
+// preserved while defaults were generated. It is intended for application
+// startup, where the caller can present the migration notice to the user.
+func PrepareSettings(baseFolder string) (*SettingsPreparation, error) {
 	if settingsInstance != nil {
-		return settingsInstance
+		return &SettingsPreparation{Settings: settingsInstance}, nil
 	}
-	settingsInstance = &AppSettings{Debug: false, GuiPagingSize: 100, ScanFolders: []string{},
-		OrganizeOptions: OrganizeOptions{SwitchSafeFileNames: true}, Prodkeys: "", IgnoreDLCTitleIds: []string{"01007F600B135007"}}
-	if _, err := os.Stat(filepath.Join(baseFolder, SETTINGS_FILENAME)); err == nil {
-		file, err := os.Open(filepath.Join(baseFolder, SETTINGS_FILENAME))
-		if err != nil {
-			zap.S().Warnf("Missing or corrupted config file, creating a new one")
-			return saveDefaultSettings(baseFolder)
-		} else {
-			err = json.NewDecoder(file).Decode(settingsInstance)
-			file.Close()
-			if err != nil {
-				zap.S().Warnf("Missing or corrupted config file, creating a new one")
-				return saveDefaultSettings(baseFolder)
-			}
-			settingsInstance = verifySettings(baseFolder, settingsInstance)
-			return settingsInstance
+
+	filename := filepath.Join(baseFolder, SETTINGS_FILENAME)
+	if _, err := os.Stat(filename); errors.Is(err, os.ErrNotExist) {
+		defaults := defaultSettings()
+		if err := SaveSettingsWithError(defaults, baseFolder); err != nil {
+			return nil, err
 		}
-	} else {
-		return saveDefaultSettings(baseFolder)
+		settingsInstance = defaults
+		return &SettingsPreparation{Settings: settingsInstance}, nil
+	} else if err != nil {
+		return nil, fmt.Errorf("stat settings: %w", err)
 	}
+
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("open settings: %w", err)
+	}
+
+	contents, err := io.ReadAll(file)
+	if err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("read settings: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return nil, fmt.Errorf("close settings: %w", err)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(contents, &raw); err != nil {
+		return nil, fmt.Errorf("decode settings: %w; the file was not changed, create a v2 settings.json", err)
+	}
+	if raw == nil {
+		return nil, errors.New("settings.json must contain a JSON object; the file was not changed")
+	}
+
+	var envelope struct {
+		SchemaVersion *int `json:"schema_version"`
+	}
+	if err := json.Unmarshal(contents, &envelope); err != nil {
+		return nil, fmt.Errorf("decode settings: %w; the file was not changed, create a v2 settings.json", err)
+	}
+	if envelope.SchemaVersion == nil || *envelope.SchemaVersion == 1 {
+		backupPath, err := preserveLegacySettings(filename)
+		if err != nil {
+			return nil, err
+		}
+
+		defaults := defaultSettings()
+		if err := SaveSettingsWithError(defaults, baseFolder); err != nil {
+			if restoreErr := restoreLegacySettings(filename, backupPath); restoreErr != nil {
+				return nil, fmt.Errorf("create default settings: %w; restore legacy settings: %v", err, restoreErr)
+			}
+			return nil, fmt.Errorf("create default settings: %w; the legacy settings were restored", err)
+		}
+		return &SettingsPreparation{
+			Settings:  defaults,
+			Migration: &MigrationInfo{BackupPath: backupPath},
+		}, nil
+	}
+	if *envelope.SchemaVersion != SETTINGS_SCHEMA_VERSION {
+		return nil, fmt.Errorf("unsupported settings schema_version %d; expected %d; the file was not changed", *envelope.SchemaVersion, SETTINGS_SCHEMA_VERSION)
+	}
+
+	loaded := defaultSettings()
+	if err := json.Unmarshal(contents, loaded); err != nil {
+		return nil, fmt.Errorf("decode settings: %w; the file was not changed", err)
+	}
+	verifySettings(loaded)
+	settingsInstance = loaded
+	return &SettingsPreparation{Settings: settingsInstance}, nil
 }
 
-func verifySettings(baseFolder string, settings *AppSettings) *AppSettings {
-	// check so titles json url is set, if not revert to default
-	if settings.TitlesJsonUrl == "" {
-		settings.TitlesJsonUrl = DEFAULT_TITLES_JSON_URL
+func preserveLegacySettings(filename string) (string, error) {
+	directory := filepath.Dir(filename)
+	backupPath := filepath.Join(directory, "settings.v1.json")
+	for suffix := 1; ; suffix++ {
+		if suffix > 1 {
+			backupPath = filepath.Join(directory, fmt.Sprintf("settings.v1.%d.json", suffix-1))
+		}
+		_, err := os.Stat(backupPath)
+		if errors.Is(err, os.ErrNotExist) {
+			break
+		}
+		if err != nil {
+			return "", fmt.Errorf("check legacy settings backup %q: %w", backupPath, err)
+		}
 	}
-	// check so version json url is set, if not revert to default
-	if settings.VersionsJsonUrl == "" {
-		settings.VersionsJsonUrl = DEFAULT_VERSIONS_JSON_URL
+	if err := os.Rename(filename, backupPath); err != nil {
+		return "", fmt.Errorf("preserve legacy settings as %q: %w", backupPath, err)
 	}
-
-	// check to the title json file exists, if it does not, revert ETAG
-	if _, err := os.Stat(filepath.Join(baseFolder, TITLE_JSON_FILENAME)); err != nil {
-		settings.TitlesEtag = "W/\"a5b02845cf6bd61:0\""
-	}
-	// check to the version json file exists, if it does not, revert ETAG
-	if _, err := os.Stat(filepath.Join(baseFolder, VERSIONS_JSON_FILENAME)); err != nil {
-		settings.VersionsEtag = "W/\"2ef50d1cb6bd61:0\""
-	}
-
-	return settings
+	return backupPath, nil
 }
 
-func saveDefaultSettings(baseFolder string) *AppSettings {
-	settingsInstance = &AppSettings{
-		TitlesJsonUrl:          DEFAULT_TITLES_JSON_URL,
-		TitlesEtag:             "W/\"a5b02845cf6bd61:0\"",
-		VersionsJsonUrl:        DEFAULT_VERSIONS_JSON_URL,
-		VersionsEtag:           "W/\"2ef50d1cb6bd61:0\"",
-		Folder:                 "",
-		Prodkeys:               "",
-		ScanFolders:            []string{},
-		IgnoreUpdateTitleIds:   []string{},
-		IgnoreDLCTitleIds:      []string{},
-		IgnoreDLCUpdates:       false,
-		IgnoreFileTypes:        []string{},
-		GUI:                    true,
-		GuiPagingSize:          100,
-		CheckForMissingUpdates: true,
-		CheckForMissingDLC:     true,
-		HideMissingGames:       false,
-		HideDemoGames:          false,
-		ScanRecursively:        true,
-		Debug:                  false,
-		OrganizeOptions: OrganizeOptions{
-			RenameFiles:         false,
-			CreateFolderPerGame: false,
-			DlcFolder:           "",
-			UpdatesFolder:       "",
+func restoreLegacySettings(filename, backupPath string) error {
+	if _, err := os.Stat(filename); err == nil {
+		if err := os.Remove(filename); err != nil {
+			return fmt.Errorf("remove incomplete settings file: %w", err)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("check incomplete settings file: %w", err)
+	}
+	if err := os.Rename(backupPath, filename); err != nil {
+		return fmt.Errorf("rename %q back to %q: %w", backupPath, filename, err)
+	}
+	return nil
+}
+
+func defaultSettings() *AppSettings {
+	return &AppSettings{
+		SchemaVersion: SETTINGS_SCHEMA_VERSION,
+		GUI: GUISettings{
+			Enabled:  true,
+			PageSize: 100,
+		},
+		Paths: PathSettings{ScanFolders: []string{}},
+		Scan:  ScanSettings{Recursive: true, IgnoreFileTypes: []string{}},
+		Organization: OrganizationSettings{
 			FolderNameTemplate:  fmt.Sprintf("{%v}", TEMPLATE_TITLE_NAME),
-			FileNameTemplate: fmt.Sprintf("{%v} ({%v})[{%v}][v{%v}]", TEMPLATE_TITLE_NAME, TEMPLATE_DLC_NAME,
-				TEMPLATE_TITLE_ID, TEMPLATE_VERSION),
-			DeleteEmptyFolders:         false,
-			SwitchSafeFileNames:        true,
-			DeleteOldUpdateFiles:       false,
-			ProcessWhenMissingBaseGame: false,
+			FileNameTemplate:    fmt.Sprintf("{%v} ({%v})[{%v}][v{%v}]", TEMPLATE_TITLE_NAME, TEMPLATE_DLC_NAME, TEMPLATE_TITLE_ID, TEMPLATE_VERSION),
+			SwitchSafeFileNames: true,
+		},
+		MissingContent: MissingContentSettings{
+			CheckForUpdates:   true,
+			CheckForDLC:       true,
+			IgnoreDLCTitleIDs: []string{"01007F600B135007"},
+			IgnoreUpdateIDs:   []string{},
+		},
+		DataSources: DataSourceSettings{
+			TitlesURL:   DEFAULT_TITLES_JSON_URL,
+			VersionsURL: DEFAULT_VERSIONS_JSON_URL,
 		},
 	}
-	return SaveSettings(settingsInstance, baseFolder)
+}
+
+func verifySettings(settings *AppSettings) {
+	if settings.DataSources.TitlesURL == "" {
+		settings.DataSources.TitlesURL = DEFAULT_TITLES_JSON_URL
+	}
+	if settings.DataSources.VersionsURL == "" {
+		settings.DataSources.VersionsURL = DEFAULT_VERSIONS_JSON_URL
+	}
+	if settings.GUI.PageSize <= 0 {
+		settings.GUI.PageSize = 100
+	}
+	if settings.Paths.ScanFolders == nil {
+		settings.Paths.ScanFolders = []string{}
+	}
+	if settings.Scan.IgnoreFileTypes == nil {
+		settings.Scan.IgnoreFileTypes = []string{}
+	}
+	if settings.MissingContent.IgnoreDLCTitleIDs == nil {
+		settings.MissingContent.IgnoreDLCTitleIDs = []string{}
+	}
+	if settings.MissingContent.IgnoreUpdateIDs == nil {
+		settings.MissingContent.IgnoreUpdateIDs = []string{}
+	}
+}
+
+func defaultCache() *Cache {
+	return &Cache{TitlesETag: DEFAULT_TITLES_ETAG, VersionsETag: DEFAULT_VERSIONS_ETAG}
+}
+
+func ReadCache(baseFolder string) (*Cache, error) {
+	file, err := os.Open(filepath.Join(baseFolder, CACHE_FILENAME))
+	if errors.Is(err, os.ErrNotExist) {
+		return defaultCache(), nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("open cache: %w", err)
+	}
+	defer file.Close()
+
+	cache := defaultCache()
+	if err := json.NewDecoder(file).Decode(cache); err != nil {
+		return nil, fmt.Errorf("decode cache: %w", err)
+	}
+	return cache, nil
+}
+
+func SaveCacheWithError(cache *Cache, baseFolder string) error {
+	if cache == nil {
+		return errors.New("cache is nil")
+	}
+	data, err := json.MarshalIndent(cache, "", " ")
+	if err != nil {
+		return fmt.Errorf("marshal cache: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(baseFolder, CACHE_FILENAME), data, 0644); err != nil {
+		return fmt.Errorf("write cache: %w", err)
+	}
+	return nil
 }
 
 func SaveSettings(settings *AppSettings, baseFolder string) *AppSettings {
@@ -184,20 +351,28 @@ func SaveSettings(settings *AppSettings, baseFolder string) *AppSettings {
 }
 
 func SaveSettingsWithError(settings *AppSettings, baseFolder string) error {
-	file, err := json.MarshalIndent(settings, "", " ")
+	if settings == nil {
+		return errors.New("settings are nil")
+	}
+	if settings.SchemaVersion == 0 {
+		settings.SchemaVersion = SETTINGS_SCHEMA_VERSION
+	}
+	if settings.SchemaVersion != SETTINGS_SCHEMA_VERSION {
+		return fmt.Errorf("unsupported settings schema_version %d", settings.SchemaVersion)
+	}
+	data, err := json.MarshalIndent(settings, "", " ")
 	if err != nil {
 		return fmt.Errorf("marshal settings: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(baseFolder, SETTINGS_FILENAME), file, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(baseFolder, SETTINGS_FILENAME), data, 0644); err != nil {
 		return fmt.Errorf("write settings: %w", err)
 	}
+	settingsInstance = settings
 	return nil
 }
 
 func CheckForUpdates() (bool, error) {
-
 	localVer := SLM_VERSION
-
 	res, err := http.Get(versionURL)
 	if err != nil {
 		return false, err
@@ -206,26 +381,17 @@ func CheckForUpdates() (bool, error) {
 	if res.StatusCode < http.StatusOK || res.StatusCode >= http.StatusMultipleChoices {
 		return false, fmt.Errorf("version check returned %s", res.Status)
 	}
-
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return false, err
 	}
-
 	remoteValues := map[string]string{}
-	err = json.Unmarshal(body, &remoteValues)
-	if err != nil {
+	if err := json.Unmarshal(body, &remoteValues); err != nil {
 		return false, err
 	}
-
 	remoteVer := remoteValues["version"]
 	if remoteVer == "" {
-		return false, fmt.Errorf("version check response does not contain a version")
+		return false, errors.New("version check response does not contain a version")
 	}
-
-	if version.CompareSimple(remoteVer, localVer) > 0 {
-		return true, nil
-	}
-
-	return false, nil
+	return version.CompareSimple(remoteVer, localVer) > 0, nil
 }

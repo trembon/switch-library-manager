@@ -7,14 +7,17 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-func (a *App) LoadSettings() *settings.AppSettings {
+func (a *App) LoadSettings() (*settings.AppSettings, error) {
 	a.state.mu.Lock()
 	defer a.state.mu.Unlock()
-	result := settings.ReadSettings(a.baseFolder)
+	result, err := settings.ReadSettings(a.baseFolder)
+	if err != nil {
+		return nil, err
+	}
 	if a.ctx != nil {
 		wailsruntime.WindowSetAlwaysOnTop(a.ctx, false)
 	}
-	return result
+	return result, nil
 }
 
 func (a *App) SaveSettings(value settings.AppSettings) error {
@@ -25,17 +28,17 @@ func (a *App) SaveSettings(value settings.AppSettings) error {
 }
 
 func normalizeSettings(value settings.AppSettings) settings.AppSettings {
-	if value.ScanFolders == nil {
-		value.ScanFolders = []string{}
+	if value.Paths.ScanFolders == nil {
+		value.Paths.ScanFolders = []string{}
 	}
-	if value.IgnoreDLCTitleIds == nil {
-		value.IgnoreDLCTitleIds = []string{}
+	if value.MissingContent.IgnoreDLCTitleIDs == nil {
+		value.MissingContent.IgnoreDLCTitleIDs = []string{}
 	}
-	if value.IgnoreUpdateTitleIds == nil {
-		value.IgnoreUpdateTitleIds = []string{}
+	if value.MissingContent.IgnoreUpdateIDs == nil {
+		value.MissingContent.IgnoreUpdateIDs = []string{}
 	}
-	if value.IgnoreFileTypes == nil {
-		value.IgnoreFileTypes = []string{}
+	if value.Scan.IgnoreFileTypes == nil {
+		value.Scan.IgnoreFileTypes = []string{}
 	}
 	return value
 }

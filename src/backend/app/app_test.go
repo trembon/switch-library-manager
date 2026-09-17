@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/trembon/switch-library-manager/backend/db"
@@ -30,8 +31,15 @@ func TestGetLibraryTitleNamePreservesNamePrecedence(t *testing.T) {
 func TestNormalizeSettingsInitializesFrontendLists(t *testing.T) {
 	value := normalizeSettings(settings.AppSettings{})
 
-	if value.ScanFolders == nil || value.IgnoreDLCTitleIds == nil || value.IgnoreUpdateTitleIds == nil || value.IgnoreFileTypes == nil {
+	if value.Paths.ScanFolders == nil || value.MissingContent.IgnoreDLCTitleIDs == nil || value.MissingContent.IgnoreUpdateIDs == nil || value.Scan.IgnoreFileTypes == nil {
 		t.Fatal("expected settings lists to be initialized")
+	}
+}
+
+func TestSettingsMigrationMessageIncludesBackupAndDefaultInstructions(t *testing.T) {
+	message := settingsMigrationMessage(&settings.MigrationInfo{BackupPath: "C:\\app\\settings.v1.json"})
+	if !strings.Contains(message, "C:\\app\\settings.v1.json") || !strings.Contains(message, "default values") || !strings.Contains(message, "docs/settings-v2.md") {
+		t.Fatalf("migration message = %q", message)
 	}
 }
 

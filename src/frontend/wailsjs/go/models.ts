@@ -190,7 +190,53 @@ export namespace process {
 
 export namespace settings {
 	
-	export class OrganizeOptions {
+	export class LoggingSettings {
+	    debug: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new LoggingSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.debug = source["debug"];
+	    }
+	}
+	export class DataSourceSettings {
+	    titles_url: string;
+	    versions_url: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DataSourceSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.titles_url = source["titles_url"];
+	        this.versions_url = source["versions_url"];
+	    }
+	}
+	export class MissingContentSettings {
+	    check_for_updates: boolean;
+	    check_for_dlc: boolean;
+	    ignore_dlc_updates: boolean;
+	    ignore_dlc_title_ids: string[];
+	    ignore_update_title_ids: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new MissingContentSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.check_for_updates = source["check_for_updates"];
+	        this.check_for_dlc = source["check_for_dlc"];
+	        this.ignore_dlc_updates = source["ignore_dlc_updates"];
+	        this.ignore_dlc_title_ids = source["ignore_dlc_title_ids"];
+	        this.ignore_update_title_ids = source["ignore_update_title_ids"];
+	    }
+	}
+	export class OrganizationSettings {
 	    create_folder_per_game: boolean;
 	    dlc_folder: string;
 	    updates_folder: string;
@@ -203,7 +249,7 @@ export namespace settings {
 	    process_when_missing_base_game: boolean;
 	
 	    static createFrom(source: any = {}) {
-	        return new OrganizeOptions(source);
+	        return new OrganizationSettings(source);
 	    }
 	
 	    constructor(source: any = {}) {
@@ -220,27 +266,63 @@ export namespace settings {
 	        this.process_when_missing_base_game = source["process_when_missing_base_game"];
 	    }
 	}
-	export class AppSettings {
-	    versions_json_url: string;
-	    versions_etag: string;
-	    titles_json_url: string;
-	    titles_etag: string;
-	    prod_keys: string;
-	    folder: string;
+	export class ScanSettings {
+	    recursive: boolean;
+	    ignore_file_types: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ScanSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.recursive = source["recursive"];
+	        this.ignore_file_types = source["ignore_file_types"];
+	    }
+	}
+	export class PathSettings {
+	    library_folder: string;
 	    scan_folders: string[];
-	    gui: boolean;
-	    debug: boolean;
-	    check_for_missing_updates: boolean;
-	    check_for_missing_dlc: boolean;
+	    prod_keys: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PathSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.library_folder = source["library_folder"];
+	        this.scan_folders = source["scan_folders"];
+	        this.prod_keys = source["prod_keys"];
+	    }
+	}
+	export class GUISettings {
+	    enabled: boolean;
+	    page_size: number;
 	    hide_missing_games: boolean;
 	    hide_demo_games: boolean;
-	    organize_options: OrganizeOptions;
-	    scan_recursively: boolean;
-	    gui_page_size: number;
-	    ignore_dlc_updates: boolean;
-	    ignore_dlc_title_ids: string[];
-	    ignore_update_title_ids: string[];
-	    ignore_file_types: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new GUISettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.page_size = source["page_size"];
+	        this.hide_missing_games = source["hide_missing_games"];
+	        this.hide_demo_games = source["hide_demo_games"];
+	    }
+	}
+	export class AppSettings {
+	    schema_version: number;
+	    gui: GUISettings;
+	    paths: PathSettings;
+	    scan: ScanSettings;
+	    organization: OrganizationSettings;
+	    missing_content: MissingContentSettings;
+	    data_sources: DataSourceSettings;
+	    logging: LoggingSettings;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
@@ -248,26 +330,14 @@ export namespace settings {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.versions_json_url = source["versions_json_url"];
-	        this.versions_etag = source["versions_etag"];
-	        this.titles_json_url = source["titles_json_url"];
-	        this.titles_etag = source["titles_etag"];
-	        this.prod_keys = source["prod_keys"];
-	        this.folder = source["folder"];
-	        this.scan_folders = source["scan_folders"];
-	        this.gui = source["gui"];
-	        this.debug = source["debug"];
-	        this.check_for_missing_updates = source["check_for_missing_updates"];
-	        this.check_for_missing_dlc = source["check_for_missing_dlc"];
-	        this.hide_missing_games = source["hide_missing_games"];
-	        this.hide_demo_games = source["hide_demo_games"];
-	        this.organize_options = this.convertValues(source["organize_options"], OrganizeOptions);
-	        this.scan_recursively = source["scan_recursively"];
-	        this.gui_page_size = source["gui_page_size"];
-	        this.ignore_dlc_updates = source["ignore_dlc_updates"];
-	        this.ignore_dlc_title_ids = source["ignore_dlc_title_ids"];
-	        this.ignore_update_title_ids = source["ignore_update_title_ids"];
-	        this.ignore_file_types = source["ignore_file_types"];
+	        this.schema_version = source["schema_version"];
+	        this.gui = this.convertValues(source["gui"], GUISettings);
+	        this.paths = this.convertValues(source["paths"], PathSettings);
+	        this.scan = this.convertValues(source["scan"], ScanSettings);
+	        this.organization = this.convertValues(source["organization"], OrganizationSettings);
+	        this.missing_content = this.convertValues(source["missing_content"], MissingContentSettings);
+	        this.data_sources = this.convertValues(source["data_sources"], DataSourceSettings);
+	        this.logging = this.convertValues(source["logging"], LoggingSettings);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -288,6 +358,12 @@ export namespace settings {
 		    return a;
 		}
 	}
+	
+	
+	
+	
+	
+	
 
 }
 
