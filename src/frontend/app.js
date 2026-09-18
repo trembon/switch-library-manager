@@ -32,6 +32,7 @@ $(function () {
     let currTable
     let themeMediaQuery
     let themeMediaQueryHandler
+    let restartRequired = false
 
     function setThemeAttribute(theme) {
         document.documentElement.dataset.bsTheme = theme;
@@ -75,6 +76,7 @@ $(function () {
     const progressBar = $('.progress-bar');
 
     function setLoading(loading) {
+        loading = loading || restartRequired;
         wrapper.classList.toggle('is-loading', loading);
         wrapper.setAttribute('aria-busy', String(loading));
 
@@ -104,11 +106,23 @@ $(function () {
         setLoading(false);
     }
 
+    function lockForRestart() {
+        restartRequired = true;
+        wrapper.classList.add('restart-required');
+        $('.progress-type').text('Restart required');
+        $('.progress-msg').text('Settings were saved. Close and restart the application to continue.');
+        $('.progress-container').attr('aria-label', 'Application restart required');
+        setLoading(true);
+    }
+
     //handle tabs action
     $('.tabgroup > div').hide();
     // loadTab($('.tabgroup > div:first-of-type'));
 
     let showError = function (detail) {
+        if (restartRequired) {
+            return;
+        }
         ShowMessage("error", "Error", "An unexpected error occurred", detail || "")
             .catch(error => console.error(error));
         if (state.settings.paths) {
@@ -119,6 +133,9 @@ $(function () {
     };
 
         EventsOn("updateProgress", function (message) {
+            if (restartRequired) {
+                return;
+            }
             setLoading(true);
             let count = message.curr;
             let total = message.total;
@@ -133,6 +150,9 @@ $(function () {
 
         EventsOn("error", showError);
         EventsOn("rescan", function (hard) {
+            if (restartRequired) {
+                return;
+            }
             state.library = undefined;
             state.updates = undefined;
             state.dlc = undefined;
@@ -584,12 +604,15 @@ $(function () {
                 .then(saved => {
                     state.settings = saved;
                     state.settingsDraft = cloneSettings(saved);
-                    state.settingsFeedback = {
-                        type: "success",
-                        message: "Settings saved. Restart the application for all changes to take effect."
-                    };
-                    renderSettingsTab();
+                    state.settingsFeedback = undefined;
+                    return ShowMessage(
+                        "info",
+                        "Restart required",
+                        "Settings were saved successfully.",
+                        "Close and restart the application for all changes to take effect."
+                    ).catch(() => undefined);
                 })
+                .then(() => lockForRestart())
                 .catch(error => showSettingsFeedback("danger", settingsErrorMessage(error)));
         });
 

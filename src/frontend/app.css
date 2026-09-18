@@ -115,6 +115,10 @@ body {
     min-width: 3rem;
 }
 
+.wrapper.restart-required .progress {
+    display: none;
+}
+
 .tabgroup {
     flex: 1;
     height: 100%;
