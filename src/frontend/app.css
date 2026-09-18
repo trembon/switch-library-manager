@@ -162,11 +162,33 @@ body {
     overflow-wrap: anywhere;
 }
 
-.settings-json {
-    display: block;
-    max-height: 70vh;
-    overflow: auto;
-    white-space: pre-wrap;
+.settings-editor {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 1rem;
+}
+
+.settings-section {
+    margin-bottom: 1rem;
+    padding: 1.25rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    background: var(--bs-tertiary-bg);
+}
+
+.settings-section h4 {
+    margin-bottom: 1rem;
+}
+
+.settings-list-row .form-control {
+    min-width: 0;
+}
+
+.settings-actions {
+    display: flex;
+    gap: .75rem;
+    justify-content: flex-end;
+    padding-bottom: 1rem;
 }
 
 #library-table .tabulator .tabulator-header {

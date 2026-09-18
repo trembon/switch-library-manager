@@ -2,6 +2,8 @@
 
 Switch Library Manager uses a categorized `settings.json` format. The file is valid JSON and must contain the current `"schema_version"` value, which is currently `2`.
 
+When using the graphical interface, the Settings tab provides a structured editor for these options. The schema version and internal cache values are not shown. Saving settings writes the JSON file and displays a restart notice; the existing folder picker remains an immediate path-and-rescan workflow.
+
 ## Example
 
 ```json

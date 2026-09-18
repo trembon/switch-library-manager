@@ -65,10 +65,186 @@
     </div>
 
     <script id="settingsTemplate" type="text/x-jsrender">
-      <div class="alert alert-success" role="alert">
-          You can edit the settings, by modifying the settings.json file, and reloading the app
-      </div>
-      <pre><code class="settings-json">{{:code}}</code></pre>
+      {{if feedback}}
+      <div class="alert alert-{{:feedback.type}}" role="alert">{{:feedback.message}}</div>
+      {{/if}}
+      <form id="settings-form" class="settings-editor">
+        <div class="settings-section">
+          <h4>Interface</h4>
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" name="gui_enabled" id="settings-gui-enabled" {{if gui.enabled}}checked{{/if}}>
+            <label class="form-check-label" for="settings-gui-enabled">Start with the graphical interface</label>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label" for="settings-gui-page-size">Rows per page</label>
+              <input class="form-control" type="number" min="1" name="gui_page_size" id="settings-gui-page-size" value="{{:gui.page_size}}" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="settings-gui-theme">Theme</label>
+              <select class="form-select" name="gui_theme" id="settings-gui-theme">
+                <option value="inherit" {{if gui.theme === "inherit"}}selected{{/if}}>Follow system</option>
+                <option value="light" {{if gui.theme === "light"}}selected{{/if}}>Light</option>
+                <option value="dark" {{if gui.theme === "dark"}}selected{{/if}}>Dark</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-check mt-3">
+            <input class="form-check-input" type="checkbox" name="gui_hide_missing_games" id="settings-gui-hide-missing" {{if gui.hide_missing_games}}checked{{/if}}>
+            <label class="form-check-label" for="settings-gui-hide-missing">Hide missing games tab</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="gui_hide_demo_games" id="settings-gui-hide-demo" {{if gui.hide_demo_games}}checked{{/if}}>
+            <label class="form-check-label" for="settings-gui-hide-demo">Hide demo games from missing games</label>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h4>Paths</h4>
+          <label class="form-label" for="settings-library-folder">Library folder</label>
+          <div class="input-group mb-3">
+            <input class="form-control" type="text" name="paths_library_folder" id="settings-library-folder" value="{{:paths.library_folder}}">
+            <button class="btn btn-outline-secondary settings-folder-select" type="button" data-settings-folder-target="library_folder">Browse</button>
+          </div>
+          <label class="form-label">Additional scan folders</label>
+          <div data-settings-list-container="scan_folders">
+            {{for paths.scan_folders}}
+            <div class="settings-list-row input-group mb-2">
+              <input class="form-control" type="text" data-settings-list="scan_folders" value="{{:#data}}">
+              <button class="btn btn-outline-danger settings-list-remove" type="button">Remove</button>
+            </div>
+            {{/for}}
+          </div>
+          <div class="mb-3">
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-settings-list-add="scan_folders">Add scan folder</button>
+          </div>
+          <label class="form-label" for="settings-prod-keys">prod.keys file or folder</label>
+          <input class="form-control" type="text" name="paths_prod_keys" id="settings-prod-keys" value="{{:paths.prod_keys}}">
+        </div>
+
+        <div class="settings-section">
+          <h4>Scanning</h4>
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" name="scan_recursive" id="settings-scan-recursive" {{if scan.recursive}}checked{{/if}}>
+            <label class="form-check-label" for="settings-scan-recursive">Scan subfolders recursively</label>
+          </div>
+          <label class="form-label">Ignored file extensions</label>
+          <div data-settings-list-container="ignore_file_types">
+            {{for scan.ignore_file_types}}
+            <div class="settings-list-row input-group mb-2">
+              <input class="form-control" type="text" data-settings-list="ignore_file_types" value="{{:#data}}" placeholder="nsp">
+              <button class="btn btn-outline-danger settings-list-remove" type="button">Remove</button>
+            </div>
+            {{/for}}
+          </div>
+          <button class="btn btn-outline-secondary btn-sm" type="button" data-settings-list-add="ignore_file_types">Add extension</button>
+        </div>
+
+        <div class="settings-section">
+          <h4>Organization</h4>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="organization_create_folder_per_game" id="settings-org-folders" {{if organization.create_folder_per_game}}checked{{/if}}>
+            <label class="form-check-label" for="settings-org-folders">Create a folder for each game</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="organization_rename_files" id="settings-org-rename" {{if organization.rename_files}}checked{{/if}}>
+            <label class="form-check-label" for="settings-org-rename">Rename files</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="organization_switch_safe_file_names" id="settings-org-safe-names" {{if organization.switch_safe_file_names}}checked{{/if}}>
+            <label class="form-check-label" for="settings-org-safe-names">Use Switch-safe file names</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="organization_delete_empty_folders" id="settings-org-delete-empty" {{if organization.delete_empty_folders}}checked{{/if}}>
+            <label class="form-check-label" for="settings-org-delete-empty">Delete empty folders</label>
+          </div>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="organization_delete_old_update_files" id="settings-org-delete-old" {{if organization.delete_old_update_files}}checked{{/if}}>
+            <label class="form-check-label" for="settings-org-delete-old">Delete old update files</label>
+          </div>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="organization_process_when_missing_base_game" id="settings-org-missing-base" {{if organization.process_when_missing_base_game}}checked{{/if}}>
+            <label class="form-check-label" for="settings-org-missing-base">Process files when the base game is missing</label>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label" for="settings-org-updates-folder">Updates subfolder</label>
+              <input class="form-control" type="text" name="organization_updates_folder" id="settings-org-updates-folder" value="{{:organization.updates_folder}}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="settings-org-dlc-folder">DLC subfolder</label>
+              <input class="form-control" type="text" name="organization_dlc_folder" id="settings-org-dlc-folder" value="{{:organization.dlc_folder}}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="settings-org-folder-template">Folder name template</label>
+              <input class="form-control" type="text" name="organization_folder_name_template" id="settings-org-folder-template" value="{{:organization.folder_name_template}}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="settings-org-file-template">File name template</label>
+              <input class="form-control" type="text" name="organization_file_name_template" id="settings-org-file-template" value="{{:organization.file_name_template}}">
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h4>Missing content</h4>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="missing_check_for_updates" id="settings-missing-updates" {{if missing_content.check_for_updates}}checked{{/if}}>
+            <label class="form-check-label" for="settings-missing-updates">Check for missing updates</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="missing_check_for_dlc" id="settings-missing-dlc" {{if missing_content.check_for_dlc}}checked{{/if}}>
+            <label class="form-check-label" for="settings-missing-dlc">Check for missing DLC</label>
+          </div>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="missing_ignore_dlc_updates" id="settings-missing-ignore-dlc" {{if missing_content.ignore_dlc_updates}}checked{{/if}}>
+            <label class="form-check-label" for="settings-missing-ignore-dlc">Ignore DLC updates</label>
+          </div>
+          <label class="form-label">Ignored DLC title IDs</label>
+          <div data-settings-list-container="ignore_dlc_title_ids">
+            {{for missing_content.ignore_dlc_title_ids}}
+            <div class="settings-list-row input-group mb-2">
+              <input class="form-control" type="text" data-settings-list="ignore_dlc_title_ids" value="{{:#data}}" maxlength="16">
+              <button class="btn btn-outline-danger settings-list-remove" type="button">Remove</button>
+            </div>
+            {{/for}}
+          </div>
+          <div class="mb-3">
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-settings-list-add="ignore_dlc_title_ids">Add DLC title ID</button>
+          </div>
+          <label class="form-label">Ignored update title IDs</label>
+          <div data-settings-list-container="ignore_update_title_ids">
+            {{for missing_content.ignore_update_title_ids}}
+            <div class="settings-list-row input-group mb-2">
+              <input class="form-control" type="text" data-settings-list="ignore_update_title_ids" value="{{:#data}}" maxlength="16">
+              <button class="btn btn-outline-danger settings-list-remove" type="button">Remove</button>
+            </div>
+            {{/for}}
+          </div>
+          <button class="btn btn-outline-secondary btn-sm" type="button" data-settings-list-add="ignore_update_title_ids">Add update title ID</button>
+        </div>
+
+        <div class="settings-section">
+          <h4>Data sources</h4>
+          <label class="form-label" for="settings-data-titles">Titles URL</label>
+          <input class="form-control mb-3" type="url" name="data_titles_url" id="settings-data-titles" value="{{:data_sources.titles_url}}" required>
+          <label class="form-label" for="settings-data-versions">Versions URL</label>
+          <input class="form-control" type="url" name="data_versions_url" id="settings-data-versions" value="{{:data_sources.versions_url}}" required>
+        </div>
+
+        <div class="settings-section">
+          <h4>Logging</h4>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" name="logging_debug" id="settings-logging-debug" {{if logging.debug}}checked{{/if}}>
+            <label class="form-check-label" for="settings-logging-debug">Enable debug logging</label>
+          </div>
+        </div>
+
+        <div class="settings-actions">
+          <button class="btn btn-primary" type="submit">Save settings</button>
+          <button class="btn btn-outline-secondary" type="button" id="settings-cancel">Cancel</button>
+        </div>
+      </form>
     </script>
 
     <script id="missingTemplate" type="text/x-jsrender">
@@ -224,7 +400,7 @@
       {{if folder}}
        <div class="alert center alert-info" role="alert">
            You can automatically organize your library into a folder per game structure,
-           Or just rename the files to a standard way, the options below can be customize through the settings.json file.
+           Or just rename the files to a standard way. Configure these options in the Settings tab.
        </div>
        <div class="container">
           <form>

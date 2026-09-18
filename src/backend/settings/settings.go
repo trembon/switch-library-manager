@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 
 	"github.com/mcuadros/go-version"
 	"go.uber.org/zap"
@@ -380,15 +383,99 @@ func SaveSettingsWithError(settings *AppSettings, baseFolder string) error {
 	if settings.SchemaVersion != SETTINGS_SCHEMA_VERSION {
 		return fmt.Errorf("unsupported settings schema_version %d", settings.SchemaVersion)
 	}
-	settings.GUI.Theme = NormalizeTheme(settings.GUI.Theme)
+	verifySettings(settings)
+	if err := validateSettings(settings); err != nil {
+		return err
+	}
 	data, err := json.MarshalIndent(settings, "", " ")
 	if err != nil {
 		return fmt.Errorf("marshal settings: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(baseFolder, SETTINGS_FILENAME), data, 0644); err != nil {
+	if err := writeSettingsFile(filepath.Join(baseFolder, SETTINGS_FILENAME), data); err != nil {
 		return fmt.Errorf("write settings: %w", err)
 	}
 	settingsInstance = settings
+	return nil
+}
+
+func validateSettings(settings *AppSettings) error {
+	if err := validateDataSourceURL("titles_url", settings.DataSources.TitlesURL); err != nil {
+		return err
+	}
+	if err := validateDataSourceURL("versions_url", settings.DataSources.VersionsURL); err != nil {
+		return err
+	}
+	for _, id := range append(append([]string{}, settings.MissingContent.IgnoreDLCTitleIDs...), settings.MissingContent.IgnoreUpdateIDs...) {
+		if id == "" {
+			continue
+		}
+		if len(id) != 16 {
+			return fmt.Errorf("title ID %q must contain exactly 16 hexadecimal characters", id)
+		}
+		for _, char := range id {
+			if !strings.ContainsRune("0123456789abcdefABCDEF", char) {
+				return fmt.Errorf("title ID %q must contain only hexadecimal characters", id)
+			}
+		}
+	}
+	if settings.Organization.RenameFiles && !containsTitleIdentity(settings.Organization.FileNameTemplate) {
+		return errors.New("file_name_template must contain {TITLE_NAME} or {TITLE_ID} when file renaming is enabled")
+	}
+	if settings.Organization.CreateFolderPerGame && !containsTitleIdentity(settings.Organization.FolderNameTemplate) {
+		return errors.New("folder_name_template must contain {TITLE_NAME} or {TITLE_ID} when game folders are enabled")
+	}
+	return nil
+}
+
+func validateDataSourceURL(name, value string) error {
+	parsed, err := url.ParseRequestURI(value)
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return fmt.Errorf("data_sources.%s must be an absolute HTTP or HTTPS URL", name)
+	}
+	return nil
+}
+
+func containsTitleIdentity(template string) bool {
+	return strings.Contains(template, "{"+TEMPLATE_TITLE_NAME+"}") || strings.Contains(template, "{"+TEMPLATE_TITLE_ID+"}")
+}
+
+func writeSettingsFile(filename string, data []byte) error {
+	temporary, err := os.CreateTemp(filepath.Dir(filename), ".settings.json.tmp-*")
+	if err != nil {
+		return fmt.Errorf("create temporary settings file: %w", err)
+	}
+	temporaryName := temporary.Name()
+	defer os.Remove(temporaryName)
+
+	if err := temporary.Chmod(0644); err != nil {
+		_ = temporary.Close()
+		return fmt.Errorf("set temporary settings permissions: %w", err)
+	}
+	if _, err := temporary.Write(data); err != nil {
+		_ = temporary.Close()
+		return fmt.Errorf("write temporary settings file: %w", err)
+	}
+	if err := temporary.Sync(); err != nil {
+		_ = temporary.Close()
+		return fmt.Errorf("sync temporary settings file: %w", err)
+	}
+	if err := temporary.Close(); err != nil {
+		return fmt.Errorf("close temporary settings file: %w", err)
+	}
+	if err := os.Rename(temporaryName, filename); err != nil {
+		// Windows does not replace an existing file during Rename. Removing the
+		// old file is the platform fallback; the normal path remains an atomic
+		// same-directory replacement on platforms that support it.
+		if runtime.GOOS != "windows" {
+			return fmt.Errorf("replace settings file: %w", err)
+		}
+		if removeErr := os.Remove(filename); removeErr != nil {
+			return fmt.Errorf("replace settings file: %w; remove existing file: %v", err, removeErr)
+		}
+		if renameErr := os.Rename(temporaryName, filename); renameErr != nil {
+			return fmt.Errorf("replace settings file after removing existing file: %w", renameErr)
+		}
+	}
 	return nil
 }
 

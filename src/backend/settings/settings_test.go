@@ -131,6 +131,57 @@ func TestSettingsSaveRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSaveSettingsValidatesAndReplacesFile(t *testing.T) {
+	isolateSettings(t)
+	base := t.TempDir()
+
+	invalidURL := defaultSettings()
+	invalidURL.DataSources.TitlesURL = "ftp://titles.example/titles.json"
+	if err := SaveSettingsWithError(invalidURL, base); err == nil || !strings.Contains(err.Error(), "absolute HTTP or HTTPS URL") {
+		t.Fatalf("invalid URL error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(base, SETTINGS_FILENAME)); !os.IsNotExist(err) {
+		t.Fatalf("invalid settings created a file, stat error = %v", err)
+	}
+
+	invalidID := defaultSettings()
+	invalidID.MissingContent.IgnoreUpdateIDs = []string{"not-a-title-id"}
+	if err := SaveSettingsWithError(invalidID, base); err == nil || !strings.Contains(err.Error(), "exactly 16 hexadecimal") {
+		t.Fatalf("invalid title ID error = %v", err)
+	}
+
+	invalidTemplate := defaultSettings()
+	invalidTemplate.Organization.RenameFiles = true
+	invalidTemplate.Organization.FileNameTemplate = "{VERSION}"
+	if err := SaveSettingsWithError(invalidTemplate, base); err == nil || !strings.Contains(err.Error(), "file_name_template") {
+		t.Fatalf("invalid template error = %v", err)
+	}
+
+	valid := defaultSettings()
+	valid.Paths.LibraryFolder = "first"
+	if err := SaveSettingsWithError(valid, base); err != nil {
+		t.Fatal(err)
+	}
+	valid.Paths.LibraryFolder = "second"
+	if err := SaveSettingsWithError(valid, base); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := os.ReadFile(filepath.Join(base, SETTINGS_FILENAME))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(loaded), `"library_folder": "second"`) {
+		t.Fatalf("settings file was not replaced: %s", loaded)
+	}
+	temporary, err := filepath.Glob(filepath.Join(base, ".settings.json.tmp-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(temporary) != 0 {
+		t.Fatalf("temporary settings files remain: %v", temporary)
+	}
+}
+
 func TestSettingsMigratesOlderSettingsWithoutSchemaMarker(t *testing.T) {
 	isolateSettings(t)
 	base := t.TempDir()

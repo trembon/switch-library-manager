@@ -24,6 +24,8 @@ $(function () {
 
     let state = {
         settings:{},
+        settingsDraft: undefined,
+        settingsFeedback: undefined,
         keys:false
     };
 
@@ -140,6 +142,8 @@ $(function () {
 
         LoadSettings().then(function (message) {
             state.settings = message;
+            state.settingsDraft = undefined;
+            state.settingsFeedback = undefined;
             applyTheme(state.settings.gui && state.settings.gui.theme);
 
             if(state.settings.gui.hide_missing_games){
@@ -209,10 +213,136 @@ $(function () {
             state.updates = undefined;
             state.dlc = undefined;
             SaveSettings(state.settings)
-                .then(() => scanLocalFolder(false))
+                .then(() => {
+                    state.settingsDraft = undefined;
+                    return scanLocalFolder(false);
+                })
                 .catch(error => showError(error.message));
         };
 
+
+        function cloneSettings(value) {
+            return JSON.parse(JSON.stringify(value));
+        }
+
+        function settingsErrorMessage(error) {
+            return error && error.message ? error.message : String(error);
+        }
+
+        function renderSettingsTab() {
+            if (!state.settingsDraft) {
+                state.settingsDraft = cloneSettings(state.settings);
+            }
+            let templateData = Object.assign({}, state.settingsDraft, {
+                feedback: state.settingsFeedback
+            });
+            let settingsHtml = $("#settingsTemplate").render(templateData);
+            $("#settings").html(settingsHtml);
+        }
+
+        function showSettingsFeedback(type, message) {
+            state.settingsFeedback = {type: type, message: message};
+            renderSettingsTab();
+        }
+
+        function listValues(form, name) {
+            return Array.from(form.querySelectorAll('[data-settings-list="' + name + '"]'))
+                .map(input => input.value.trim())
+                .filter(value => value.length > 0);
+        }
+
+        function collectSettings(form) {
+            return {
+                schema_version: state.settings.schema_version,
+                gui: {
+                    enabled: form.elements.gui_enabled.checked,
+                    page_size: Number(form.elements.gui_page_size.value),
+                    hide_missing_games: form.elements.gui_hide_missing_games.checked,
+                    hide_demo_games: form.elements.gui_hide_demo_games.checked,
+                    theme: form.elements.gui_theme.value
+                },
+                paths: {
+                    library_folder: form.elements.paths_library_folder.value.trim(),
+                    scan_folders: listValues(form, "scan_folders"),
+                    prod_keys: form.elements.paths_prod_keys.value.trim()
+                },
+                scan: {
+                    recursive: form.elements.scan_recursive.checked,
+                    ignore_file_types: listValues(form, "ignore_file_types")
+                },
+                organization: {
+                    create_folder_per_game: form.elements.organization_create_folder_per_game.checked,
+                    dlc_folder: form.elements.organization_dlc_folder.value,
+                    updates_folder: form.elements.organization_updates_folder.value,
+                    rename_files: form.elements.organization_rename_files.checked,
+                    delete_empty_folders: form.elements.organization_delete_empty_folders.checked,
+                    delete_old_update_files: form.elements.organization_delete_old_update_files.checked,
+                    folder_name_template: form.elements.organization_folder_name_template.value,
+                    switch_safe_file_names: form.elements.organization_switch_safe_file_names.checked,
+                    file_name_template: form.elements.organization_file_name_template.value,
+                    process_when_missing_base_game: form.elements.organization_process_when_missing_base_game.checked
+                },
+                missing_content: {
+                    check_for_updates: form.elements.missing_check_for_updates.checked,
+                    check_for_dlc: form.elements.missing_check_for_dlc.checked,
+                    ignore_dlc_updates: form.elements.missing_ignore_dlc_updates.checked,
+                    ignore_dlc_title_ids: listValues(form, "ignore_dlc_title_ids"),
+                    ignore_update_title_ids: listValues(form, "ignore_update_title_ids")
+                },
+                data_sources: {
+                    titles_url: form.elements.data_titles_url.value.trim(),
+                    versions_url: form.elements.data_versions_url.value.trim()
+                },
+                logging: {
+                    debug: form.elements.logging_debug.checked
+                }
+            };
+        }
+
+        function captureSettingsDraft() {
+            const form = document.getElementById("settings-form");
+            if (form) {
+                state.settingsDraft = collectSettings(form);
+            }
+        }
+
+        function appendSettingsListRow(name, value) {
+            const container = document.querySelector('[data-settings-list-container="' + name + '"]');
+            if (!container) {
+                return;
+            }
+            const row = document.createElement("div");
+            row.className = "settings-list-row input-group mb-2";
+            const input = document.createElement("input");
+            input.type = "text";
+            input.className = "form-control";
+            input.value = value || "";
+            input.dataset.settingsList = name;
+            const remove = document.createElement("button");
+            remove.type = "button";
+            remove.className = "btn btn-outline-danger settings-list-remove";
+            remove.textContent = "Remove";
+            row.append(input, remove);
+            container.append(row);
+            input.focus();
+        }
+
+        function settingsFolderSelected(target, path) {
+            if (target === "library_folder") {
+                const input = document.querySelector('[name="paths_library_folder"]');
+                if (input) {
+                    input.value = path;
+                }
+                captureSettingsDraft();
+                return;
+            }
+            const existing = Array.from(document.querySelectorAll('[data-settings-list="scan_folders"]'))
+                .some(input => input.value === path);
+            if (!existing) {
+                appendSettingsListRow("scan_folders", path);
+            }
+            captureSettingsDraft();
+        }
 
         function loadTab(target) {
             hideCurrentTab();
@@ -221,10 +351,7 @@ $(function () {
             $(target).show();
 
             if (target === "#settings") {
-                let settingsJSON = JSON.stringify(state.settings, null, 2)
-                let settingsHtml = $(target + "Template").render({code: settingsJSON})
-                $(target).html(settingsHtml);
-                //  asticode.loader.hide()
+                renderSettingsTab();
             } else if (target === "#organize") {
                 let html = $(target + "Template").render({folder: state.settings.paths.library_folder,settings:state.settings})
                 $(target).html(html);
@@ -417,11 +544,60 @@ $(function () {
             $(e.currentTarget).closest(".alert").hide();
         });
 
+        $("body").on("click", "[data-settings-list-add]", e => {
+            appendSettingsListRow(e.currentTarget.dataset.settingsListAdd, "");
+            captureSettingsDraft();
+        });
+
+        $("body").on("click", ".settings-list-remove", e => {
+            $(e.currentTarget).closest(".settings-list-row").remove();
+            captureSettingsDraft();
+        });
+
+        $("body").on("input change", "#settings-form input, #settings-form select", () => {
+            captureSettingsDraft();
+            state.settingsFeedback = undefined;
+        });
+
+        $("body").on("click", ".settings-folder-select", e => {
+            SelectFolder()
+                .then(path => {
+                    if (path) {
+                        settingsFolderSelected(e.currentTarget.dataset.settingsFolderTarget, path);
+                    }
+                })
+                .catch(error => showSettingsFeedback("danger", settingsErrorMessage(error)));
+        });
+
+        $("body").on("click", "#settings-cancel", () => {
+            state.settingsDraft = cloneSettings(state.settings);
+            state.settingsFeedback = undefined;
+            renderSettingsTab();
+        });
+
+        $("body").on("submit", "#settings-form", e => {
+            e.preventDefault();
+            const value = collectSettings(e.currentTarget);
+            state.settingsDraft = value;
+            SaveSettings(value)
+                .then(() => LoadSettings())
+                .then(saved => {
+                    state.settings = saved;
+                    state.settingsDraft = cloneSettings(saved);
+                    state.settingsFeedback = {
+                        type: "success",
+                        message: "Settings saved. Restart the application for all changes to take effect."
+                    };
+                    renderSettingsTab();
+                })
+                .catch(error => showSettingsFeedback("danger", settingsErrorMessage(error)));
+        });
+
         $("body").on("click", ".library-organize-action", e => {
             e.preventDefault();
             if (state.settings.organization.create_folder_per_game === false &&
                 state.settings.organization.rename_files === false){
-                ShowMessage("info", "Library organization is turned off", "Please update settings.json to enable this feature", "You should set 'rename_files' and/or 'create_folder_per_game' to 'true'")
+                ShowMessage("info", "Library organization is turned off", "Please update the settings to enable this feature", "Enable 'Rename files' and/or 'Create a folder for each game' in the Settings tab")
                     .catch(error => showError(error.message));
                 return
             }
