@@ -226,12 +226,12 @@ body {
 }
 
 .tabulator-row.tabulator-selectable:hover {
-    background-color: var(--slm-table-hover);
+    background-color: var(--slm-table-hover) !important;
 }
 
 .tabulator-row.tabulator-selected,
 .tabulator-row.tabulator-selected:hover {
-    background-color: var(--bs-primary-bg-subtle);
+    background-color: var(--bs-primary-bg-subtle) !important;
     color: var(--bs-primary-text-emphasis);
 }
 
