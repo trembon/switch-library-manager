@@ -69,19 +69,33 @@ body {
 
 .progress-container {
     position: fixed;
-    z-index: 98;
-    top: 3.7rem;
-    right: 0;
-    left: 0;
-    width: min(42rem, calc(100% - 2rem));
-    margin: 0 auto;
-    padding: 0.5rem 1rem 0.75rem;
+    z-index: 100;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: var(--bs-body-bg);
+    text-align: center;
+}
+
+.wrapper:not(.is-loading) .progress-container {
+    display: none;
+}
+
+.wrapper.is-loading .app-nav,
+.wrapper.is-loading .tabgroup {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.progress-panel {
+    width: min(42rem, 100%);
+    padding: 1.5rem;
     border: 1px solid var(--bs-border-color);
-    border-top: 0;
-    border-radius: 0 0 var(--bs-border-radius) var(--bs-border-radius);
+    border-radius: var(--bs-border-radius);
     background: var(--bs-body-bg);
     box-shadow: var(--bs-box-shadow-sm);
-    text-align: center;
 }
 
 .progress-type {
@@ -95,6 +109,10 @@ body {
     margin-top: 0.25rem;
     color: var(--bs-secondary-color);
     font-size: 0.75rem;
+}
+
+.progress-bar {
+    min-width: 3rem;
 }
 
 .tabgroup {
@@ -264,6 +282,10 @@ body {
     .app-nav .nav-link {
         padding-right: 0.65rem;
         padding-left: 0.65rem;
+    }
+
+    .progress-panel {
+        padding: 1rem;
     }
 
     .tabgroup {

@@ -25,8 +25,8 @@
   </head>
 
   <body>
-    <div class="wrapper">
-      <nav id="tab_btns" class="app-nav" data-tabgroup="tab-group" aria-label="Main navigation">
+    <div class="wrapper is-loading" aria-busy="true">
+      <nav id="tab_btns" class="app-nav" data-tabgroup="tab-group" aria-label="Main navigation" aria-hidden="true" inert>
         <ul class="nav nav-tabs flex-nowrap" role="tablist">
           <li class="nav-item" role="presentation"><a id="library-tab" href="#library" class="nav-link active" role="tab" aria-controls="library" aria-selected="true">Library</a></li>
           <li class="nav-item missing_btn" role="presentation"><a id="missing-tab" href="#missing" class="nav-link" role="tab" aria-controls="missing" aria-selected="false">Missing games</a></li>
@@ -37,20 +37,23 @@
           <li class="nav-item" role="presentation"><a id="settings-tab" href="#settings" class="nav-link" role="tab" aria-controls="settings" aria-selected="false">Settings</a></li>
         </ul>
       </nav>
-      <div class="progress-container" aria-live="polite">
-        <h5 class="progress-type">Loading...</h5>
-        <div class="progress">
+      <div class="progress-container" role="status" aria-live="polite" aria-label="Loading application">
+        <div class="progress-panel">
+          <h5 class="progress-type">Loading...</h5>
+          <div class="progress">
           <div
             class="progress-bar"
             role="progressbar"
-            aria-valuenow=""
+            aria-valuenow="0"
             aria-valuemin="0"
             aria-valuemax="100"
-          ></div>
+            aria-label="Loading progress"
+          >0%</div>
+          </div>
+          <div class="progress-msg"></div>
         </div>
-        <div class="progress-msg"></div>
       </div>
-      <section id="tab-group" class="tabgroup">
+      <section id="tab-group" class="tabgroup" aria-hidden="true" inert>
         <div id="library" role="tabpanel" aria-labelledby="library-tab"></div>
         <div id="updates" role="tabpanel" aria-labelledby="updates-tab"></div>
         <div id="missing" role="tabpanel" aria-labelledby="missing-tab"></div>

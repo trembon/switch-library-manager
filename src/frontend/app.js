@@ -67,6 +67,41 @@ $(function () {
 
     applyTheme(THEME_INHERIT);
 
+    const wrapper = document.querySelector('.wrapper');
+    const tabButtons = document.getElementById('tab_btns');
+    const tabGroup = document.getElementById('tab-group');
+    const progressBar = $('.progress-bar');
+
+    function setLoading(loading) {
+        wrapper.classList.toggle('is-loading', loading);
+        wrapper.setAttribute('aria-busy', String(loading));
+
+        [tabButtons, tabGroup].forEach(element => {
+            element.setAttribute('aria-hidden', String(loading));
+            if (loading) {
+                element.setAttribute('inert', '');
+            } else {
+                element.removeAttribute('inert');
+            }
+        });
+    }
+
+    function resetProgress() {
+        progressBar.attr('aria-valuenow', 0);
+        progressBar.attr('style', 'width: 0%');
+        progressBar.text('0%');
+    }
+
+    function showProgress(message) {
+        resetProgress();
+        $('.progress-type').text(message);
+        setLoading(true);
+    }
+
+    function hideProgress() {
+        setLoading(false);
+    }
+
     //handle tabs action
     $('.tabgroup > div').hide();
     // loadTab($('.tabgroup > div:first-of-type'));
@@ -77,25 +112,20 @@ $(function () {
         if (state.settings.paths) {
             state.settings.paths.library_folder = undefined;
         }
-        $(".progress-container").hide();
+        hideProgress();
         loadTab("#library");
     };
 
         EventsOn("updateProgress", function (message) {
-            let pcg = 0
+            setLoading(true);
             let count = message.curr;
             let total = message.total;
             $('.progress-msg').text(message.message + " ...");
-            if (count !== -1 && total !== -1){
-                pcg = Math.floor(count / total * 100);
+            if (count >= 0 && total > 0){
+                let pcg = Math.min(100, Math.max(0, Math.floor(count / total * 100)));
                 $('.progress-bar').attr('aria-valuenow', pcg);
                 $('.progress-bar').attr('style', 'width:' + Number(pcg) + '%');
                 $('.progress-bar').text(pcg + "%");
-            }
-            if (pcg === 100){
-                $(".progress-container").hide();
-            }else{
-                $(".progress-container").show();
             }
         });
 
@@ -105,7 +135,7 @@ $(function () {
             state.updates = undefined;
             state.dlc = undefined;
             state.missingGames = undefined;
-            scanLocalFolder(Boolean(hard));
+            scanLocalFolder(Boolean(hard)).catch(error => showError(error.message));
         });
 
         LoadSettings().then(function (message) {
@@ -128,11 +158,10 @@ $(function () {
             return ShowMessage("info", "New update available", "There is a new update available, please download from Github", "");
         }).catch(error => showError(error.message));
 
-        $(".progress-container").show();
-        $(".progress-type").text("Downloading latest Switch titles/versions ...");
+        showProgress("Downloading latest Switch titles/versions ...");
 
         UpdateDB().then(function () {
-            scanLocalFolder(false);
+            return scanLocalFolder(false);
         }).catch(error => showError(error.message));
 
         let openFolderPicker = function (mode) {
@@ -143,19 +172,18 @@ $(function () {
 
         let scanLocalFolder = function(mode){
             if (!state.settings.paths.library_folder){
-                loadTab("#library")
-                return
+                loadTab("#library");
+                hideProgress();
+                return Promise.resolve();
             }
-            //show progress
-            $(".progress-container").show();
-            $(".progress-type").text("Scanning local library...");
+            showProgress("Scanning local library...");
 
-            UpdateLocalLibrary(Boolean(mode))
-                .then(result => {
-                    state.library = result;
-                    loadTab("#library");
-                })
-                .catch(error => showError(error.message));
+            return UpdateLocalLibrary(Boolean(mode)).then(result => {
+                state.library = result;
+                loadTab("#library");
+                hideProgress();
+                return result;
+            });
         };
 
         let updateFolder = function (mode,path) {
@@ -175,6 +203,7 @@ $(function () {
                 state.settings.paths.library_folder = path;
             }
             $('.tabgroup > div').hide();
+            showProgress("Scanning local library...");
             console.log("selected folder:"+path);
             state.library = undefined;
             state.updates = undefined;
@@ -400,16 +429,15 @@ $(function () {
                 if (confirmed) {
                     //show progress
                     $('.tabgroup > div').hide();
-                    $(".progress-container").show();
-                    $(".progress-type").text("Organizing local library...");
+                    showProgress("Organizing local library...");
 
                     OrganizeLibrary().then(() => {
-                        $(".progress-container").hide();
                         state.library = undefined;
                         state.updates = undefined;
                         state.dlc = undefined;
                         loadTab("#library");
-                        scanLocalFolder(true);
+                        return scanLocalFolder(true);
+                    }).then(() => {
                         ShowMessage("info", "Success", "Operation completed successfully", "")
                             .catch(error => showError(error.message));
                     }).catch(error => showError(error.message));
