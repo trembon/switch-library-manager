@@ -318,20 +318,21 @@ $(function () {
                         initialSort:[
                             {column:"name", dir:"asc"}, //sort by this first
                         ],
-                        layout:"fitDataStretch",
+                        layout:"fitColumns",
+                        columnMinWidth:24,
                         pagination: "local",
                         paginationSize: state.settings.gui.page_size,
                         data: state.library.library_data,
                         columns: [
-                            {formatter:"rownum"},
-                            {field: "icon",formatter:"image", download:false,headerSort:false,formatterParams:{height:"60px", width:"60px"}},
-                            {title: "Title", field: "name", headerFilter:"input",formatter:"textarea",width:350},
+                            {formatter:"rownum",minWidth:24},
+                            {field: "icon",minWidth:40,formatter:"image", download:false,headerSort:false,formatterParams:{height:"60px", width:"60px"}},
+                            {title: "Title", field: "name", headerFilter:"input",formatter:"textarea",widthGrow:3},
                             {title: "Title id", headerSort:false, field: "titleId"},
                             {title: "Region", headerSort:true, field: "region"},
                             {title: "Type", headerSort:true, field: "type"},
                             {title: "Update", headerSort:false, field: "update"},
                             {title: "Version", headerSort:false, field: "version"},
-                            {title: "File name", headerSort:false, field: "path",formatter:"textarea",cellClick:function(e, cell){
+                            {title: "File name", headerSort:false, field: "path",formatter:"textarea",widthGrow:3,cellClick:function(e, cell){
                                     //e - the click event object
                                     //cell - cell component
                                     ShowInFolder(cell.getData().path).catch(error => showError(error.message))
