@@ -22,6 +22,10 @@ export function GetMissingUpdates() {
   return window['go']['app']['App']['GetMissingUpdates']();
 }
 
+export function GetOrganizationPreview() {
+  return window['go']['app']['App']['GetOrganizationPreview']();
+}
+
 export function IsKeysFileAvailable() {
   return window['go']['app']['App']['IsKeysFileAvailable']();
 }
@@ -32,6 +36,10 @@ export function LoadSettings() {
 
 export function OrganizeLibrary() {
   return window['go']['app']['App']['OrganizeLibrary']();
+}
+
+export function RescanLibrary(arg1) {
+  return window['go']['app']['App']['RescanLibrary'](arg1);
 }
 
 export function SaveSettings(arg1) {

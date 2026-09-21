@@ -37,3 +37,13 @@ type ProgressUpdate struct {
 	Total   int    `json:"total"`
 	Message string `json:"message"`
 }
+
+type OrganizationPreview struct {
+	RootFolder string                     `json:"root_folder"`
+	Entries    []OrganizationPreviewEntry `json:"entries"`
+}
+
+type OrganizationPreviewEntry struct {
+	Kind string `json:"kind"`
+	Path string `json:"path"`
+}

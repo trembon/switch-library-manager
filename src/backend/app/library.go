@@ -26,6 +26,21 @@ func (a *App) UpdateDB() error {
 func (a *App) UpdateLocalLibrary(ignoreCache bool) (LocalLibraryData, error) {
 	a.state.mu.Lock()
 	defer a.state.mu.Unlock()
+	return a.updateLocalLibraryLocked(ignoreCache)
+}
+
+func (a *App) RescanLibrary(hard bool) (LocalLibraryData, error) {
+	a.state.mu.Lock()
+	defer a.state.mu.Unlock()
+	if hard {
+		if err := a.localDbManager.ClearScanData(); err != nil {
+			return LocalLibraryData{}, err
+		}
+	}
+	return a.updateLocalLibraryLocked(hard)
+}
+
+func (a *App) updateLocalLibraryLocked(ignoreCache bool) (LocalLibraryData, error) {
 	if a.state.switchDB == nil {
 		return LocalLibraryData{}, errors.New("title database is not loaded")
 	}

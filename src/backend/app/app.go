@@ -68,7 +68,6 @@ func (a *App) run(assets fs.FS) error {
 		AlwaysOnTop:      true,
 		BackgroundColour: options.NewRGB(51, 51, 51),
 		AssetServer:      &assetserver.Options{Assets: frontend},
-		Menu:             a.applicationMenu(),
 		OnStartup:        a.startup,
 		OnShutdown:       a.shutdown,
 		SingleInstanceLock: &options.SingleInstanceLock{

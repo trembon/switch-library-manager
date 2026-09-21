@@ -154,15 +154,78 @@ body {
     max-width: 60rem;
 }
 
-#organize form {
+#organize .organization-section {
+    margin-bottom: 1rem;
     padding: 1.25rem;
     border: 1px solid var(--bs-border-color);
     border-radius: var(--bs-border-radius);
     background: var(--bs-tertiary-bg);
 }
 
-#organize .form-control-plaintext {
+#organize .organization-section h4 {
+    margin-bottom: 1rem;
+}
+
+#organize .organization-root {
+    display: block;
+    overflow-wrap: anywhere;
     color: var(--bs-body-color);
+}
+
+#organize .organization-preview-table {
+    --bs-table-bg: transparent;
+}
+
+#organize .organization-preview-table code {
+    overflow-wrap: anywhere;
+    color: var(--bs-body-color);
+}
+
+#organize .organization-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+#organize .organization-section p:last-child {
+    margin-bottom: 0;
+}
+
+#organize .organization-preview-table th:first-child {
+    width: 8rem;
+}
+
+#organize .organization-preview-table td {
+    min-width: 0;
+}
+
+#organize .organization-preview-table code,
+#organize .organization-root {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.8125rem;
+}
+
+#organize .organization-root {
+    padding: 0.75rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius-sm);
+    background: var(--bs-body-bg);
+}
+
+#organize .organization-preview-table code {
+    white-space: normal;
+}
+
+#organize .organization-preview-table tbody tr:last-child > * {
+    border-bottom: 0;
+}
+
+#organize .organization-preview-table td,
+#organize .organization-preview-table th {
+    vertical-align: top;
+}
+
+#organize .organization-preview-table td {
     overflow-wrap: anywhere;
 }
 
@@ -319,7 +382,11 @@ body {
         padding-left: 0.5rem;
     }
 
-    #organize form {
+    #organize .organization-section {
         padding: 0.75rem;
+    }
+
+    #organize .organization-preview-table th:first-child {
+        width: 6rem;
     }
 }

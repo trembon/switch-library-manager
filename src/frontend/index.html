@@ -399,73 +399,53 @@
     <script id="organizeTemplate" type="text/x-jsrender">
       {{if folder}}
        <div class="alert center alert-info" role="alert">
-           You can automatically organize your library into a folder per game structure,
-           Or just rename the files to a standard way. Configure these options in the Settings tab.
+           Review the resulting paths below, then organize your library using the current settings.
+           Change organization options in the Settings tab.
        </div>
-       <div class="container">
-          <form>
-          <div class="row mb-3">
-                <label for="baseFolder" class="col-sm-2 col-form-label">Base folder</label>
-                <div class="col-sm-10">
-                  <input type="text" readonly class="form-control-plaintext" id="baseFolder" value="{{:folder}}">
-                </div>
+       <div class="container organization-panel">
+          <section class="organization-section" aria-labelledby="organization-root-heading">
+            <h4 id="organization-root-heading">Library root</h4>
+            <code class="organization-root">{{:folder}}</code>
+          </section>
+
+          <section class="organization-section" aria-labelledby="organization-preview-heading">
+            <h4 id="organization-preview-heading">Example resulting paths</h4>
+            {{if previewLoading}}
+              <p class="text-secondary mb-0">Preparing examples...</p>
+            {{else preview && preview.entries && preview.entries.length}}
+              <p class="text-secondary">Paths are shown relative to the library root.</p>
+              <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0 organization-preview-table">
+                  <thead>
+                    <tr><th scope="col">Content</th><th scope="col">Resulting path</th></tr>
+                  </thead>
+                  <tbody>
+                    {{for preview.entries}}
+                    <tr>
+                      <th scope="row">{{if kind === "game"}}Game{{else kind === "update"}}Update{{else}}DLC{{/if}}</th>
+                      <td><code>{{:path}}</code></td>
+                    </tr>
+                    {{/for}}
+                  </tbody>
+                </table>
               </div>
-          <div class="row mb-3">
-                <label for="createFolders" class="col-sm-2 col-form-label">Create folders</label>
-                <div class="col-sm-10">
-                  <input type="text" readonly class="form-control-plaintext" id="createFolders" value="{{:settings.organization.create_folder_per_game}}">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label for="createUpdatesFolder" class="col-sm-2 col-form-label">Create Updates folders</label>
-                <div class="col-sm-10">
-                  <input type="text" readonly class="form-control-plaintext" id="createUpdatesFolder" value="{{:settings.organization.updates_folder}}">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label for="createDlcFolder" class="col-sm-2 col-form-label">Create DLC folders</label>
-                <div class="col-sm-10">
-                  <input type="text" readonly class="form-control-plaintext" id="createDlcFolder" value="{{:settings.organization.dlc_folder}}">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label for="renameFiles" class="col-sm-2 col-form-label">Rename files</label>
-                <div class="col-sm-10">
-                  <input type="text" readonly class="form-control-plaintext" id="renameFiles" value="{{:settings.organization.rename_files}}">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label for="deleteEmptyFolders" class="col-sm-2 col-form-label">Delete empty folders</label>
-                <div class="col-sm-10">
-                  <input type="text" readonly class="form-control-plaintext" id="deleteEmptyFolders" value="{{:settings.organization.delete_empty_folders}}">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label for="deleteOldUpdateFiles" class="col-sm-2 col-form-label">Delete old update files</label>
-                <div class="col-sm-10">
-                  <input type="text" readonly class="form-control-plaintext" id="deleteOldUpdateFiles" value="{{:settings.organization.delete_old_update_files}}">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label for="processMissingBaseGame" class="col-sm-2 col-form-label">Process files when base game is missing</label>
-                <div class="col-sm-10">
-                  <input type="text" readonly class="form-control-plaintext" id="processMissingBaseGame" value="{{:settings.organization.process_when_missing_base_game}}">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label for="folderNameTemplate" class="col-sm-2 col-form-label">Folder name template</label>
-                <div class="col-sm-10">
-                  <input type="text" readonly class="form-control-plaintext" id="folderNameTemplate" value="{{:settings.organization.folder_name_template}}">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label for="fileNameTemplate" class="col-sm-2 col-form-label">File name template</label>
-                <div class="col-sm-10">
-                  <input type="text" readonly class="form-control-plaintext" id="fileNameTemplate" value="{{:settings.organization.file_name_template}}">
-                </div>
-              </div>
-                 <button type="submit" class="btn btn-primary library-organize-action">Begin library organization</button>
-          </form>
+            {{else}}
+              <p class="text-secondary mb-0">No preview paths are available.</p>
+            {{/if}}
+          </section>
+
+          <section class="organization-section" aria-labelledby="organization-scan-heading">
+            <h4 id="organization-scan-heading">Refresh library data</h4>
+            <p class="text-secondary">Rescan the configured folders, or use a hard rescan to rebuild the local scan data.</p>
+            <div class="organization-actions">
+              <button type="button" class="btn btn-outline-secondary rescan-action" data-hard="false">Rescan</button>
+              <button type="button" class="btn btn-outline-secondary rescan-action" data-hard="true">Hard rescan</button>
+            </div>
+          </section>
+
+          <div class="organization-actions">
+            <button type="button" class="btn btn-primary library-organize-action">Begin library organization</button>
+          </div>
        </div>
 
         {{else}}

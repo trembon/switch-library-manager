@@ -13,6 +13,7 @@ import (
 	"github.com/trembon/switch-library-manager/backend/fileio"
 	"github.com/trembon/switch-library-manager/backend/settings"
 	"github.com/trembon/switch-library-manager/backend/switchfs"
+	bolt "go.etcd.io/bbolt"
 	"go.uber.org/zap"
 )
 
@@ -166,7 +167,11 @@ func scanFolder(folder string, recursive bool, files *[]ExtendedFileInfo, progre
 }
 
 func (ldb *LocalSwitchDBManager) ClearScanData() error {
-	return ldb.db.ClearTable(DB_TABLE_FILE_SCAN_METADATA)
+	err := ldb.db.ClearTable(DB_TABLE_FILE_SCAN_METADATA)
+	if errors.Is(err, bolt.ErrBucketNotFound) {
+		return nil
+	}
+	return err
 }
 
 func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,

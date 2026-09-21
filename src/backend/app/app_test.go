@@ -2,11 +2,14 @@ package app
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/trembon/switch-library-manager/backend/db"
 	"github.com/trembon/switch-library-manager/backend/settings"
+	"go.uber.org/zap"
 )
 
 func TestGetLibraryTitleNameFallsBackForEmptyRemoteName(t *testing.T) {
@@ -59,5 +62,63 @@ func TestFrontendModelsPreserveJSONContract(t *testing.T) {
 	want := `{"library_data":[{"id":0,"name":"","version":"","dlc":"","titleId":"0100000000001000","path":"","icon":"","update":0,"region":"","type":""}],"issues":[{"key":"file.nsp","value":"issue"}],"num_files":1}`
 	if string(data) != want {
 		t.Fatalf("JSON = %s, want %s", data, want)
+	}
+}
+
+func TestRescanLibraryHardModeRebuildsLocalScan(t *testing.T) {
+	baseFolder := t.TempDir()
+	libraryFolder := filepath.Join(baseFolder, "library")
+	if err := os.Mkdir(libraryFolder, 0755); err != nil {
+		t.Fatal(err)
+	}
+	first := filepath.Join(libraryFolder, "First Game [0100000000001000][v0].nsp")
+	if err := os.WriteFile(first, []byte("first"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := settings.SaveSettingsWithError(&settings.AppSettings{
+		Paths: settings.PathSettings{LibraryFolder: libraryFolder, ScanFolders: []string{}},
+		Scan:  settings.ScanSettings{IgnoreFileTypes: []string{}},
+	}, baseFolder); err != nil {
+		t.Fatal(err)
+	}
+
+	localManager, err := db.NewLocalSwitchDBManager(baseFolder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer localManager.Close()
+	application := &App{
+		baseFolder:     baseFolder,
+		localDbManager: localManager,
+		sugarLogger:    zap.NewNop().Sugar(),
+		state:          State{switchDB: &db.SwitchTitlesDB{}},
+	}
+
+	firstScan, err := application.RescanLibrary(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstScan.NumFiles != 1 {
+		t.Fatalf("first scan files = %d, want 1", firstScan.NumFiles)
+	}
+
+	second := filepath.Join(libraryFolder, "Second Game [0100000000002000][v0].nsp")
+	if err := os.WriteFile(second, []byte("second"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	normalScan, err := application.RescanLibrary(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if normalScan.NumFiles != 1 {
+		t.Fatalf("normal rescan files = %d, want cached 1", normalScan.NumFiles)
+	}
+
+	hardScan, err := application.RescanLibrary(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hardScan.NumFiles != 2 {
+		t.Fatalf("hard rescan files = %d, want 2", hardScan.NumFiles)
 	}
 }

@@ -183,7 +183,7 @@ func OrganizeByFolders(baseFolder string,
 		if v.BaseExist {
 			templateData[settings.TEMPLATE_TYPE] = "BASE"
 			from = filepath.Join(v.File.ExtendedInfo.BaseFolder, v.File.ExtendedInfo.FileName)
-			to = filepath.Join(destinationPath, getFileName(options, v.File.ExtendedInfo.FileName, templateData, 0))
+			to = organizationTargetPath(destinationPath, v.File.ExtendedInfo.BaseFolder, v.File.ExtendedInfo.FileName, options, "base", templateData, 0)
 			err = moveFile(from, to)
 			if err != nil {
 				logger.Errorf("Failed to move file [%v]\n", err)
@@ -211,19 +211,10 @@ func OrganizeByFolders(baseFolder string,
 			}
 
 			from = filepath.Join(updateInfo.ExtendedInfo.BaseFolder, updateInfo.ExtendedInfo.FileName)
-			if options.CreateFolderPerGame {
-				if options.UpdatesFolder != "" {
-					to = filepath.Join(destinationPath, options.UpdatesFolder)
-					createFolder(to, logger)
-					to = filepath.Join(to, getFileName(options, updateInfo.ExtendedInfo.FileName, templateData, 0))
-				} else {
-					to = filepath.Join(destinationPath, getFileName(options, updateInfo.ExtendedInfo.FileName, templateData, 0))
-				}
-			} else {
-				if options.UpdatesFolder != "" {
-					to = filepath.Join(options.UpdatesFolder, getFileName(options, updateInfo.ExtendedInfo.FileName, templateData, 0))
-				} else {
-					to = filepath.Join(updateInfo.ExtendedInfo.BaseFolder, getFileName(options, updateInfo.ExtendedInfo.FileName, templateData, 0))
+			to = organizationTargetPath(destinationPath, updateInfo.ExtendedInfo.BaseFolder, updateInfo.ExtendedInfo.FileName, options, "update", templateData, 0)
+			if options.CreateFolderPerGame && options.UpdatesFolder != "" {
+				if err := createFolder(filepath.Dir(to), logger); err != nil {
+					continue
 				}
 			}
 			err := moveFile(from, to)
@@ -254,19 +245,10 @@ func OrganizeByFolders(baseFolder string,
 
 			dlcNameTry := 0
 			for {
-				if options.CreateFolderPerGame {
-					if options.DlcFolder != "" {
-						to = filepath.Join(destinationPath, options.DlcFolder)
-						createFolder(to, logger)
-						to = filepath.Join(to, getFileName(options, dlc.ExtendedInfo.FileName, templateData, dlcNameTry))
-					} else {
-						to = filepath.Join(destinationPath, getFileName(options, dlc.ExtendedInfo.FileName, templateData, dlcNameTry))
-					}
-				} else {
-					if options.DlcFolder != "" {
-						to = filepath.Join(options.DlcFolder, getFileName(options, dlc.ExtendedInfo.FileName, templateData, dlcNameTry))
-					} else {
-						to = filepath.Join(dlc.ExtendedInfo.BaseFolder, getFileName(options, dlc.ExtendedInfo.FileName, templateData, dlcNameTry))
+				to = organizationTargetPath(destinationPath, dlc.ExtendedInfo.BaseFolder, dlc.ExtendedInfo.FileName, options, "dlc", templateData, dlcNameTry)
+				if options.CreateFolderPerGame && options.DlcFolder != "" {
+					if err := createFolder(filepath.Dir(to), logger); err != nil {
+						break
 					}
 				}
 
@@ -394,6 +376,35 @@ func getFileName(options settings.OrganizeOptions, originalName string, template
 	ext := path.Ext(originalName)
 	result := applyTemplate(templateData, options.SwitchSafeFileNames, options.FileNameTemplate, nameTry)
 	return result + ext
+}
+
+func organizationTargetPath(destinationPath, sourceFolder, originalName string, options settings.OrganizeOptions, contentKind string, templateData map[string]string, nameTry int) string {
+	fileName := getFileName(options, originalName, templateData, nameTry)
+	if options.CreateFolderPerGame {
+		switch contentKind {
+		case "update":
+			if options.UpdatesFolder != "" {
+				return filepath.Join(destinationPath, options.UpdatesFolder, fileName)
+			}
+		case "dlc":
+			if options.DlcFolder != "" {
+				return filepath.Join(destinationPath, options.DlcFolder, fileName)
+			}
+		}
+		return filepath.Join(destinationPath, fileName)
+	}
+
+	switch contentKind {
+	case "update":
+		if options.UpdatesFolder != "" {
+			return filepath.Join(options.UpdatesFolder, fileName)
+		}
+	case "dlc":
+		if options.DlcFolder != "" {
+			return filepath.Join(options.DlcFolder, fileName)
+		}
+	}
+	return filepath.Join(sourceFolder, fileName)
 }
 
 func moveFile(from string, to string) error {

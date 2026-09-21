@@ -14,11 +14,15 @@ export function GetMissingGames():Promise<Array<app.SwitchTitle>>;
 
 export function GetMissingUpdates():Promise<Array<process.IncompleteTitle>>;
 
+export function GetOrganizationPreview():Promise<app.OrganizationPreview>;
+
 export function IsKeysFileAvailable():Promise<boolean>;
 
 export function LoadSettings():Promise<settings.AppSettings>;
 
 export function OrganizeLibrary():Promise<void>;
+
+export function RescanLibrary(arg1:boolean):Promise<app.LocalLibraryData>;
 
 export function SaveSettings(arg1:settings.AppSettings):Promise<void>;
 

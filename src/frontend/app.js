@@ -1,18 +1,19 @@
 import {
     CheckUpdate,
     ConfirmOrganization,
+    GetOrganizationPreview,
     GetMissingDLC,
     GetMissingGames,
     GetMissingUpdates,
     IsKeysFileAvailable,
     LoadSettings,
     OrganizeLibrary,
+    RescanLibrary,
     SaveSettings,
     SelectFolder,
     ShowInFolder,
     ShowMessage,
     UpdateDB,
-    UpdateLocalLibrary,
 } from './wailsjs/go/app/App.js'
 import { EventsOn } from './wailsjs/runtime/runtime.js'
 
@@ -26,6 +27,7 @@ $(function () {
         settings:{},
         settingsDraft: undefined,
         settingsFeedback: undefined,
+        organizationPreview: undefined,
         keys:false
     };
 
@@ -149,17 +151,6 @@ $(function () {
         });
 
         EventsOn("error", showError);
-        EventsOn("rescan", function (hard) {
-            if (restartRequired) {
-                return;
-            }
-            state.library = undefined;
-            state.updates = undefined;
-            state.dlc = undefined;
-            state.missingGames = undefined;
-            scanLocalFolder(Boolean(hard)).catch(error => showError(error.message));
-        });
-
         LoadSettings().then(function (message) {
             state.settings = message;
             state.settingsDraft = undefined;
@@ -202,8 +193,9 @@ $(function () {
             }
             showProgress("Scanning local library...");
 
-            return UpdateLocalLibrary(Boolean(mode)).then(result => {
+            return RescanLibrary(Boolean(mode)).then(result => {
                 state.library = result;
+                state.organizationPreview = undefined;
                 loadTab("#library");
                 hideProgress();
                 return result;
@@ -232,6 +224,8 @@ $(function () {
             state.library = undefined;
             state.updates = undefined;
             state.dlc = undefined;
+            state.missingGames = undefined;
+            state.organizationPreview = undefined;
             SaveSettings(state.settings)
                 .then(() => {
                     state.settingsDraft = undefined;
@@ -373,7 +367,22 @@ $(function () {
             if (target === "#settings") {
                 renderSettingsTab();
             } else if (target === "#organize") {
-                let html = $(target + "Template").render({folder: state.settings.paths.library_folder,settings:state.settings})
+                const folder = state.settings.paths.library_folder;
+                if (!folder) {
+                    $(target).html($(target + "Template").render({folder: folder}));
+                    return;
+                }
+                if (!state.organizationPreview || state.organizationPreview.root_folder !== folder) {
+                    $(target).html($(target + "Template").render({folder: folder, previewLoading: true}));
+                    GetOrganizationPreview().then(preview => {
+                        state.organizationPreview = preview;
+                        if (!restartRequired && $(target).is(":visible")) {
+                            loadTab(target);
+                        }
+                    }).catch(error => showError(error.message));
+                    return;
+                }
+                let html = $(target + "Template").render({folder: folder, preview: state.organizationPreview})
                 $(target).html(html);
             } else if (target === "#updates") {
                 if (state.settings.paths.library_folder && !state.library){
@@ -558,6 +567,19 @@ $(function () {
 
         $("body").on("click", ".export-btn", e => {
             currTable.download("csv", "export.csv", {}, "all");
+        });
+
+        $("body").on("click", ".rescan-action", e => {
+            if (restartRequired) {
+                return;
+            }
+            state.library = undefined;
+            state.updates = undefined;
+            state.dlc = undefined;
+            state.missingGames = undefined;
+            state.organizationPreview = undefined;
+            const hard = e.currentTarget.dataset.hard === "true";
+            scanLocalFolder(hard).catch(error => showError(error.message));
         });
 
         $("body").on("click", ".alert-dismiss", e => {
