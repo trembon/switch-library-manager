@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/schollz/progressbar/v3"
@@ -21,6 +22,18 @@ import (
 var (
 	progressBar *progressbar.ProgressBar
 )
+
+const (
+	csvGamesKind          = "games"
+	csvMissingGamesKind   = "missing_games"
+	csvMissingUpdatesKind = "missing_updates"
+	csvMissingDLCKind     = "missing_dlc"
+	csvIssuesKind         = "issues"
+)
+
+func csvExportFilename(kind string, date time.Time) string {
+	return fmt.Sprintf("slm_%s.%s.csv", kind, date.Format("2006-01-02"))
+}
 
 type Console struct {
 	baseFolder   string
@@ -57,6 +70,7 @@ func (c *Console) Start() {
 			}
 		}
 	}
+	exportDate := time.Now()
 
 	//1. load the titles JSON object
 	fmt.Println("Downloading latest switch titles json file")
@@ -140,7 +154,7 @@ func (c *Console) Start() {
 
 	issuesCsvFile := ""
 	if csvOutput != "" {
-		issuesCsvFile = filepath.Join(csvOutput, "issues.csv")
+		issuesCsvFile = filepath.Join(csvOutput, csvExportFilename(csvIssuesKind, exportDate))
 	}
 	c.processIssues(localDB, issuesCsvFile)
 
@@ -163,7 +177,7 @@ func (c *Console) Start() {
 
 		missingUpdatesCsvFile := ""
 		if csvOutput != "" {
-			missingUpdatesCsvFile = filepath.Join(csvOutput, "missing_updates.csv")
+			missingUpdatesCsvFile = filepath.Join(csvOutput, csvExportFilename(csvMissingUpdatesKind, exportDate))
 		}
 
 		c.processMissingUpdates(localDB, titlesDB, settingsObj, missingUpdatesCsvFile)
@@ -174,7 +188,7 @@ func (c *Console) Start() {
 
 		missingDlcCsvFile := ""
 		if csvOutput != "" {
-			missingDlcCsvFile = filepath.Join(csvOutput, "missing_dlc.csv")
+			missingDlcCsvFile = filepath.Join(csvOutput, csvExportFilename(csvMissingDLCKind, exportDate))
 		}
 
 		c.processMissingDLC(localDB, titlesDB, missingDlcCsvFile)

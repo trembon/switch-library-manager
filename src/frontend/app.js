@@ -32,6 +32,7 @@ $(function () {
     };
 
     let currTable
+    let currTableExportKind
     let themeMediaQuery
     let themeMediaQueryHandler
     let restartRequired = false
@@ -42,6 +43,14 @@ $(function () {
             paginationSize: state.settings.gui.page_size,
             footerElement: '<div class="slm-table-footer-actions"><button type="button" class="btn btn-link export-btn">Export to CSV</button></div>'
         }, options);
+    }
+
+    function exportDate() {
+        const date = new Date();
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return year + "-" + month + "-" + day;
     }
 
     function setThemeAttribute(theme) {
@@ -413,7 +422,7 @@ $(function () {
                         ],
                         data: state.updates,
                         columns: [
-                            {formatter:"rownum"},
+                            {formatter:"rownum",download:false},
                             {field: "Attributes.bannerUrl",download:false,formatter:"image", headerSort:false,formatterParams:{height:"60px", width:"60px"}},
                             {title: "Title", field: "Attributes.name", headerFilter:"input",formatter:"textarea",width:350},
                             {title: "Type", field: "Meta.type", headerFilter:"input"},
@@ -423,6 +432,7 @@ $(function () {
                             {title: "Update date", headerSort:true, field: "latest_update_date",sorter:"date", sorterParams:{format:"YYYY-MM-DD"}}
                         ],
                     }));
+                    currTableExportKind = "missing_updates";
                 }
             } else if (target === "#dlc") {
                 if (state.settings.paths.library_folder && !state.library){
@@ -445,7 +455,7 @@ $(function () {
                         ],
                         data: state.dlc,
                         columns: [
-                            {formatter:"rownum"},
+                            {formatter:"rownum",download:false},
                             {field: "Attributes.bannerUrl",download:false,formatter:"image", headerSort:false,formatterParams:{height:"60px", width:"60px"}},
                             {title: "Title", field: "Attributes.name", headerFilter:"input",formatter:"textarea",width:350},
                             {title: "# Missing", field: "missing_dlc.length"},
@@ -459,6 +469,7 @@ $(function () {
                                 }}
                         ],
                     }));
+                    currTableExportKind = "missing_dlc";
                 }
             } else if (target === "#status") {
                 if (state.settings.paths.library_folder && !state.library){
@@ -471,7 +482,7 @@ $(function () {
                         layout:"fitDataStretch",
                         data: state.library.issues,
                         columns: [
-                            {formatter:"rownum"},
+                            {formatter:"rownum",download:false},
                             {title: "File name",width:500, headerSort:false, field: "key",formatter:"textarea",cellClick:function(e, cell){
                                     //e - the click event object
                                     //cell - cell component
@@ -485,6 +496,7 @@ $(function () {
                             }
                         ],
                     }));
+                    currTableExportKind = "issues";
                 }
             } else if (target === "#library") {
                 if (state.settings.paths.library_folder && !state.library){
@@ -508,7 +520,7 @@ $(function () {
                         columnMinWidth:24,
                         data: state.library.library_data,
                         columns: [
-                            {formatter:"rownum",minWidth:24},
+                            {formatter:"rownum",download:false,minWidth:24},
                             {field: "icon",minWidth:40,formatter:"image", download:false,headerSort:false,formatterParams:{height:"60px", width:"60px"}},
                             {title: "Title", field: "name", headerFilter:"input",formatter:"textarea",widthGrow:3},
                             {title: "Title id", headerSort:false, field: "titleId"},
@@ -524,6 +536,7 @@ $(function () {
                             }
                         ],
                     }));
+                    currTableExportKind = "games";
                 }
             } else if (target === "#missing") {
                 if (state.settings.paths.library_folder && !state.library){
@@ -546,7 +559,7 @@ $(function () {
                         ],
                         data: state.missingGames,
                         columns: [
-                            {formatter:"rownum"},
+                            {formatter:"rownum",download:false},
                             {field: "icon",download:false,formatter:"image", headerSort:false,formatterParams:{height:"60px", width:"60px"}},
                             {field: "name",title: "Title",  headerFilter:"input",formatter:"textarea",width:350},
                             {title: "Title id", headerSort:false, field: "titleId"},
@@ -554,6 +567,7 @@ $(function () {
                             {title: "Release date", headerSort:true, field: "release_date", sorter:"date", sorterParams:{format:"YYYY-MM-DD"}},
                         ],
                     }));
+                    currTableExportKind = "missing_games";
                 }
             }
         }
@@ -563,7 +577,9 @@ $(function () {
         });
 
         $("body").on("click", ".export-btn", e => {
-            currTable.download("csv", "export.csv", {}, "all");
+            if (currTable && currTableExportKind) {
+                currTable.download("csv", "slm_" + currTableExportKind + "." + exportDate() + ".csv", {}, "all");
+            }
         });
 
         $("body").on("click", ".rescan-action", e => {
