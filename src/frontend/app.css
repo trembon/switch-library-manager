@@ -358,6 +358,30 @@ body {
     color: var(--bs-emphasis-color);
 }
 
+.tabulator .tabulator-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.tabulator .tabulator-footer .slm-table-footer-actions {
+    order: 2;
+    margin-left: auto;
+}
+
+.tabulator .tabulator-footer .slm-table-footer-actions .export-btn {
+    padding: 0.25rem 0.5rem;
+}
+
+@media (max-width: 480px) {
+    .tabulator .tabulator-footer .slm-table-footer-actions {
+        width: 100%;
+        margin-left: 0;
+        text-align: right;
+    }
+}
+
 .tabulator .tabulator-placeholder span {
     color: var(--bs-secondary-color);
 }

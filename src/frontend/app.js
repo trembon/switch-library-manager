@@ -36,6 +36,14 @@ $(function () {
     let themeMediaQueryHandler
     let restartRequired = false
 
+    function tableOptions(options) {
+        return Object.assign({
+            pagination: "local",
+            paginationSize: state.settings.gui.page_size,
+            footerElement: '<div class="slm-table-footer-actions"><button type="button" class="btn btn-link export-btn">Export to CSV</button></div>'
+        }, options);
+    }
+
     function setThemeAttribute(theme) {
         document.documentElement.dataset.bsTheme = theme;
     }
@@ -398,13 +406,11 @@ $(function () {
                 let html = $(target + "Template").render({folder: state.settings.paths.library_folder,updates:state.updates})
                 $(target).html(html);
                 if (state.updates && state.updates.length) {
-                    currTable = new Tabulator("#updates-table", {
+                    currTable = new Tabulator("#updates-table", tableOptions({
                         layout:"fitDataStretch",
                         initialSort:[
                             {column:"latest_update_date", dir:"desc"}, //sort by this first
                         ],
-                        pagination: "local",
-                        paginationSize: state.settings.gui.page_size,
                         data: state.updates,
                         columns: [
                             {formatter:"rownum"},
@@ -416,7 +422,7 @@ $(function () {
                             {title: "Available version", headerSort:false, field: "latest_update", hozAlign: "right"},
                             {title: "Update date", headerSort:true, field: "latest_update_date",sorter:"date", sorterParams:{format:"YYYY-MM-DD"}}
                         ],
-                    });
+                    }));
                 }
             } else if (target === "#dlc") {
                 if (state.settings.paths.library_folder && !state.library){
@@ -432,13 +438,11 @@ $(function () {
                 let html = $(target + "Template").render({folder: state.settings.paths.library_folder,dlc:state.dlc});
                 $(target).html(html);
                 if (state.dlc && state.dlc.length) {
-                    currTable = new Tabulator("#dlc-table", {
+                    currTable = new Tabulator("#dlc-table", tableOptions({
                         layout:"fitDataStretch",
                         initialSort:[
                             {column:"Attributes.name", dir:"asc"}, //sort by this first
                         ],
-                        pagination: "local",
-                        paginationSize: state.settings.gui.page_size,
                         data: state.dlc,
                         columns: [
                             {formatter:"rownum"},
@@ -454,7 +458,7 @@ $(function () {
                                     return value
                                 }}
                         ],
-                    });
+                    }));
                 }
             } else if (target === "#status") {
                 if (state.settings.paths.library_folder && !state.library){
@@ -463,10 +467,8 @@ $(function () {
                 let html = $(target + "Template").render({folder: state.settings.paths.library_folder,library:state.library ? state.library.issues: undefined,numFiles:state.library ? state.library.num_files:-1});
                 $(target).html(html);
                 if (state.library.issues && state.library.issues.length) {
-                    currTable = new Tabulator("#status-table", {
+                    currTable = new Tabulator("#status-table", tableOptions({
                         layout:"fitDataStretch",
-                        pagination: "local",
-                        paginationSize: state.settings.gui.page_size,
                         data: state.library.issues,
                         columns: [
                             {formatter:"rownum"},
@@ -482,7 +484,7 @@ $(function () {
                                 }
                             }
                         ],
-                    });
+                    }));
                 }
             } else if (target === "#library") {
                 if (state.settings.paths.library_folder && !state.library){
@@ -494,19 +496,16 @@ $(function () {
                         library: state.library ? state.library.library_data : [] ,
                         num_skipped:state.library ? (state.library.issues ? state.library.issues.length : 0) : 0,
                         num_files:state.library ? state.library.num_files : 0,
-                        keys:state.keys,
-                        scanFolders:state.settings.paths.scan_folders
+                        keys:state.keys
                     })
                 $(target).html(html);
                 if (state.library && state.library.library_data.length) {
-                    currTable = new Tabulator("#library-table", {
+                    currTable = new Tabulator("#library-table", tableOptions({
                         initialSort:[
                             {column:"name", dir:"asc"}, //sort by this first
                         ],
                         layout:"fitColumns",
                         columnMinWidth:24,
-                        pagination: "local",
-                        paginationSize: state.settings.gui.page_size,
                         data: state.library.library_data,
                         columns: [
                             {formatter:"rownum",minWidth:24},
@@ -524,7 +523,7 @@ $(function () {
                                 }
                             }
                         ],
-                    });
+                    }));
                 }
             } else if (target === "#missing") {
                 if (state.settings.paths.library_folder && !state.library){
@@ -540,13 +539,11 @@ $(function () {
                 let html = $(target + "Template").render({folder: state.settings.paths.library_folder,missingGames:state.missingGames});
                 $(target).html(html);
                 if (state.missingGames && state.missingGames.length) {
-                    currTable = new Tabulator("#missingGames-table", {
+                    currTable = new Tabulator("#missingGames-table", tableOptions({
                         layout:"fitDataStretch",
                         initialSort:[
                             {column:"name", dir:"asc"}, //sort by this first
                         ],
-                        pagination: "local",
-                        paginationSize: state.settings.gui.page_size,
                         data: state.missingGames,
                         columns: [
                             {formatter:"rownum"},
@@ -556,7 +553,7 @@ $(function () {
                             {title: "Region", headerSort:true,headerFilter:"input",formatter:"textarea", field: "region"},
                             {title: "Release date", headerSort:true, field: "release_date", sorter:"date", sorterParams:{format:"YYYY-MM-DD"}},
                         ],
-                    });
+                    }));
                 }
             }
         }
