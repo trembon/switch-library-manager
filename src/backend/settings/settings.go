@@ -26,7 +26,7 @@ const (
 	CACHE_FILENAME            = "cache.json"
 	TITLE_JSON_FILENAME       = "titles.json"
 	VERSIONS_JSON_FILENAME    = "versions.json"
-	SLM_VERSION               = "2.0.0"
+	SLM_VERSION               = "2.0.0-beta1"
 	SETTINGS_SCHEMA_VERSION   = 2
 	DEFAULT_TITLES_JSON_URL   = "https://tinfoil.io/repo/db/titles.json"
 	DEFAULT_VERSIONS_JSON_URL = "https://raw.githubusercontent.com/blawar/titledb/master/versions.json"
