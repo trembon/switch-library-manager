@@ -52,7 +52,7 @@ func (a *App) updateLocalLibraryLocked(ignoreCache bool) (LocalLibraryData, erro
 	return buildLocalLibraryData(localDB, a.state.switchDB), nil
 }
 
-func (a *App) buildSwitchDB() (*db.SwitchTitlesDB, error) {
+func (a *App) buildSwitchDB() (switchTitleDB *db.SwitchTitlesDB, returnErr error) {
 	settingsObj, err := settings.ReadSettings(a.baseFolder)
 	if err != nil {
 		return nil, err
@@ -68,6 +68,12 @@ func (a *App) buildSwitchDB() (*db.SwitchTitlesDB, error) {
 	if err != nil {
 		return nil, errors.New("failed to download switch titles [reason:" + err.Error() + "]")
 	}
+	defer func() {
+		if closeErr := titleFile.Close(); closeErr != nil {
+			returnErr = errors.Join(returnErr, fmt.Errorf("close switch titles file: %w", closeErr))
+			switchTitleDB = nil
+		}
+	}()
 	cache.TitlesETag = titlesETag
 
 	a.updateProgress(2, 4, "Downloading versions.json")
@@ -76,13 +82,19 @@ func (a *App) buildSwitchDB() (*db.SwitchTitlesDB, error) {
 	if err != nil {
 		return nil, errors.New("failed to download switch updates [reason:" + err.Error() + "]")
 	}
+	defer func() {
+		if closeErr := versionsFile.Close(); closeErr != nil {
+			returnErr = errors.Join(returnErr, fmt.Errorf("close switch versions file: %w", closeErr))
+			switchTitleDB = nil
+		}
+	}()
 	cache.VersionsETag = versionsETag
 	if err := settings.SaveCacheWithError(cache, a.baseFolder); err != nil {
 		return nil, fmt.Errorf("save title database cache: %w", err)
 	}
 
 	a.updateProgress(3, 4, "Processing switch titles and updates ...")
-	switchTitleDB, err := db.CreateSwitchTitleDB(titleFile, versionsFile)
+	switchTitleDB, err = db.CreateSwitchTitleDB(titleFile, versionsFile)
 	a.updateProgress(4, 4, "Finishing up...")
 	return switchTitleDB, err
 }

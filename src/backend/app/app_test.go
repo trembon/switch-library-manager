@@ -2,6 +2,9 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,6 +65,67 @@ func TestFrontendModelsPreserveJSONContract(t *testing.T) {
 	want := `{"library_data":[{"id":0,"name":"","version":"","dlc":"","titleId":"0100000000001000","path":"","icon":"","update":0,"region":"","type":""}],"issues":[{"key":"file.nsp","value":"issue"}],"num_files":1}`
 	if string(data) != want {
 		t.Fatalf("JSON = %s, want %s", data, want)
+	}
+}
+
+func TestBuildSwitchDBClosesDownloadedFiles(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		failVersions bool
+		wantBuildErr bool
+	}{
+		{name: "success"},
+		{name: "versions download failure", failVersions: true, wantBuildErr: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			baseFolder := t.TempDir()
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/versions" && test.failVersions {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/titles":
+					_, _ = fmt.Fprint(w, `{"0100000000010000":{"id":"0100000000010000","name":"Game"}}`)
+				case "/versions":
+					_, _ = fmt.Fprint(w, `{}`)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+
+			if err := settings.SaveSettingsWithError(&settings.AppSettings{
+				SchemaVersion: settings.SETTINGS_SCHEMA_VERSION,
+				DataSources: settings.DataSourceSettings{
+					TitlesURL:   server.URL + "/titles",
+					VersionsURL: server.URL + "/versions",
+				},
+			}, baseFolder); err != nil {
+				t.Fatal(err)
+			}
+
+			application := &App{
+				baseFolder:  baseFolder,
+				sugarLogger: zap.NewNop().Sugar(),
+			}
+			_, err := application.buildSwitchDB()
+			if (err != nil) != test.wantBuildErr {
+				t.Fatalf("buildSwitchDB() error = %v, want error: %v", err, test.wantBuildErr)
+			}
+
+			for _, name := range []string{settings.TITLE_JSON_FILENAME, settings.VERSIONS_JSON_FILENAME} {
+				path := filepath.Join(baseFolder, name)
+				renamed := path + ".renamed"
+				if err := os.Rename(path, renamed); err != nil {
+					t.Fatalf("rename %s after buildSwitchDB: %v", name, err)
+				}
+				if err := os.Remove(renamed); err != nil {
+					t.Fatalf("remove renamed %s: %v", name, err)
+				}
+			}
+		})
 	}
 }
 

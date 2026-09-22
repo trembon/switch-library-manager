@@ -82,6 +82,14 @@ func (c *Console) Start() {
 		fmt.Printf("title json file doesn't exist\n")
 		return
 	}
+	defer func() {
+		if closeErr := titleFile.Close(); closeErr != nil {
+			fmt.Printf("failed to close title json file: %v\n", closeErr)
+			if c.sugarLogger != nil {
+				c.sugarLogger.Errorf("failed to close title json file: %v", closeErr)
+			}
+		}
+	}()
 	cache.TitlesETag = titlesEtag
 	progressBar.Add(1)
 	//2. load the versions JSON object
@@ -91,6 +99,14 @@ func (c *Console) Start() {
 		fmt.Printf("version json file doesn't exist\n")
 		return
 	}
+	defer func() {
+		if closeErr := versionsFile.Close(); closeErr != nil {
+			fmt.Printf("failed to close version json file: %v\n", closeErr)
+			if c.sugarLogger != nil {
+				c.sugarLogger.Errorf("failed to close version json file: %v", closeErr)
+			}
+		}
+	}()
 	cache.VersionsETag = versionsEtag
 	progressBar.Add(1)
 	progressBar.Finish()

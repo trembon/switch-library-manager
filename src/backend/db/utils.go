@@ -17,6 +17,8 @@ type ProgressUpdater interface {
 	UpdateProgress(curr int, total int, message string)
 }
 
+// LoadAndUpdateFile downloads or opens filePath and returns an open file.
+// The caller owns the returned file and must close it.
 func LoadAndUpdateFile(url string, filePath string, etag string) (*os.File, string, error) {
 
 	//create file if not exist
