@@ -383,9 +383,14 @@
     <script id="organizeTemplate" type="text/x-jsrender">
       {{if folder}}
        <div class="container organization-panel">
-          <section class="organization-section" aria-labelledby="organization-root-heading">
-            <h4 id="organization-root-heading">Library root</h4>
-            <code class="organization-root">{{:folder}}</code>
+          <section class="organization-section organization-target" aria-labelledby="organization-target-heading">
+            <div class="organization-target-content">
+              <h4 id="organization-target-heading">Organize into</h4>
+              <code class="organization-root">{{:folder}}</code>
+            </div>
+            <div class="organization-target-action">
+              <button type="button" class="btn btn-primary library-organize-action">Organize library</button>
+            </div>
           </section>
 
           <section class="organization-section" aria-labelledby="organization-preview-heading">
@@ -422,10 +427,6 @@
               <button type="button" class="btn btn-outline-secondary rescan-action" data-hard="true">Hard rescan</button>
             </div>
           </section>
-
-          <div class="organization-actions">
-            <button type="button" class="btn btn-primary library-organize-action">Begin library organization</button>
-          </div>
        </div>
 
         {{else}}

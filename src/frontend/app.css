@@ -162,6 +162,29 @@ body {
     background: var(--bs-tertiary-bg);
 }
 
+#organize .organization-target {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1.5rem;
+}
+
+#organize .organization-target-content {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+#organize .organization-target-action {
+    flex: 0 0 auto;
+}
+
+#organize .organization-target .library-organize-action {
+    min-height: 2.75rem;
+    padding-right: 1.25rem;
+    padding-left: 1.25rem;
+    font-weight: 600;
+}
+
 #organize .organization-section h4 {
     margin-bottom: 1rem;
 }
@@ -413,6 +436,18 @@ body {
 
     #organize .organization-section {
         padding: 0.75rem;
+    }
+
+    #organize .organization-target {
+        display: block;
+    }
+
+    #organize .organization-target-action {
+        margin-top: 1rem;
+    }
+
+    #organize .organization-target .library-organize-action {
+        width: 100%;
     }
 
     #organize .organization-preview-table th:first-child {
