@@ -45,7 +45,9 @@ func StartWithMigration(baseFolder string, sugarLogger *zap.SugaredLogger, asset
 	}
 	defer localDbManager.Close()
 
-	settings.InitSwitchKeys(baseFolder)
+	if _, err := settings.InitSwitchKeys(baseFolder); err != nil {
+		sugarLogger.Warnf("failed to initialize Switch keys (deep scan disabled): %v", err)
+	}
 	application := &App{
 		baseFolder:     baseFolder,
 		localDbManager: localDbManager,
