@@ -37,12 +37,33 @@ $(function () {
     let themeMediaQueryHandler
     let restartRequired = false
 
+    function updatePaginationVisibility(table) {
+        const paginator = table.element.querySelector(".tabulator-paginator");
+        if (!paginator) {
+            return;
+        }
+
+        const hidden = table.getPageMax() <= 1;
+        paginator.hidden = hidden;
+        paginator.setAttribute("aria-hidden", String(hidden));
+    }
+
     function tableOptions(options) {
-        return Object.assign({
+        const tableOptions = Object.assign({
             pagination: "local",
             paginationSize: state.settings.gui.page_size,
             footerElement: '<div class="slm-table-footer-actions"><button type="button" class="btn btn-link export-btn">Export to CSV</button></div>'
-        }, options);
+        }, options || {});
+        const renderComplete = tableOptions.renderComplete;
+
+        tableOptions.renderComplete = function () {
+            updatePaginationVisibility(this);
+            if (renderComplete) {
+                renderComplete.call(this);
+            }
+        };
+
+        return tableOptions;
     }
 
     function exportDate() {

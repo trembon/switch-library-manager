@@ -398,6 +398,10 @@ body {
     margin-left: auto;
 }
 
+.tabulator .tabulator-footer .tabulator-paginator[hidden] {
+    display: none;
+}
+
 .tabulator .tabulator-footer .slm-table-footer-actions .export-btn {
     padding: 0.25rem 0.5rem;
 }
