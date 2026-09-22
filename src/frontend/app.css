@@ -366,6 +366,11 @@ body {
 }
 
 .tabulator .tabulator-footer .slm-table-footer-actions {
+    order: 1;
+    margin-left: 0;
+}
+
+.tabulator .tabulator-footer .tabulator-paginator {
     order: 2;
     margin-left: auto;
 }
@@ -378,7 +383,7 @@ body {
     .tabulator .tabulator-footer .slm-table-footer-actions {
         width: 100%;
         margin-left: 0;
-        text-align: right;
+        text-align: left;
     }
 }
 
