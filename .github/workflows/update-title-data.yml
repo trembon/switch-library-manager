@@ -1,0 +1,85 @@
+name: Update title data
+
+on:
+  schedule:
+    - cron: "0 0,6,12,18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+
+      - name: Install NUT system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libssl-dev
+
+      - name: Clone NUT and titledb
+        run: |
+          git clone --depth 1 https://github.com/blawar/nut.git "$GITHUB_WORKSPACE/nut"
+          git clone --depth 1 https://github.com/blawar/titledb.git "$GITHUB_WORKSPACE/nut/titledb"
+
+      - name: Install NUT Python dependencies
+        working-directory: ${{ github.workspace }}/nut
+        run: python -m pip install -r requirements.txt
+
+      - name: Generate US English titles and stage data
+        working-directory: ${{ github.workspace }}/nut
+        run: |
+          python nut.py --import-region US --language en
+          mkdir -p "$GITHUB_WORKSPACE/generated-data"
+          cp titledb/titles.json "$GITHUB_WORKSPACE/generated-data/titles.json"
+          cp titledb/versions.json "$GITHUB_WORKSPACE/generated-data/versions.json"
+
+      - name: Validate generated JSON files
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          for filename in ("titles.json", "versions.json"):
+              path = Path("generated-data") / filename
+              if not path.is_file() or path.stat().st_size == 0:
+                  raise SystemExit(f"Missing or empty generated file: {path}")
+              with path.open(encoding="utf-8") as source:
+                  payload = json.load(source)
+              if not isinstance(payload, dict) or not payload:
+                  raise SystemExit(f"Expected a non-empty JSON object: {path}")
+          PY
+
+      - name: Upload manually generated data
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v7
+        with:
+          name: switch-library-manager-title-data
+          path: generated-data/*.json
+          if-no-files-found: error
+
+      - name: Publish data release
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if ! gh release view data >/dev/null 2>&1; then
+            gh release create data \
+              --prerelease \
+              --latest=false \
+              --title "Switch Library Manager title data" \
+              --notes "Rolling US English titles.json and versions.json generated from blawar/titledb using blawar/nut."
+          fi
+
+          gh release upload data \
+            generated-data/titles.json \
+            generated-data/versions.json \
+            --clobber
