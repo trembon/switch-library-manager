@@ -2,7 +2,7 @@ name: Update title data
 
 on:
   schedule:
-    - cron: "0 0,6,12,18 * * *"
+    - cron: "0 2,8,14,20 * * *"
   workflow_dispatch:
 
 permissions:
