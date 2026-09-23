@@ -287,6 +287,9 @@ func TestPersistenceRoundTripAndCacheClearing(t *testing.T) {
 func TestLoadAndUpdateFileETagFallbackAndValidation(t *testing.T) {
 	base := t.TempDir()
 	path := filepath.Join(base, "titles.json")
+	if err := os.WriteFile(path, []byte(`{"title":"cached"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
 	var requests int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
@@ -338,6 +341,50 @@ func TestLoadAndUpdateFileETagFallbackAndValidation(t *testing.T) {
 	missing := filepath.Join(base, "missing.json")
 	if file, _, err = LoadAndUpdateFile(server.URL+"/missing", missing, ""); err == nil || file != nil {
 		t.Fatalf("expected missing fallback error, file=%v err=%v", file, err)
+	}
+}
+
+func TestLoadAndUpdateFileDownloadsWithoutETagWhenLocalFileIsMissingOrEmpty(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		createFile bool
+	}{
+		{name: "missing"},
+		{name: "empty", createFile: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "titles.json")
+			if test.createFile {
+				if err := os.WriteFile(path, nil, 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if got := r.Header.Get("If-None-Match"); got != "" {
+					t.Errorf("If-None-Match = %q, want empty without a local cache", got)
+				}
+				w.Header().Set("ETag", "fresh")
+				_, _ = w.Write([]byte(`{"title":"downloaded"}`))
+			}))
+			defer server.Close()
+
+			file, etag, err := LoadAndUpdateFile(server.URL, path, `W/"default"`)
+			if err != nil {
+				t.Fatalf("download without local cache: %v", err)
+			}
+			if etag != "fresh" {
+				file.Close()
+				t.Fatalf("etag = %q, want fresh", etag)
+			}
+			if err := file.Close(); err != nil {
+				t.Fatal(err)
+			}
+			contents, err := os.ReadFile(path)
+			if err != nil || string(contents) != `{"title":"downloaded"}` {
+				t.Fatalf("downloaded file = %q, err = %v", contents, err)
+			}
+		})
 	}
 }
 

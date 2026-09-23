@@ -4,6 +4,7 @@ import (
 	bytes2 "bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"go.uber.org/zap"
 	"io"
 	"io/ioutil"
@@ -20,18 +21,27 @@ type ProgressUpdater interface {
 // LoadAndUpdateFile downloads or opens filePath and returns an open file.
 // The caller owns the returned file and must close it.
 func LoadAndUpdateFile(url string, filePath string, etag string) (*os.File, string, error) {
-
-	//create file if not exist
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		var created *os.File
-		created, err = os.Create(filePath)
+	// An ETag is only useful when there is a local file to use after a 304
+	// response. In particular, the default ETag in cache.json must not be sent
+	// on first run when filePath does not yet contain the downloaded data.
+	localAvailable := false
+	fileInfo, statErr := os.Stat(filePath)
+	if statErr == nil {
+		localAvailable = !fileInfo.IsDir() && fileInfo.Size() > 0
+	} else if os.IsNotExist(statErr) {
+		created, err := os.Create(filePath)
 		if err != nil {
 			zap.S().Errorf("Failed to create file %v - %v\n", filePath, err)
-			return nil, "", err
+			return nil, "", fmt.Errorf("create local data file %q: %w", filePath, err)
 		}
-		if err = created.Close(); err != nil {
-			return nil, "", err
+		if err := created.Close(); err != nil {
+			return nil, "", fmt.Errorf("close new local data file %q: %w", filePath, err)
 		}
+	} else {
+		return nil, "", fmt.Errorf("check local data file %q: %w", filePath, statErr)
+	}
+	if !localAvailable {
+		etag = ""
 	}
 
 	var file *os.File = nil
@@ -54,6 +64,13 @@ func LoadAndUpdateFile(url string, filePath string, etag string) (*os.File, stri
 	}
 
 	if file == nil {
+		if !localAvailable {
+			if err != nil {
+				return nil, "", fmt.Errorf("download failed and no local data file is available: %w", err)
+			}
+			return nil, "", errors.New("download failed and no local data file is available")
+		}
+
 		//load file
 		file, err = os.Open(filePath)
 		if err != nil {
@@ -62,10 +79,13 @@ func LoadAndUpdateFile(url string, filePath string, etag string) (*os.File, stri
 		}
 
 		fileInfo, err := os.Stat(filePath)
-		if err != nil || fileInfo.Size() == 0 {
+		if err != nil || fileInfo.IsDir() || fileInfo.Size() == 0 {
 			file.Close()
-			zap.S().Infof("Local file is empty, or corrupted")
-			return nil, "", errors.New("unable to download switch titles db")
+			zap.S().Infof("Local file is empty, a directory, or corrupted")
+			if err != nil {
+				return nil, "", fmt.Errorf("stat local data file %q: %w", filePath, err)
+			}
+			return nil, "", errors.New("local data file is empty or is a directory")
 		}
 	}
 
