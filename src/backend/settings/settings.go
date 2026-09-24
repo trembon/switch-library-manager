@@ -28,11 +28,9 @@ const (
 	VERSIONS_JSON_FILENAME    = "versions.json"
 	SLM_VERSION               = "2.0.0-beta1"
 	SETTINGS_SCHEMA_VERSION   = 2
-	DEFAULT_TITLES_JSON_URL   = "https://tinfoil.io/repo/db/titles.json"
-	DEFAULT_VERSIONS_JSON_URL = "https://raw.githubusercontent.com/blawar/titledb/master/versions.json"
+	DEFAULT_TITLES_JSON_URL   = "https://github.com/trembon/switch-library-manager/releases/download/data/titles.json"
+	DEFAULT_VERSIONS_JSON_URL = "https://github.com/trembon/switch-library-manager/releases/download/data/versions.json"
 	SLM_VERSION_URL           = "https://raw.githubusercontent.com/trembon/switch-library-manager/master/version.json"
-	DEFAULT_TITLES_ETAG       = "W/\"a5b02845cf6bd61:0\""
-	DEFAULT_VERSIONS_ETAG     = "W/\"2ef50d1cb6bd61:0\""
 )
 
 const (
@@ -115,8 +113,12 @@ type AppSettings struct {
 }
 
 type Cache struct {
-	TitlesETag   string `json:"titles_etag"`
-	VersionsETag string `json:"versions_etag"`
+	TitlesETag     string `json:"titles_etag"`
+	VersionsETag   string `json:"versions_etag"`
+	TitlesURL      string `json:"titles_url"`
+	VersionsURL    string `json:"versions_url"`
+	TitlesSHA256   string `json:"titles_sha256"`
+	VersionsSHA256 string `json:"versions_sha256"`
 }
 
 // MigrationInfo describes an older settings file that was preserved while
@@ -331,7 +333,7 @@ func NormalizeTheme(theme string) string {
 }
 
 func defaultCache() *Cache {
-	return &Cache{TitlesETag: DEFAULT_TITLES_ETAG, VersionsETag: DEFAULT_VERSIONS_ETAG}
+	return &Cache{}
 }
 
 func ReadCache(baseFolder string) (*Cache, error) {
@@ -344,11 +346,16 @@ func ReadCache(baseFolder string) (*Cache, error) {
 	}
 	defer file.Close()
 
-	cache := defaultCache()
-	if err := json.NewDecoder(file).Decode(cache); err != nil {
-		return nil, fmt.Errorf("decode cache: %w", err)
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("read cache: %w", err)
 	}
-	return cache, nil
+	var cache Cache
+	if err := json.Unmarshal(data, &cache); err != nil {
+		zap.S().Warnf("ignoring malformed cache file %q: %v", filepath.Join(baseFolder, CACHE_FILENAME), err)
+		return defaultCache(), nil
+	}
+	return &cache, nil
 }
 
 func SaveCacheWithError(cache *Cache, baseFolder string) error {

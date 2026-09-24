@@ -89,7 +89,7 @@ func TestBuildSwitchDBClosesDownloadedFiles(t *testing.T) {
 				case "/titles":
 					_, _ = fmt.Fprint(w, `{"0100000000010000":{"id":"0100000000010000","name":"Game"}}`)
 				case "/versions":
-					_, _ = fmt.Fprint(w, `{}`)
+					_, _ = fmt.Fprint(w, `{"0100000000010000":{"1":"2024-01-01"}}`)
 				default:
 					http.NotFound(w, r)
 				}
@@ -115,7 +115,13 @@ func TestBuildSwitchDBClosesDownloadedFiles(t *testing.T) {
 				t.Fatalf("buildSwitchDB() error = %v, want error: %v", err, test.wantBuildErr)
 			}
 
-			for _, name := range []string{settings.TITLE_JSON_FILENAME, settings.VERSIONS_JSON_FILENAME} {
+			filesToCheck := []string{settings.TITLE_JSON_FILENAME}
+			if !test.failVersions {
+				filesToCheck = append(filesToCheck, settings.VERSIONS_JSON_FILENAME)
+			} else if _, statErr := os.Stat(filepath.Join(baseFolder, settings.VERSIONS_JSON_FILENAME)); !os.IsNotExist(statErr) {
+				t.Fatalf("versions file should not be created after failed download, stat error = %v", statErr)
+			}
+			for _, name := range filesToCheck {
 				path := filepath.Join(baseFolder, name)
 				renamed := path + ".renamed"
 				if err := os.Rename(path, renamed); err != nil {

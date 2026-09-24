@@ -77,7 +77,9 @@ func (c *Console) Start() {
 	progressBar = progressbar.New(2)
 
 	filename := filepath.Join(c.baseFolder, settings.TITLE_JSON_FILENAME)
-	titleFile, titlesEtag, err := db.LoadAndUpdateFile(settingsObj.DataSources.TitlesURL, filename, cache.TitlesETag)
+	titleFile, titleCache, err := db.LoadAndUpdateFile(settingsObj.DataSources.TitlesURL, filename, db.RemoteFileCache{
+		URL: cache.TitlesURL, ETag: cache.TitlesETag, SHA256: cache.TitlesSHA256,
+	}, db.ValidateTitlesJSON)
 	if err != nil {
 		fmt.Printf("title json file doesn't exist\n")
 		return
@@ -90,11 +92,13 @@ func (c *Console) Start() {
 			}
 		}
 	}()
-	cache.TitlesETag = titlesEtag
+	cache.TitlesETag, cache.TitlesURL, cache.TitlesSHA256 = titleCache.ETag, titleCache.URL, titleCache.SHA256
 	progressBar.Add(1)
 	//2. load the versions JSON object
 	filename = filepath.Join(c.baseFolder, settings.VERSIONS_JSON_FILENAME)
-	versionsFile, versionsEtag, err := db.LoadAndUpdateFile(settingsObj.DataSources.VersionsURL, filename, cache.VersionsETag)
+	versionsFile, versionsCache, err := db.LoadAndUpdateFile(settingsObj.DataSources.VersionsURL, filename, db.RemoteFileCache{
+		URL: cache.VersionsURL, ETag: cache.VersionsETag, SHA256: cache.VersionsSHA256,
+	}, db.ValidateVersionsJSON)
 	if err != nil {
 		fmt.Printf("version json file doesn't exist\n")
 		return
@@ -107,7 +111,7 @@ func (c *Console) Start() {
 			}
 		}
 	}()
-	cache.VersionsETag = versionsEtag
+	cache.VersionsETag, cache.VersionsURL, cache.VersionsSHA256 = versionsCache.ETag, versionsCache.URL, versionsCache.SHA256
 	progressBar.Add(1)
 	progressBar.Finish()
 	newUpdate, err := settings.CheckForUpdates()

@@ -50,6 +50,25 @@ func TestDefaultSettingsAndJSON(t *testing.T) {
 	}
 }
 
+func TestExistingSettingsURLsArePreserved(t *testing.T) {
+	isolateSettings(t)
+	base := t.TempDir()
+	legacy := defaultSettings()
+	legacy.DataSources.TitlesURL = "https://tinfoil.io/repo/db/titles.json"
+	legacy.DataSources.VersionsURL = "https://raw.githubusercontent.com/blawar/titledb/master/versions.json"
+	if err := SaveSettingsWithError(legacy, base); err != nil {
+		t.Fatal(err)
+	}
+	settingsInstance = nil
+	loaded, err := ReadSettings(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.DataSources.TitlesURL != legacy.DataSources.TitlesURL || loaded.DataSources.VersionsURL != legacy.DataSources.VersionsURL {
+		t.Fatalf("existing source URLs changed: %#v", loaded.DataSources)
+	}
+}
+
 func TestThemeSettingsNormalizeAndRoundTrip(t *testing.T) {
 	isolateSettings(t)
 	base := t.TempDir()
@@ -312,17 +331,42 @@ func TestRestoreOldSettings(t *testing.T) {
 func TestCacheRoundTrip(t *testing.T) {
 	base := t.TempDir()
 	cache, err := ReadCache(base)
-	if err != nil || cache.TitlesETag == "" || cache.VersionsETag == "" {
+	if err != nil || cache.TitlesETag != "" || cache.VersionsETag != "" {
 		t.Fatalf("default cache: %#v, %v", cache, err)
 	}
 	cache.TitlesETag = "titles-etag"
 	cache.VersionsETag = "versions-etag"
+	cache.TitlesURL = "https://titles.example/titles.json"
+	cache.VersionsURL = "https://versions.example/versions.json"
+	cache.TitlesSHA256 = "titles-sha256"
+	cache.VersionsSHA256 = "versions-sha256"
 	if err := SaveCacheWithError(cache, base); err != nil {
 		t.Fatal(err)
 	}
 	loaded, err := ReadCache(base)
-	if err != nil || loaded.TitlesETag != "titles-etag" || loaded.VersionsETag != "versions-etag" {
+	if err != nil || loaded.TitlesETag != "titles-etag" || loaded.VersionsETag != "versions-etag" || loaded.TitlesURL != cache.TitlesURL || loaded.VersionsURL != cache.VersionsURL || loaded.TitlesSHA256 != cache.TitlesSHA256 || loaded.VersionsSHA256 != cache.VersionsSHA256 {
 		t.Fatalf("cache round-trip: %#v, %v", loaded, err)
+	}
+}
+
+func TestReadCacheTreatsMalformedAndLegacyCacheAsMissingValidators(t *testing.T) {
+	base := t.TempDir()
+	path := filepath.Join(base, CACHE_FILENAME)
+	if err := os.WriteFile(path, []byte(`{"titles_etag":`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cache, err := ReadCache(base)
+	if err != nil || cache.TitlesETag != "" || cache.VersionsETag != "" {
+		t.Fatalf("malformed cache = %#v, err = %v", cache, err)
+	}
+
+	legacyCache := `{"titles_etag":"old-title","versions_etag":"old-version"}`
+	if err := os.WriteFile(path, []byte(legacyCache), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cache, err = ReadCache(base)
+	if err != nil || cache.TitlesETag != "old-title" || cache.VersionsETag != "old-version" || cache.TitlesURL != "" || cache.VersionsURL != "" || cache.TitlesSHA256 != "" || cache.VersionsSHA256 != "" {
+		t.Fatalf("legacy cache = %#v, err = %v", cache, err)
 	}
 }
 

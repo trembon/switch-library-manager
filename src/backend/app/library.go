@@ -64,7 +64,9 @@ func (a *App) buildSwitchDB() (switchTitleDB *db.SwitchTitlesDB, returnErr error
 	a.updateProgress(1, 4, "Downloading titles.json")
 
 	filename := filepath.Join(a.baseFolder, settings.TITLE_JSON_FILENAME)
-	titleFile, titlesETag, err := db.LoadAndUpdateFile(settingsObj.DataSources.TitlesURL, filename, cache.TitlesETag)
+	titleFile, titleCache, err := db.LoadAndUpdateFile(settingsObj.DataSources.TitlesURL, filename, db.RemoteFileCache{
+		URL: cache.TitlesURL, ETag: cache.TitlesETag, SHA256: cache.TitlesSHA256,
+	}, db.ValidateTitlesJSON)
 	if err != nil {
 		return nil, errors.New("failed to download switch titles [reason:" + err.Error() + "]")
 	}
@@ -74,11 +76,13 @@ func (a *App) buildSwitchDB() (switchTitleDB *db.SwitchTitlesDB, returnErr error
 			switchTitleDB = nil
 		}
 	}()
-	cache.TitlesETag = titlesETag
+	cache.TitlesETag, cache.TitlesURL, cache.TitlesSHA256 = titleCache.ETag, titleCache.URL, titleCache.SHA256
 
 	a.updateProgress(2, 4, "Downloading versions.json")
 	filename = filepath.Join(a.baseFolder, settings.VERSIONS_JSON_FILENAME)
-	versionsFile, versionsETag, err := db.LoadAndUpdateFile(settingsObj.DataSources.VersionsURL, filename, cache.VersionsETag)
+	versionsFile, versionsCache, err := db.LoadAndUpdateFile(settingsObj.DataSources.VersionsURL, filename, db.RemoteFileCache{
+		URL: cache.VersionsURL, ETag: cache.VersionsETag, SHA256: cache.VersionsSHA256,
+	}, db.ValidateVersionsJSON)
 	if err != nil {
 		return nil, errors.New("failed to download switch updates [reason:" + err.Error() + "]")
 	}
@@ -88,7 +92,7 @@ func (a *App) buildSwitchDB() (switchTitleDB *db.SwitchTitlesDB, returnErr error
 			switchTitleDB = nil
 		}
 	}()
-	cache.VersionsETag = versionsETag
+	cache.VersionsETag, cache.VersionsURL, cache.VersionsSHA256 = versionsCache.ETag, versionsCache.URL, versionsCache.SHA256
 	if err := settings.SaveCacheWithError(cache, a.baseFolder); err != nil {
 		return nil, fmt.Errorf("save title database cache: %w", err)
 	}

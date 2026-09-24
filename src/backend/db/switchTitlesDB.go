@@ -3,6 +3,7 @@ package db
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -34,6 +35,43 @@ type SwitchTitle struct {
 
 type SwitchTitlesDB struct {
 	TitlesMap map[string]*SwitchTitle
+}
+
+func decodeToJsonObject(reader io.Reader, target interface{}) error {
+	return json.NewDecoder(reader).Decode(target)
+}
+
+// ValidateTitlesJSON rejects malformed or empty title data before a download
+// can replace the last usable local copy.
+func ValidateTitlesJSON(data []byte) error {
+	var titles map[string]TitleAttributes
+	if err := json.Unmarshal(data, &titles); err != nil {
+		return fmt.Errorf("decode titles JSON: %w", err)
+	}
+	if len(titles) == 0 {
+		return errors.New("titles JSON must contain at least one title")
+	}
+	return nil
+}
+
+// ValidateVersionsJSON rejects malformed or empty version data before a
+// download can replace the last usable local copy.
+func ValidateVersionsJSON(data []byte) error {
+	var versions map[string]map[int]string
+	if err := json.Unmarshal(data, &versions); err != nil {
+		return fmt.Errorf("decode versions JSON: %w", err)
+	}
+	if len(versions) == 0 {
+		return errors.New("versions JSON must contain at least one title")
+	}
+	for id, titleVersions := range versions {
+		for version := range titleVersions {
+			if version < 0 {
+				return fmt.Errorf("version %d for title %q must not be negative", version, id)
+			}
+		}
+	}
+	return nil
 }
 
 func CreateSwitchTitleDB(titlesFile, versionsFile io.Reader) (*SwitchTitlesDB, error) {

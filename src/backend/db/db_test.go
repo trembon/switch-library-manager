@@ -1,6 +1,8 @@
 package db
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -56,6 +58,30 @@ func TestCreateSwitchTitleDBGroupsTitlesAndVersions(t *testing.T) {
 	}
 	if game.Dlc["0100000000011001"].Name != "DLC" {
 		t.Fatalf("unexpected DLC: %#v", game.Dlc)
+	}
+}
+
+func TestCreateSwitchTitleDBSkipsUnsupportedIDAndKeepsSupportedTitles(t *testing.T) {
+	titles := `{"0100000000010000":{"id":"0100000000010000","name":"Game"},"0100000000000816":{"id":"0100000000000816","name":"Unsupported DLC"}}`
+	versions := `{"0100000000010000":{"1":"2024-01-01"},"0100000000000816":{"1":"2024-01-01"}}`
+
+	if err := ValidateTitlesJSON([]byte(titles)); err != nil {
+		t.Fatalf("titles validator rejected an unsupported ID: %v", err)
+	}
+	if err := ValidateVersionsJSON([]byte(versions)); err != nil {
+		t.Fatalf("versions validator rejected an unsupported ID: %v", err)
+	}
+
+	database, err := CreateSwitchTitleDB(strings.NewReader(titles), strings.NewReader(versions))
+	if err != nil {
+		t.Fatalf("create title database: %v", err)
+	}
+	if len(database.TitlesMap) != 1 {
+		t.Fatalf("unsupported ID affected title grouping: %#v", database.TitlesMap)
+	}
+	game, ok := database.TitlesMap["0100000000010"]
+	if !ok || game.Attributes.Name != "Game" {
+		t.Fatalf("supported title was not retained: %#v", database.TitlesMap)
 	}
 }
 
@@ -287,7 +313,8 @@ func TestPersistenceRoundTripAndCacheClearing(t *testing.T) {
 func TestLoadAndUpdateFileETagFallbackAndValidation(t *testing.T) {
 	base := t.TempDir()
 	path := filepath.Join(base, "titles.json")
-	if err := os.WriteFile(path, []byte(`{"title":"cached"}`), 0644); err != nil {
+	initialContents := []byte(`{"title":"cached"}`)
+	if err := os.WriteFile(path, initialContents, 0644); err != nil {
 		t.Fatal(err)
 	}
 	var requests int
@@ -314,23 +341,25 @@ func TestLoadAndUpdateFileETagFallbackAndValidation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	file, etag, err := LoadAndUpdateFile(server.URL, path, "old")
-	if err != nil || etag != "new" {
-		t.Fatalf("download: file=%v etag=%q err=%v", file, etag, err)
+	file, cached, err := LoadAndUpdateFile(server.URL, path, RemoteFileCache{
+		URL: server.URL, ETag: "old", SHA256: hashBytes(initialContents),
+	}, validateJSONObject)
+	if err != nil || cached.ETag != "new" || cached.URL != server.URL {
+		t.Fatalf("download: file=%v cache=%#v err=%v", file, cached, err)
 	}
 	file.Close()
 	contents, _ := os.ReadFile(path)
 	if string(contents) != `{"title":"ok"}` {
 		t.Fatalf("saved contents: %s", contents)
 	}
-	file, etag, err = LoadAndUpdateFile(server.URL, path, etag)
-	if err != nil || etag != "new" {
-		t.Fatalf("304 fallback: file=%v etag=%q err=%v", file, etag, err)
+	file, cached, err = LoadAndUpdateFile(server.URL, path, cached, validateJSONObject)
+	if err != nil || cached.ETag != "new" {
+		t.Fatalf("304 fallback: file=%v cache=%#v err=%v", file, cached, err)
 	}
 	file.Close()
-	file, etag, err = LoadAndUpdateFile(server.URL, path, etag)
-	if err != nil || etag != "new" {
-		t.Fatalf("invalid JSON fallback: file=%v etag=%q err=%v", file, etag, err)
+	file, cached, err = LoadAndUpdateFile(server.URL, path, cached, validateJSONObject)
+	if err != nil || cached.ETag != "new" {
+		t.Fatalf("invalid JSON fallback: file=%v cache=%#v err=%v", file, cached, err)
 	}
 	file.Close()
 	contents, _ = os.ReadFile(path)
@@ -339,7 +368,7 @@ func TestLoadAndUpdateFileETagFallbackAndValidation(t *testing.T) {
 	}
 
 	missing := filepath.Join(base, "missing.json")
-	if file, _, err = LoadAndUpdateFile(server.URL+"/missing", missing, ""); err == nil || file != nil {
+	if file, _, err = LoadAndUpdateFile(server.URL+"/missing", missing, RemoteFileCache{ETag: "stale"}, validateJSONObject); err == nil || file != nil {
 		t.Fatalf("expected missing fallback error, file=%v err=%v", file, err)
 	}
 }
@@ -369,13 +398,15 @@ func TestLoadAndUpdateFileDownloadsWithoutETagWhenLocalFileIsMissingOrEmpty(t *t
 			}))
 			defer server.Close()
 
-			file, etag, err := LoadAndUpdateFile(server.URL, path, `W/"default"`)
+			file, cache, err := LoadAndUpdateFile(server.URL, path, RemoteFileCache{
+				URL: server.URL, ETag: `W/"default"`, SHA256: "stale-hash",
+			}, validateJSONObject)
 			if err != nil {
 				t.Fatalf("download without local cache: %v", err)
 			}
-			if etag != "fresh" {
+			if cache.ETag != "fresh" || cache.URL != server.URL || cache.SHA256 == "" {
 				file.Close()
-				t.Fatalf("etag = %q, want fresh", etag)
+				t.Fatalf("cache = %#v, want fresh validator metadata", cache)
 			}
 			if err := file.Close(); err != nil {
 				t.Fatal(err)
@@ -388,15 +419,152 @@ func TestLoadAndUpdateFileDownloadsWithoutETagWhenLocalFileIsMissingOrEmpty(t *t
 	}
 }
 
+func TestLoadAndUpdateFileInvalidatesETagForURLOrLocalFileChanges(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		cacheURL  string
+		cacheHash string
+	}{
+		{name: "missing cache"},
+		{name: "source URL changed", cacheURL: "https://old.example/titles.json", cacheHash: hashBytes([]byte(`{"title":"cached"}`))},
+		{name: "local file changed", cacheURL: "https://data.example/titles.json", cacheHash: "old-hash"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "titles.json")
+			if err := os.WriteFile(path, []byte(`{"title":"cached"}`), 0644); err != nil {
+				t.Fatal(err)
+			}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if got := r.Header.Get("If-None-Match"); got != "" {
+					t.Errorf("If-None-Match = %q, want empty for stale cache metadata", got)
+				}
+				w.Header().Set("ETag", "fresh")
+				_, _ = w.Write([]byte(`{"title":"updated"}`))
+			}))
+			defer server.Close()
+
+			file, cache, err := LoadAndUpdateFile(server.URL, path, RemoteFileCache{
+				URL: test.cacheURL, ETag: "stale", SHA256: test.cacheHash,
+			}, validateJSONObject)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer file.Close()
+			if cache.URL != server.URL || cache.ETag != "fresh" || cache.SHA256 != hashBytes([]byte(`{"title":"updated"}`)) {
+				t.Fatalf("cache metadata = %#v", cache)
+			}
+			contents, err := os.ReadFile(path)
+			if err != nil || string(contents) != `{"title":"updated"}` {
+				t.Fatalf("updated file = %q, err = %v", contents, err)
+			}
+		})
+	}
+}
+
+func TestLoadAndUpdateFileUsesLocalFallbackWithoutRetainingStaleETag(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "titles.json")
+	local := []byte(`{"title":"edited"}`)
+	if err := os.WriteFile(path, local, 0644); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("If-None-Match"); got != "" {
+			t.Errorf("If-None-Match = %q, want empty after local edit", got)
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	file, cache, err := LoadAndUpdateFile(server.URL, path, RemoteFileCache{
+		URL: server.URL, ETag: "old", SHA256: hashBytes([]byte(`{"title":"original"}`)),
+	}, validateJSONObject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if cache.ETag != "" || cache.URL != server.URL || cache.SHA256 != hashBytes(local) {
+		t.Fatalf("fallback cache metadata = %#v", cache)
+	}
+	contents, err := os.ReadFile(path)
+	if err != nil || string(contents) != string(local) {
+		t.Fatalf("fallback file = %q, err = %v", contents, err)
+	}
+}
+
+func TestLoadAndUpdateFileRetries304WithoutUsableLocalCopy(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "titles.json")
+	var requests int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if got := r.Header.Get("If-None-Match"); got != "" {
+			t.Errorf("request %d If-None-Match = %q, want empty", requests, got)
+		}
+		if requests == 1 {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		_, _ = w.Write([]byte(`{"title":"downloaded"}`))
+	}))
+	defer server.Close()
+
+	file, _, err := LoadAndUpdateFile(server.URL, path, RemoteFileCache{}, validateJSONObject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	file.Close()
+	if requests != 2 {
+		t.Fatalf("request count = %d, want unconditional retry", requests)
+	}
+}
+
+func TestValidateRemoteDataJSON(t *testing.T) {
+	if err := ValidateTitlesJSON([]byte(`{"0100000000010000":{"id":"0100000000010000","name":"Game"}}`)); err != nil {
+		t.Fatalf("valid titles JSON rejected: %v", err)
+	}
+	if err := ValidateVersionsJSON([]byte(`{"0100000000010000":{"1":"2024-01-01"}}`)); err != nil {
+		t.Fatalf("valid versions JSON rejected: %v", err)
+	}
+	tests := []struct {
+		name     string
+		validate JSONValidator
+		data     string
+	}{
+		{name: "empty titles", validate: ValidateTitlesJSON, data: `{}`},
+		{name: "empty versions", validate: ValidateVersionsJSON, data: `{}`},
+		{name: "malformed titles", validate: ValidateTitlesJSON, data: `{"0100000000010000":`},
+		{name: "malformed versions", validate: ValidateVersionsJSON, data: `{"0100000000010000":`},
+		{name: "invalid title shape", validate: ValidateTitlesJSON, data: `{"0100000000010000":"Game"}`},
+		{name: "invalid versions shape", validate: ValidateVersionsJSON, data: `{"0100000000010000":"1"}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := test.validate([]byte(test.data)); err == nil {
+				t.Fatal("expected invalid remote data to be rejected")
+			}
+		})
+	}
+}
+
+func validateJSONObject(data []byte) error {
+	var object map[string]interface{}
+	if err := json.Unmarshal(data, &object); err != nil {
+		return err
+	}
+	if object == nil {
+		return errors.New("expected a JSON object")
+	}
+	return nil
+}
+
 func TestDownloadBytesRejectsBadURLAndStatus(t *testing.T) {
-	if _, _, err := downloadBytesFromUrl(":", ""); err == nil {
+	if _, _, _, err := downloadBytesFromURL(":", ""); err == nil {
 		t.Fatal("expected bad URL error")
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	}))
 	defer server.Close()
-	if _, _, err := downloadBytesFromUrl(server.URL, ""); err == nil || !strings.Contains(err.Error(), "non 200") {
+	if _, _, _, err := downloadBytesFromURL(server.URL, ""); err == nil || !strings.Contains(err.Error(), "HTTP status") {
 		t.Fatalf("unexpected status error: %v", err)
 	}
 }
@@ -592,8 +760,8 @@ func TestPersistentDBReadAndWriteErrors(t *testing.T) {
 	if err := pd.GetEntry("corrupt", "value", &value); err == nil {
 		t.Fatal("expected gob decoding error")
 	}
-	if _, err := saveFile([]byte("data"), filepath.Join(base, "missing", "directory")); err == nil {
-		t.Fatal("expected saveFile error")
+	if err := replaceFileAtomically(filepath.Join(base, "missing", "directory"), []byte("data")); err == nil {
+		t.Fatal("expected atomic replacement error")
 	}
 	pd.Close()
 	if err := pd.AddEntry("closed", "value", "value"); err == nil {
@@ -606,24 +774,16 @@ func TestPersistentDBReadAndWriteErrors(t *testing.T) {
 
 func TestDownloadAndLoadFileCreationErrors(t *testing.T) {
 	base := t.TempDir()
-	if _, _, err := LoadAndUpdateFile(":", filepath.Join(base, "missing", "titles.json"), ""); err == nil {
-		t.Fatal("expected file creation error")
+	if _, _, err := LoadAndUpdateFile(":", filepath.Join(base, "missing", "titles.json"), RemoteFileCache{}, validateJSONObject); err == nil {
+		t.Fatal("expected request error")
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"valid":true}`))
 	}))
 	url := server.URL
 	server.Close()
-	if _, _, err := downloadBytesFromUrl(url, ""); err == nil {
+	if _, _, _, err := downloadBytesFromURL(url, ""); err == nil {
 		t.Fatal("expected HTTP client error")
-	}
-
-	saved, err := saveFile([]byte("data"), filepath.Join(base, "saved.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := saved.Close(); err != nil {
-		t.Fatal(err)
 	}
 }
 
