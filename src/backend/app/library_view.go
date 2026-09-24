@@ -12,7 +12,7 @@ func buildLocalLibraryData(localDB *db.LocalSwitchFilesDB, switchDB *db.SwitchTi
 		if value.BaseExist {
 			version := ""
 			name := ""
-			if value.File.Metadata.Ncap != nil {
+if value.File.Metadata != nil && value.File.Metadata.Ncap != nil {
 				version = value.File.Metadata.Ncap.DisplayVersion
 				name = value.File.Metadata.Ncap.TitleName["AmericanEnglish"].Title
 			}
