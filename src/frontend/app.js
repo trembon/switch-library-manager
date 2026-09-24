@@ -406,12 +406,13 @@ $(function () {
                 renderSettingsTab();
             } else if (target === "#organize") {
                 const folder = state.settings.paths.library_folder;
+                const organization = state.settings.organization;
                 if (!folder) {
-                    $(target).html($(target + "Template").render({folder: folder}));
+                    $(target).html($(target + "Template").render({folder: folder, organization: organization}));
                     return;
                 }
                 if (!state.organizationPreview || state.organizationPreview.root_folder !== folder) {
-                    $(target).html($(target + "Template").render({folder: folder, previewLoading: true}));
+                    $(target).html($(target + "Template").render({folder: folder, organization: organization, previewLoading: true}));
                     GetOrganizationPreview().then(preview => {
                         state.organizationPreview = preview;
                         if (!restartRequired && $(target).is(":visible")) {
@@ -420,7 +421,7 @@ $(function () {
                     }).catch(error => showError(error.message));
                     return;
                 }
-                let html = $(target + "Template").render({folder: folder, preview: state.organizationPreview})
+                let html = $(target + "Template").render({folder: folder, organization: organization, preview: state.organizationPreview})
                 $(target).html(html);
             } else if (target === "#updates") {
                 if (state.settings.paths.library_folder && !state.library){

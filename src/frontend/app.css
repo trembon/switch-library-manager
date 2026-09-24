@@ -189,6 +189,17 @@ body {
     margin-bottom: 1rem;
 }
 
+#organize .organization-option-state {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.5rem;
+    margin-bottom: 0.75rem;
+}
+
+#organize .organization-option-state p {
+    margin-bottom: 0;
+}
+
 #organize .organization-root {
     display: block;
     overflow-wrap: anywhere;

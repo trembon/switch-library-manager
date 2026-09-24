@@ -393,31 +393,50 @@
             </div>
           </section>
 
-          <section class="organization-section" aria-labelledby="organization-preview-heading">
-            <h4 id="organization-preview-heading">Example resulting paths</h4>
-            {{if previewLoading}}
-              <p class="text-secondary mb-0">Preparing examples...</p>
-            {{else preview && preview.entries && preview.entries.length}}
-              <p class="text-secondary">Paths are shown relative to the library root.</p>
-              <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0 organization-preview-table">
-                  <thead>
-                    <tr><th scope="col">Content</th><th scope="col">Resulting path</th></tr>
-                  </thead>
-                  <tbody>
-                    {{for preview.entries}}
-                    <tr>
-                      <th scope="row">{{if kind === "game"}}Game{{else kind === "update"}}Update{{else}}DLC{{/if}}</th>
-                      <td><code>{{:path}}</code></td>
-                    </tr>
-                    {{/for}}
-                  </tbody>
-                </table>
-              </div>
+          <section class="organization-section" aria-labelledby="organization-behavior-heading">
+            <h4 id="organization-behavior-heading">Organization behavior</h4>
+            <div class="organization-option-state">
+              <p><strong>Create a folder for each game:</strong> {{if organization.create_folder_per_game}}On{{else}}Off{{/if}}</p>
+              <p><strong>Rename files:</strong> {{if organization.rename_files}}On{{else}}Off{{/if}}</p>
+            </div>
+            {{if organization.create_folder_per_game && organization.rename_files}}
+              <p class="text-secondary mb-0">Files will be placed in per-game folders and renamed. The examples below include your configured folder, file-name, and Updates/DLC subfolder settings.</p>
+            {{else organization.create_folder_per_game}}
+              <p class="text-secondary mb-0">Files will be placed in per-game folders. Original filenames will be kept; Update and DLC entries may use their configured subfolders as shown below.</p>
+            {{else organization.rename_files}}
+              <p class="text-secondary mb-0">No per-game folders will be created. Files will be renamed; configured Updates/DLC subfolders may still change update and DLC destinations as shown below.</p>
             {{else}}
-              <p class="text-secondary mb-0">No preview paths are available.</p>
+              <div class="alert alert-info mb-0" role="status">Organization is disabled with both options off. No files will be moved or renamed. Enable at least one option in Settings and restart the application to apply it.</div>
             {{/if}}
           </section>
+
+          {{if organization.create_folder_per_game || organization.rename_files}}
+            <section class="organization-section" aria-labelledby="organization-preview-heading">
+              <h4 id="organization-preview-heading">Example resulting paths</h4>
+              {{if previewLoading}}
+                <p class="text-secondary mb-0">Preparing examples...</p>
+              {{else preview && preview.entries && preview.entries.length}}
+                <p class="text-secondary">Paths are shown relative to the library root.</p>
+                <div class="table-responsive">
+                  <table class="table table-sm align-middle mb-0 organization-preview-table">
+                    <thead>
+                      <tr><th scope="col">Content</th><th scope="col">Resulting path</th></tr>
+                    </thead>
+                    <tbody>
+                      {{for preview.entries}}
+                      <tr>
+                        <th scope="row">{{if kind === "game"}}Game{{else kind === "update"}}Update{{else}}DLC{{/if}}</th>
+                        <td><code>{{:path}}</code></td>
+                      </tr>
+                      {{/for}}
+                    </tbody>
+                  </table>
+                </div>
+              {{else}}
+                <p class="text-secondary mb-0">No preview paths are available.</p>
+              {{/if}}
+            </section>
+          {{/if}}
 
           <section class="organization-section" aria-labelledby="organization-scan-heading">
             <h4 id="organization-scan-heading">Refresh library data</h4>
