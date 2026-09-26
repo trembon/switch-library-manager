@@ -7,17 +7,12 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v7
 
       - name: Setup environment
         uses: ./.github/actions/setup-environment
-
-      - name: Generate embedded assets
-        working-directory: ./src
-        shell: bash
-        run: ./astilectron-bundler
 
       - name: Run Go tests
         working-directory: ./src
@@ -30,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          packages=(./db ./fileio ./process ./settings ./switchfs ./switchfs/_crypto)
+          packages=(./backend/db ./backend/fileio ./backend/process ./backend/settings ./backend/switchfs ./backend/switchfs/_crypto)
           coverage_file="$(mktemp)"
           trap 'rm -f "$coverage_file"' EXIT
           first_profile=true
@@ -54,3 +49,5 @@ jobs:
 
       - name: Build app
         uses: ./.github/actions/build-app
+        with:
+          platform: linux/amd64

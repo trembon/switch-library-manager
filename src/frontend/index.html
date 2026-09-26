@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Switch Library Manager</title>
+    <link href="lib/css/bootstrap/bootstrap.min.css" rel="stylesheet" />
+    <link href="lib/css/tabulator/tabulator.min.css" rel="stylesheet" />
+    <link
+      href="lib/css/tabulator/bootstrap/tabulator_bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" type="text/css" href="app.css" />
+    <script type="text/javascript" src="lib/js/jquery/jquery-4.0.0.min.js"></script>
+    <script type="text/javascript" src="lib/js/moment/moment.min.js"></script>
+    <script
+      type="text/javascript"
+      src="lib/js/tabulator/tabulator.min.js"
+    ></script>
+    <script
+      type="text/javascript"
+      src="lib/js/jsrender/jsrender.min.js"
+    ></script>
+    <script type="module" src="app.js"></script>
+  </head>
+
+  <body>
+    <div class="wrapper is-loading" aria-busy="true">
+      <nav id="tab_btns" class="app-nav" data-tabgroup="tab-group" aria-label="Main navigation" aria-hidden="true" inert>
+        <ul class="nav nav-tabs flex-nowrap" role="tablist">
+          <li class="nav-item" role="presentation"><a id="library-tab" href="#library" class="nav-link active" role="tab" aria-controls="library" aria-selected="true">Library</a></li>
+          <li class="nav-item missing_btn" role="presentation"><a id="missing-tab" href="#missing" class="nav-link" role="tab" aria-controls="missing" aria-selected="false">Missing games</a></li>
+          <li class="nav-item" role="presentation"><a id="updates-tab" href="#updates" class="nav-link" role="tab" aria-controls="updates" aria-selected="false">Missing updates</a></li>
+          <li class="nav-item" role="presentation"><a id="dlc-tab" href="#dlc" class="nav-link" role="tab" aria-controls="dlc" aria-selected="false">Missing DLC</a></li>
+          <li class="nav-item" role="presentation"><a id="organize-tab" href="#organize" class="nav-link" role="tab" aria-controls="organize" aria-selected="false">Organize</a></li>
+          <li class="nav-item" role="presentation"><a id="status-tab" href="#status" class="nav-link" role="tab" aria-controls="status" aria-selected="false">Issues</a></li>
+          <li class="nav-item" role="presentation"><a id="settings-tab" href="#settings" class="nav-link" role="tab" aria-controls="settings" aria-selected="false">Settings</a></li>
+        </ul>
+      </nav>
+      <div class="progress-container" role="status" aria-live="polite" aria-label="Loading application">
+        <div class="progress-panel">
+          <h5 class="progress-type">Loading...</h5>
+          <div class="progress">
+          <div
+            class="progress-bar"
+            role="progressbar"
+            aria-valuenow="0"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-label="Loading progress"
+          >0%</div>
+          </div>
+          <div class="progress-msg"></div>
+        </div>
+      </div>
+      <section id="tab-group" class="tabgroup" aria-hidden="true" inert>
+        <div id="library" role="tabpanel" aria-labelledby="library-tab"></div>
+        <div id="updates" role="tabpanel" aria-labelledby="updates-tab"></div>
+        <div id="missing" role="tabpanel" aria-labelledby="missing-tab"></div>
+        <div id="dlc" role="tabpanel" aria-labelledby="dlc-tab"></div>
+        <div id="organize" role="tabpanel" aria-labelledby="organize-tab"></div>
+        <div id="status" role="tabpanel" aria-labelledby="status-tab"></div>
+        <div id="settings" role="tabpanel" aria-labelledby="settings-tab"></div>
+      </section>
+    </div>
+
+    <script id="settingsTemplate" type="text/x-jsrender">
+      {{if feedback}}
+      <div class="alert alert-{{:feedback.type}}" role="alert">{{:feedback.message}}</div>
+      {{/if}}
+      <form id="settings-form" class="settings-editor">
+        <div class="settings-section">
+          <h4>Interface</h4>
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" name="gui_enabled" id="settings-gui-enabled" {{if gui.enabled}}checked{{/if}}>
+            <label class="form-check-label" for="settings-gui-enabled">Start with the graphical interface</label>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label" for="settings-gui-page-size">Rows per page</label>
+              <input class="form-control" type="number" min="1" name="gui_page_size" id="settings-gui-page-size" value="{{:gui.page_size}}" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="settings-gui-theme">Theme</label>
+              <select class="form-select" name="gui_theme" id="settings-gui-theme">
+                <option value="inherit" {{if gui.theme === "inherit"}}selected{{/if}}>Follow system</option>
+                <option value="light" {{if gui.theme === "light"}}selected{{/if}}>Light</option>
+                <option value="dark" {{if gui.theme === "dark"}}selected{{/if}}>Dark</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-check mt-3">
+            <input class="form-check-input" type="checkbox" name="gui_hide_missing_games" id="settings-gui-hide-missing" {{if gui.hide_missing_games}}checked{{/if}}>
+            <label class="form-check-label" for="settings-gui-hide-missing">Hide missing games tab</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="gui_hide_demo_games" id="settings-gui-hide-demo" {{if gui.hide_demo_games}}checked{{/if}}>
+            <label class="form-check-label" for="settings-gui-hide-demo">Hide demo games from missing games</label>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h4>Paths</h4>
+          <label class="form-label" for="settings-library-folder">Library folder</label>
+          <div class="input-group mb-3">
+            <input class="form-control" type="text" name="paths_library_folder" id="settings-library-folder" value="{{:paths.library_folder}}">
+            <button class="btn btn-outline-secondary settings-folder-select" type="button" data-settings-folder-target="library_folder">Browse</button>
+          </div>
+          <label class="form-label">Additional scan folders</label>
+          <div data-settings-list-container="scan_folders">
+            {{for paths.scan_folders}}
+            <div class="settings-list-row input-group mb-2">
+              <input class="form-control" type="text" data-settings-list="scan_folders" value="{{:#data}}">
+              <button class="btn btn-outline-danger settings-list-remove" type="button">Remove</button>
+            </div>
+            {{/for}}
+          </div>
+          <div class="mb-3">
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-settings-list-add="scan_folders">Add scan folder</button>
+          </div>
+          <label class="form-label" for="settings-prod-keys">prod.keys file or folder</label>
+          <input class="form-control" type="text" name="paths_prod_keys" id="settings-prod-keys" value="{{:paths.prod_keys}}">
+        </div>
+
+        <div class="settings-section">
+          <h4>Scanning</h4>
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" name="scan_recursive" id="settings-scan-recursive" {{if scan.recursive}}checked{{/if}}>
+            <label class="form-check-label" for="settings-scan-recursive">Scan subfolders recursively</label>
+          </div>
+          <label class="form-label">Ignored file extensions</label>
+          <div data-settings-list-container="ignore_file_types">
+            {{for scan.ignore_file_types}}
+            <div class="settings-list-row input-group mb-2">
+              <input class="form-control" type="text" data-settings-list="ignore_file_types" value="{{:#data}}" placeholder="nsp">
+              <button class="btn btn-outline-danger settings-list-remove" type="button">Remove</button>
+            </div>
+            {{/for}}
+          </div>
+          <button class="btn btn-outline-secondary btn-sm" type="button" data-settings-list-add="ignore_file_types">Add extension</button>
+        </div>
+
+        <div class="settings-section">
+          <h4>Organization</h4>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="organization_create_folder_per_game" id="settings-org-folders" {{if organization.create_folder_per_game}}checked{{/if}}>
+            <label class="form-check-label" for="settings-org-folders">Create a folder for each game</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="organization_rename_files" id="settings-org-rename" {{if organization.rename_files}}checked{{/if}}>
+            <label class="form-check-label" for="settings-org-rename">Rename files</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="organization_switch_safe_file_names" id="settings-org-safe-names" {{if organization.switch_safe_file_names}}checked{{/if}}>
+            <label class="form-check-label" for="settings-org-safe-names">Use Switch-safe file names</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="organization_delete_empty_folders" id="settings-org-delete-empty" {{if organization.delete_empty_folders}}checked{{/if}}>
+            <label class="form-check-label" for="settings-org-delete-empty">Delete empty folders</label>
+          </div>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="organization_delete_old_update_files" id="settings-org-delete-old" {{if organization.delete_old_update_files}}checked{{/if}}>
+            <label class="form-check-label" for="settings-org-delete-old">Delete old update files</label>
+          </div>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="organization_process_when_missing_base_game" id="settings-org-missing-base" {{if organization.process_when_missing_base_game}}checked{{/if}}>
+            <label class="form-check-label" for="settings-org-missing-base">Process files when the base game is missing</label>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label" for="settings-org-updates-folder">Updates subfolder</label>
+              <input class="form-control" type="text" name="organization_updates_folder" id="settings-org-updates-folder" value="{{:organization.updates_folder}}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="settings-org-dlc-folder">DLC subfolder</label>
+              <input class="form-control" type="text" name="organization_dlc_folder" id="settings-org-dlc-folder" value="{{:organization.dlc_folder}}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="settings-org-folder-template">Folder name template</label>
+              <input class="form-control" type="text" name="organization_folder_name_template" id="settings-org-folder-template" value="{{:organization.folder_name_template}}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="settings-org-file-template">File name template</label>
+              <input class="form-control" type="text" name="organization_file_name_template" id="settings-org-file-template" value="{{:organization.file_name_template}}">
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h4>Missing content</h4>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="missing_check_for_updates" id="settings-missing-updates" {{if missing_content.check_for_updates}}checked{{/if}}>
+            <label class="form-check-label" for="settings-missing-updates">Check for missing updates</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="missing_check_for_dlc" id="settings-missing-dlc" {{if missing_content.check_for_dlc}}checked{{/if}}>
+            <label class="form-check-label" for="settings-missing-dlc">Check for missing DLC</label>
+          </div>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="missing_ignore_dlc_updates" id="settings-missing-ignore-dlc" {{if missing_content.ignore_dlc_updates}}checked{{/if}}>
+            <label class="form-check-label" for="settings-missing-ignore-dlc">Ignore DLC updates</label>
+          </div>
+          <label class="form-label">Ignored DLC title IDs</label>
+          <div data-settings-list-container="ignore_dlc_title_ids">
+            {{for missing_content.ignore_dlc_title_ids}}
+            <div class="settings-list-row input-group mb-2">
+              <input class="form-control" type="text" data-settings-list="ignore_dlc_title_ids" value="{{:#data}}" maxlength="16">
+              <button class="btn btn-outline-danger settings-list-remove" type="button">Remove</button>
+            </div>
+            {{/for}}
+          </div>
+          <div class="mb-3">
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-settings-list-add="ignore_dlc_title_ids">Add DLC title ID</button>
+          </div>
+          <label class="form-label">Ignored update title IDs</label>
+          <div data-settings-list-container="ignore_update_title_ids">
+            {{for missing_content.ignore_update_title_ids}}
+            <div class="settings-list-row input-group mb-2">
+              <input class="form-control" type="text" data-settings-list="ignore_update_title_ids" value="{{:#data}}" maxlength="16">
+              <button class="btn btn-outline-danger settings-list-remove" type="button">Remove</button>
+            </div>
+            {{/for}}
+          </div>
+          <button class="btn btn-outline-secondary btn-sm" type="button" data-settings-list-add="ignore_update_title_ids">Add update title ID</button>
+        </div>
+
+        <div class="settings-section">
+          <h4>Data sources</h4>
+          <label class="form-label" for="settings-data-titles">Titles URL</label>
+          <input class="form-control mb-3" type="url" name="data_titles_url" id="settings-data-titles" value="{{:data_sources.titles_url}}" required>
+          <label class="form-label" for="settings-data-versions">Versions URL</label>
+          <input class="form-control" type="url" name="data_versions_url" id="settings-data-versions" value="{{:data_sources.versions_url}}" required>
+        </div>
+
+        <div class="settings-section">
+          <h4>Logging</h4>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" name="logging_debug" id="settings-logging-debug" {{if logging.debug}}checked{{/if}}>
+            <label class="form-check-label" for="settings-logging-debug">Enable debug logging</label>
+          </div>
+        </div>
+
+        <div class="settings-actions">
+          <button class="btn btn-primary" type="submit">Save settings</button>
+          <button class="btn btn-outline-secondary" type="button" id="settings-cancel">Cancel</button>
+        </div>
+      </form>
+    </script>
+
+    <script id="missingTemplate" type="text/x-jsrender">
+      {{if folder}}
+          {{if missingGames && missingGames.length}}
+              <section id="missingGames-table" class="content"></section>
+          {{else}}
+              <div class="alert center alert-success" role="alert">
+                  You have all the games, you are not missing any Games!
+              </div>
+          {{/if}}
+      {{else}}
+          <div class="alert center alert-warning" role="alert">
+              Local games folder is not set, please set the folder to get started
+          </div>
+          <div class="center">
+                <button type="button" class="btn btn-outline-primary folder-set">Set Folder</button>
+          </div>
+      {{/if}}
+    </script>
+
+    <script id="libraryTemplate" type="text/x-jsrender">
+      {{if folder}}
+          {{if library && library.length}}
+              {{if keys === "false"}}
+              <div id="missingkeys" class="alert center alert-danger" role="alert" >
+                  Prod.keys was not found, deep NSP scan is disabled, library content is based on file names tags.
+                  <button type="button" class="btn-close alert-dismiss" aria-label="Close"></button>
+              </div>
+              {{/if}}
+              {{if num_skipped != 0}}
+                   <div id="scan_issues" class="alert center alert-warning" role="alert">
+                  {{:num_skipped}} out of {{:num_files}} files were skipped during scan, click on the issues tab to learn more
+                  <button type="button" class="btn-close alert-dismiss" aria-label="Close"></button>
+                    </div>
+              {{/if}}
+              <section id="library-table" class="content"></section>
+          {{else}}
+              <div class="alert center alert-warning" role="alert">
+              {{if num_skipped != 0}}
+                   {{:num_skipped}} out of {{:num_files}} files were skipped during scan, click on the issues tab to learn more
+              {{else}}
+                  The selected folder ({{:folder}}) is empty. please set a different folder
+              {{/if}}
+              </div>
+              {{if !keys}}
+              <div id="missingkeys" class="alert center alert-danger" role="alert" >
+                  Prod.keys was not found, analysing NSP is disabled, library content is based on file names only
+              </div>
+              {{/if}}
+              <div class="center">
+                    <button type="button" class="btn btn-outline-primary folder-set">Set Folder</button>
+              </div>
+          {{/if}}
+      {{else}}
+          <div class="alert center alert-warning" role="alert">
+              Local games folder is not set, please set the folder to get started
+          </div>
+              {{if !keys}}
+              <div id="missingkeys" class="alert center alert-danger" role="alert" >
+                  Prod.keys was not found - deep games scan is disabled, the library content is based only on file name tags
+              </div>
+              {{/if}}
+          <div class="center">
+                <button type="button" class="btn btn-outline-primary folder-set">Set Folder</button>
+          </div>
+      {{/if}}
+    </script>
+
+    <script id="updatesTemplate" type="text/x-jsrender">
+      {{if folder}}
+          {{if updates && updates.length}}
+              <div class="alert center alert-warning" role="alert">
+                  There are {{:updates.length}} games/DLC with missing updates.
+              </div>
+              <section id="updates-table" class="content"></section>
+          {{else}}
+              <div class="alert center alert-success" role="alert">
+                  All games are up to date, you are not missing any updates!
+              </div>
+          {{/if}}
+      {{else}}
+          <div class="alert center alert-warning" role="alert">
+              Local games folder is not set, please set the folder to get started
+          </div>
+          <div class="center">
+                <button type="button" class="btn btn-outline-primary folder-set">Set Folder</button>
+          </div>
+      {{/if}}
+    </script>
+
+    <script id="dlcTemplate" type="text/x-jsrender">
+      {{if folder}}
+           {{if dlc && dlc.length}}
+               <div class="alert center alert-warning" role="alert">
+                   There are {{:dlc.length}} games with missing DLC's in your local library.
+               </div>
+               <section id="dlc-table" class="content"></section>
+           {{else}}
+               <div class="alert center alert-success" role="alert">
+                   All games are up to date, you are not missing any DLC's!
+               </div>
+           {{/if}}
+       {{else}}
+           <div class="alert center alert-warning" role="alert">
+               Local games folder is not set, please set the folder to get started
+           </div>
+           <div class="center">
+                 <button type="button" class="btn btn-outline-primary folder-set">Set Folder</button>
+           </div>
+       {{/if}}
+    </script>
+
+    <script id="statusTemplate" type="text/x-jsrender">
+      {{if folder}}
+           {{if library && library.length}}
+               <div class="alert center alert-warning" role="alert">
+                   {{:library.length}} files were skipped during scan, additional details below:
+               </div>
+               <section id="status-table" class="content"></section>
+           {{else}}
+               <div class="alert center alert-success" role="alert">
+                   No issues found
+               </div>
+           {{/if}}
+       {{else}}
+           <div class="alert center alert-warning" role="alert">
+               Local games folder is not set, please set the folder to get started
+           </div>
+           <div class="center">
+                 <button type="button" class="btn btn-outline-primary folder-set">Set Folder</button>
+           </div>
+       {{/if}}
+    </script>
+
+    <script id="organizeTemplate" type="text/x-jsrender">
+      {{if folder}}
+       <div class="container organization-panel">
+          <section class="organization-section organization-target" aria-labelledby="organization-target-heading">
+            <div class="organization-target-content">
+              <h4 id="organization-target-heading">Organize into</h4>
+              <code class="organization-root">{{:folder}}</code>
+            </div>
+            <div class="organization-target-action">
+              <button type="button" class="btn btn-primary library-organize-action">Organize library</button>
+            </div>
+          </section>
+
+          <section class="organization-section" aria-labelledby="organization-behavior-heading">
+            <h4 id="organization-behavior-heading">Organization behavior</h4>
+            <div class="organization-option-state">
+              <p><strong>Create a folder for each game:</strong> {{if organization.create_folder_per_game}}On{{else}}Off{{/if}}</p>
+              <p><strong>Rename files:</strong> {{if organization.rename_files}}On{{else}}Off{{/if}}</p>
+            </div>
+            {{if organization.create_folder_per_game && organization.rename_files}}
+              <p class="text-secondary mb-0">Files will be placed in per-game folders and renamed. The examples below include your configured folder, file-name, and Updates/DLC subfolder settings.</p>
+            {{else organization.create_folder_per_game}}
+              <p class="text-secondary mb-0">Files will be placed in per-game folders. Original filenames will be kept; Update and DLC entries may use their configured subfolders as shown below.</p>
+            {{else organization.rename_files}}
+              <p class="text-secondary mb-0">No per-game folders will be created. Files will be renamed; configured Updates/DLC subfolders may still change update and DLC destinations as shown below.</p>
+            {{else}}
+              <div class="alert alert-info mb-0" role="status">Organization is disabled with both options off. No files will be moved or renamed. Enable at least one option in Settings and restart the application to apply it.</div>
+            {{/if}}
+          </section>
+
+          {{if organization.create_folder_per_game || organization.rename_files}}
+            <section class="organization-section" aria-labelledby="organization-preview-heading">
+              <h4 id="organization-preview-heading">Example resulting paths</h4>
+              {{if previewLoading}}
+                <p class="text-secondary mb-0">Preparing examples...</p>
+              {{else preview && preview.entries && preview.entries.length}}
+                <p class="text-secondary">Paths are shown relative to the library root.</p>
+                <div class="table-responsive">
+                  <table class="table table-sm align-middle mb-0 organization-preview-table">
+                    <thead>
+                      <tr><th scope="col">Content</th><th scope="col">Resulting path</th></tr>
+                    </thead>
+                    <tbody>
+                      {{for preview.entries}}
+                      <tr>
+                        <th scope="row">{{if kind === "game"}}Game{{else kind === "update"}}Update{{else}}DLC{{/if}}</th>
+                        <td><code>{{:path}}</code></td>
+                      </tr>
+                      {{/for}}
+                    </tbody>
+                  </table>
+                </div>
+              {{else}}
+                <p class="text-secondary mb-0">No preview paths are available.</p>
+              {{/if}}
+            </section>
+          {{/if}}
+
+          <section class="organization-section" aria-labelledby="organization-scan-heading">
+            <h4 id="organization-scan-heading">Refresh library data</h4>
+            <p class="text-secondary">Rescan the configured folders, or use a hard rescan to rebuild the local scan data.</p>
+            <div class="organization-actions">
+              <button type="button" class="btn btn-outline-secondary rescan-action" data-hard="false">Rescan</button>
+              <button type="button" class="btn btn-outline-secondary rescan-action" data-hard="true">Hard rescan</button>
+            </div>
+          </section>
+       </div>
+
+        {{else}}
+            <div class="alert center alert-warning" role="alert">
+                Local games folder is not set, please set the folder to get started
+            </div>
+            <div class="center">
+                  <button type="button" class="btn btn-outline-primary folder-set">Set Folder</button>
+            </div>
+        {{/if}}
+    </script>
+  </body>
+</html>

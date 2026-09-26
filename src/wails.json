@@ -1,0 +1,15 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "switch-library-manager",
+  "outputfilename": "switch-library-manager",
+  "frontend:dir": "./frontend",
+  "wailsjsdir": "./frontend",
+  "author": {
+    "name": "trembon"
+  },
+  "info": {
+    "companyName": "trembon",
+    "productName": "Switch Library Manager",
+    "productVersion": "2.0.0-beta2"
+  }
+}
