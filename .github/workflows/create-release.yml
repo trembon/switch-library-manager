@@ -19,6 +19,9 @@ jobs:
           - os: macos-15-intel
             platform: darwin/amd64
             artifact: switch-library-manager.darwin-amd64
+          - os: macos-15
+            platform: darwin/arm64
+            artifact: switch-library-manager.darwin-arm64
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -66,6 +69,12 @@ jobs:
           name: switch-library-manager.darwin-amd64
           path: release_inputs/darwin-amd64
 
+      - name: Download macOS ARM64 artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: switch-library-manager.darwin-arm64
+          path: release_inputs/darwin-arm64
+
       - name: Package artifacts
         id: package
         shell: bash
@@ -85,7 +94,7 @@ jobs:
           package_dir="$GITHUB_WORKSPACE/release_packages"
           mkdir -p "$package_dir"
 
-          for platform in windows-amd64 linux-amd64 darwin-amd64; do
+          for platform in windows-amd64 linux-amd64 darwin-amd64 darwin-arm64; do
             artifact_dir="release_inputs/${platform}"
             if [[ ! -d "$artifact_dir" ]] || [[ -z "$(find "$artifact_dir" -mindepth 1 -print -quit)" ]]; then
               echo "Downloaded artifact is missing or empty: $artifact_dir" >&2
@@ -106,6 +115,11 @@ jobs:
             zip -r "$package_dir/switch-library-manager-${release_version}.darwin-amd64.zip" .
           )
 
+          (
+            cd release_inputs/darwin-arm64
+            zip -r "$package_dir/switch-library-manager-${release_version}.darwin-arm64.zip" .
+          )
+
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:
@@ -113,3 +127,4 @@ jobs:
             release_packages/switch-library-manager-${{ steps.package.outputs.release_version }}.windows-amd64.zip
             release_packages/switch-library-manager-${{ steps.package.outputs.release_version }}.linux-amd64.tar.gz
             release_packages/switch-library-manager-${{ steps.package.outputs.release_version }}.darwin-amd64.zip
+            release_packages/switch-library-manager-${{ steps.package.outputs.release_version }}.darwin-arm64.zip

@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "master"
+  workflow_dispatch:
 
 jobs:
   build:
@@ -19,6 +20,10 @@ jobs:
           - os: macos-15-intel
             platform: darwin/amd64
             artifact: switch-library-manager.darwin-amd64
+          - os: macos-15
+            platform: darwin/arm64
+            artifact: switch-library-manager.darwin-arm64
+
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
