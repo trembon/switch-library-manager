@@ -481,13 +481,17 @@ $(function () {
                             {field: "Attributes.bannerUrl",download:false,formatter:"image", headerSort:false,formatterParams:{height:"60px", width:"60px"}},
                             {title: "Title", field: "Attributes.name", headerFilter:"input",formatter:"textarea",width:350},
                             {title: "# Missing", field: "missing_dlc.length"},
-                            {title: "Missing DLC", headerSort:false, field: "missing_dlc",formatter:function(cell, formatterParams, onRendered){
-                                    value = ""
-                                    for (var i in cell.getValue())
-                                    {
-                                        value +="<div>"+cell.getValue()[i]+"</div>"
+                            {title: "Missing DLC", headerSort:false, field: "missing_dlc",formatter:function(cell){
+                                    const content = document.createDocumentFragment();
+                                    const missingDLC = cell.getValue();
+                                    if (Array.isArray(missingDLC)) {
+                                        for (const name of missingDLC) {
+                                            const item = document.createElement("div");
+                                            item.textContent = name;
+                                            content.appendChild(item);
+                                        }
                                     }
-                                    return value
+                                    return content;
                                 }}
                         ],
                     }));
