@@ -158,3 +158,10 @@ func titleIDPrefix(id string) (string, error) {
 	}
 	return id[:len(id)-4] + strconv.FormatUint(value-1, 16), nil
 }
+
+// TitleIDPrefix returns the normalized group key shared by base, update, and
+// DLC title IDs. Callers that resolve an arbitrary content ID to its owning
+// game should use this helper rather than duplicating the grouping rules.
+func TitleIDPrefix(id string) (string, error) {
+	return titleIDPrefix(id)
+}

@@ -5,6 +5,7 @@ import {
     GetMissingDLC,
     GetMissingGames,
     GetMissingUpdates,
+    GetGameDetails,
     IsKeysFileAvailable,
     LoadSettings,
     OrganizeLibrary,
@@ -131,6 +132,105 @@ $(function () {
     const tabButtons = document.getElementById('tab_btns');
     const tabGroup = document.getElementById('tab-group');
     const progressBar = $('.progress-bar');
+    const gameDetailsDialog = document.getElementById("game-details-dialog");
+    const gameDetailsContent = document.getElementById("game-details-content");
+    let gameDetailsRequest = 0;
+    let gameDetailsReturnFocus = null;
+
+    function openGameDetails(titleID, returnFocusElement) {
+        if (!titleID || !gameDetailsDialog || !gameDetailsContent) {
+            return;
+        }
+
+        const request = ++gameDetailsRequest;
+        gameDetailsReturnFocus = returnFocusElement || document.activeElement;
+        const loading = document.createElement("div");
+        loading.className = "game-details-message";
+        loading.setAttribute("role", "status");
+        loading.textContent = "Loading game details…";
+        gameDetailsContent.replaceChildren(loading);
+        gameDetailsDialog.setAttribute("aria-label", "Loading game details");
+        gameDetailsDialog.showModal();
+
+        GetGameDetails(titleID).then(details => {
+            if (request !== gameDetailsRequest || !gameDetailsDialog.open) {
+                return;
+            }
+            gameDetailsDialog.setAttribute("aria-label", details.name ? "Game details for " + details.name : "Game details");
+            gameDetailsContent.innerHTML = $("#gameDetailsTemplate").render(details);
+        }).catch(error => {
+            if (request !== gameDetailsRequest || !gameDetailsDialog.open) {
+                return;
+            }
+            const failure = document.createElement("div");
+            failure.className = "alert alert-danger game-details-message";
+            failure.setAttribute("role", "alert");
+            failure.textContent = error && error.message ? error.message : "Unable to load game details.";
+            gameDetailsDialog.setAttribute("aria-label", "Unable to load game details");
+            gameDetailsContent.replaceChildren(failure);
+        });
+    }
+
+    gameDetailsDialog.addEventListener("close", () => {
+        gameDetailsRequest++;
+        if (gameDetailsReturnFocus && gameDetailsReturnFocus.isConnected) {
+            gameDetailsReturnFocus.focus();
+        }
+        gameDetailsReturnFocus = null;
+    });
+
+    function detailRowTitleID(data, kind) {
+        if (kind === "games") {
+            return data.titleId;
+        }
+        if (kind === "updates") {
+            return data.Attributes && data.Attributes.id;
+        }
+        if (kind === "dlc") {
+            return data.game && data.game.id;
+        }
+        return "";
+    }
+
+    function detailRowLabel(data, kind) {
+        if (kind === "dlc") {
+            return data.game && data.game.name;
+        }
+        if (kind === "updates") {
+            return data.Attributes && data.Attributes.name;
+        }
+        return data.name;
+    }
+
+    function gameDetailsTableOptions(options, kind) {
+        const optionsWithDetails = Object.assign({}, options || {});
+        const rowFormatter = optionsWithDetails.rowFormatter;
+        optionsWithDetails.rowFormatter = function (row) {
+            const data = row.getData();
+            const element = row.getElement();
+            const label = detailRowLabel(data, kind) || "game";
+            element.dataset.gameDetailsRow = "true";
+            element.setAttribute("tabindex", "0");
+            element.setAttribute("aria-haspopup", "dialog");
+            element.setAttribute("aria-label", "Open details for " + label);
+            if (rowFormatter) {
+                rowFormatter.call(this, row);
+            }
+        };
+        optionsWithDetails.rowClick = function (event, row) {
+            openGameDetails(detailRowTitleID(row.getData(), kind), row.getElement());
+        };
+        return tableOptions(optionsWithDetails);
+    }
+
+    document.addEventListener("keydown", event => {
+        const row = event.target.closest && event.target.closest(".tabulator-row[data-game-details-row='true']");
+        if (!row || (event.key !== "Enter" && event.key !== " ")) {
+            return;
+        }
+        event.preventDefault();
+        row.click();
+    });
 
     function setLoading(loading) {
         loading = loading || restartRequired;
@@ -455,7 +555,7 @@ $(function () {
                 let html = $(target + "Template").render({folder: state.settings.paths.library_folder,updates:state.updates})
                 $(target).html(html);
                 if (state.updates && state.updates.length) {
-                    createTable("#updates-table", tableOptions({
+                    createTable("#updates-table", gameDetailsTableOptions({
                         layout:"fitDataStretch",
                         initialSort:[
                             {column:"latest_update_date", dir:"desc"}, //sort by this first
@@ -471,7 +571,7 @@ $(function () {
                             {title: "Available version", headerSort:false, field: "latest_update", hozAlign: "right"},
                             {title: "Update date", headerSort:true, field: "latest_update_date",sorter:"date", sorterParams:{format:"YYYY-MM-DD"}}
                         ],
-                    }), "missing_updates");
+                    }, "updates"), "missing_updates");
                 }
             } else if (target === "#dlc") {
                 if (state.settings.paths.library_folder && !state.library){
@@ -494,7 +594,7 @@ $(function () {
                 });
                 $(target).html(html);
                 if (missingDlcRows.length) {
-                    createTable("#dlc-table", tableOptions({
+                    createTable("#dlc-table", gameDetailsTableOptions({
                         layout:"fitDataStretch",
                         initialSort:[
                             {column:"game.name", dir:"asc"},
@@ -510,7 +610,7 @@ $(function () {
                             {title: "Title", field: "game.name", headerFilter:"input", formatter:"textarea", width:350},
                             {title: "Title ID", field: "game.id", headerFilter:"input"}
                         ],
-                    }), "missing_dlc");
+                    }, "dlc"), "missing_dlc");
                 }
             } else if (target === "#status") {
                 if (state.settings.paths.library_folder && !state.library){
@@ -552,7 +652,7 @@ $(function () {
                     })
                 $(target).html(html);
                 if (state.library && state.library.library_data.length) {
-                    createTable("#library-table", tableOptions({
+                    createTable("#library-table", gameDetailsTableOptions({
                         initialSort:[
                             {column:"name", dir:"asc"}, //sort by this first
                         ],
@@ -568,14 +668,9 @@ $(function () {
                             {title: "Type", headerSort:true, field: "type"},
                             {title: "Update", headerSort:false, field: "update"},
                             {title: "Version", headerSort:false, field: "version"},
-                            {title: "File name", headerSort:false, field: "path",formatter:"textarea",widthGrow:3,cellClick:function(e, cell){
-                                    //e - the click event object
-                                    //cell - cell component
-                                    ShowInFolder(cell.getData().path).catch(error => showError(error.message))
-                                }
-                            }
+                            {title: "File name", headerSort:false, field: "path",formatter:"textarea",widthGrow:3}
                         ],
-                    }), "games");
+                    }, "games"), "games");
                 }
             } else if (target === "#missing") {
                 if (state.settings.paths.library_folder && !state.library){
@@ -591,7 +686,7 @@ $(function () {
                 let html = $(target + "Template").render({folder: state.settings.paths.library_folder,missingGames:state.missingGames});
                 $(target).html(html);
                 if (state.missingGames && state.missingGames.length) {
-                    createTable("#missingGames-table", tableOptions({
+                    createTable("#missingGames-table", gameDetailsTableOptions({
                         layout:"fitDataStretch",
                         initialSort:[
                             {column:"name", dir:"asc"}, //sort by this first
@@ -605,13 +700,40 @@ $(function () {
                             {title: "Region", headerSort:true,headerFilter:"input",formatter:"textarea", field: "region"},
                             {title: "Release date", headerSort:true, field: "release_date", sorter:"date", sorterParams:{format:"YYYY-MM-DD"}},
                         ],
-                    }), "missing_games");
+                    }, "games"), "missing_games");
                 }
             }
         }
 
         $("body").on("click", ".folder-set", e => {
             openFolderPicker(e.target.textContent)
+        });
+
+        $("body").on("click", "[data-game-details-close]", () => {
+            if (gameDetailsDialog.open) {
+                gameDetailsDialog.close();
+            }
+        });
+
+        $("body").on("click", ".game-details-show-folder", e => {
+            e.preventDefault();
+            e.stopPropagation();
+            const path = e.currentTarget.dataset.path;
+            const errorElement = document.getElementById("game-details-action-error");
+            if (!path) {
+                return;
+            }
+            ShowInFolder(path).then(() => {
+                if (errorElement) {
+                    errorElement.hidden = true;
+                    errorElement.textContent = "";
+                }
+            }).catch(error => {
+                if (errorElement) {
+                    errorElement.textContent = error && error.message ? error.message : "Unable to show the file in its folder.";
+                    errorElement.hidden = false;
+                }
+            });
         });
 
         $("body").on("click", ".export-btn", e => {

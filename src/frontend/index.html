@@ -64,6 +64,13 @@
       </section>
     </div>
 
+    <dialog id="game-details-dialog" class="game-details-dialog" aria-label="Game details">
+      <button type="button" class="btn-close game-details-close" aria-label="Close game details" data-game-details-close></button>
+      <div class="game-details-layout">
+        <div id="game-details-content" class="game-details-content"></div>
+      </div>
+    </dialog>
+
     <script id="settingsTemplate" type="text/x-jsrender">
       {{if feedback}}
       <div class="alert alert-{{:feedback.type}}" role="alert">{{:feedback.message}}</div>
@@ -464,6 +471,166 @@
                   <button type="button" class="btn btn-outline-primary folder-set">Set Folder</button>
             </div>
         {{/if}}
+    </script>
+
+    <script id="gameDetailsTemplate" type="text/x-jsrender">
+      <header class="game-details-header">
+        <div class="game-details-hero">
+          {{if attributes.bannerUrl}}
+          <img class="game-details-banner" src="{{:attributes.bannerUrl}}" alt="">
+          {{else attributes.iconUrl}}
+          <img class="game-details-icon" src="{{:attributes.iconUrl}}" alt="">
+          {{/if}}
+          <div class="game-details-title-block">
+            <h1 id="game-details-title">{{if name}}{{:name}}{{else}}Unknown game{{/if}}</h1>
+            <div class="game-details-title-id">{{:titleId}}</div>
+          </div>
+        </div>
+      </header>
+
+      <main class="game-details-scroll">
+        <div class="game-details-body">
+          <section class="game-details-section" aria-labelledby="game-details-overview-heading">
+            <div class="game-details-section-heading">
+              <h2 id="game-details-overview-heading">Game information</h2>
+              {{if base_collected}}
+              <span class="badge text-bg-success">Collected</span>
+              {{else}}
+              <span class="badge text-bg-secondary">Base game missing</span>
+              {{/if}}
+            </div>
+            <dl class="game-details-metadata">
+              {{if attributes.publisher}}<div><dt>Publisher</dt><dd>{{:attributes.publisher}}</dd></div>{{/if}}
+              {{if attributes.region}}<div><dt>Region</dt><dd>{{:attributes.region}}</dd></div>{{/if}}
+              {{if release_date_text}}<div><dt>Release date</dt><dd>{{:release_date_text}}</dd></div>{{/if}}
+              {{if attributes.id}}<div><dt>Title ID</dt><dd><code>{{:attributes.id}}</code></dd></div>{{/if}}
+            </dl>
+            {{if attributes.description}}
+            <p class="game-details-description">{{:attributes.description}}</p>
+            {{else !metadata_available}}
+            <p class="text-secondary mb-0">Catalog game information is unavailable for this title. Locally available information is shown where possible.</p>
+            {{/if}}
+            {{if attributes.screenshots && attributes.screenshots.length}}
+            <div class="game-details-screenshots" aria-label="Game screenshots">
+              {{for attributes.screenshots}}
+              {{if #data}}
+              <img src="{{:#data}}" alt="Game screenshot" loading="lazy">
+              {{/if}}
+              {{/for}}
+            </div>
+            {{/if}}
+            {{if base_collected && base_path}}
+            <div class="game-details-local-file">
+              <span><strong>Base game file:</strong> <code>{{:base_path}}</code></span>
+              <button type="button" class="btn btn-sm btn-outline-secondary game-details-show-folder" data-path="{{:base_path}}">Show in Folder</button>
+            </div>
+            {{/if}}
+          </section>
+
+          <section class="game-details-section" aria-labelledby="game-details-updates-heading">
+            <div class="game-details-section-heading">
+              <h2 id="game-details-updates-heading">Updates</h2>
+              <span class="text-secondary">{{:updates.length}} catalog versions</span>
+            </div>
+            {{if updates && updates.length}}
+            <div class="table-responsive">
+              <table class="table table-sm align-middle game-details-table">
+                <thead><tr><th scope="col">Version</th><th scope="col">Release date</th><th scope="col">Collection</th><th scope="col">Local file</th></tr></thead>
+                <tbody>
+                  {{for updates}}
+                  <tr>
+                    <th scope="row">v{{:version}}</th>
+                    <td>{{if date}}{{:date}}{{else}}Unknown{{/if}}</td>
+                    <td>{{if status === "collected"}}<span class="badge text-bg-success">Collected</span>{{else status === "ignored"}}<span class="badge text-bg-secondary">Ignored</span>{{else}}<span class="badge text-bg-warning">Missing</span>{{/if}}</td>
+                    <td>{{if path}}<button type="button" class="btn btn-sm btn-outline-secondary game-details-show-folder" data-path="{{:path}}">Show in Folder</button>{{else}}<span class="text-secondary">—</span>{{/if}}</td>
+                  </tr>
+                  {{/for}}
+                </tbody>
+              </table>
+            </div>
+            {{else remote_available}}
+            <p class="text-secondary mb-0">No updates are listed in the catalog.</p>
+            {{else}}
+            <p class="text-secondary mb-0">Update information is unavailable because this title is not in the catalog.</p>
+            {{/if}}
+            {{if local_only_updates && local_only_updates.length}}
+            <h3 class="game-details-subheading">Collected versions absent from catalog</h3>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle game-details-table">
+                <thead><tr><th scope="col">Version</th><th scope="col">Collection</th><th scope="col">Local file</th></tr></thead>
+                <tbody>
+                  {{for local_only_updates}}
+                  <tr>
+                    <th scope="row">v{{:version}}</th>
+                    <td><span class="badge text-bg-success">Collected</span></td>
+                    <td><button type="button" class="btn btn-sm btn-outline-secondary game-details-show-folder" data-path="{{:path}}">Show in Folder</button></td>
+                  </tr>
+                  {{/for}}
+                </tbody>
+              </table>
+            </div>
+            {{/if}}
+          </section>
+
+          <section class="game-details-section" aria-labelledby="game-details-dlc-heading">
+            <div class="game-details-section-heading">
+              <h2 id="game-details-dlc-heading">DLC</h2>
+              <span class="text-secondary">{{:dlc.length}} catalog items</span>
+            </div>
+            {{if dlc && dlc.length}}
+            <div class="table-responsive">
+              <table class="table table-sm align-middle game-details-table">
+                <thead><tr><th scope="col">DLC</th><th scope="col">Title ID</th><th scope="col">Versions</th><th scope="col">Collection</th><th scope="col">Local file</th></tr></thead>
+                <tbody>
+                  {{for dlc}}
+                  <tr>
+                    <th scope="row">{{if name}}{{:name}}{{else}}Unnamed DLC{{/if}}</th>
+                    <td><code>{{:titleId}}</code></td>
+                    <td>{{if has_available_version && has_local_version}}Local v{{:local_version}} / latest v{{:available_version}}{{else has_available_version}}Local version unknown / latest v{{:available_version}}{{else has_local_version}}Local v{{:local_version}} / latest unknown{{else}}—{{/if}}</td>
+                    <td>
+                      {{if status === "collected"}}
+                      <span class="badge text-bg-success">Collected</span>
+                      {{if update_status === "out_of_date"}}<span class="badge text-bg-warning">Update available</span>{{else update_status === "ignored"}}<span class="badge text-bg-secondary">Update ignored</span>{{else update_status === "unknown"}}<span class="badge text-bg-secondary">Version unknown</span>{{/if}}
+                      {{else status === "ignored"}}
+                      <span class="badge text-bg-secondary">Ignored</span>
+                      {{else}}
+                      <span class="badge text-bg-warning">Missing</span>
+                      {{/if}}
+                    </td>
+                    <td>{{if path}}<button type="button" class="btn btn-sm btn-outline-secondary game-details-show-folder" data-path="{{:path}}">Show in Folder</button>{{else}}<span class="text-secondary">—</span>{{/if}}</td>
+                  </tr>
+                  {{/for}}
+                </tbody>
+              </table>
+            </div>
+            {{else remote_available}}
+            <p class="text-secondary mb-0">No DLC is listed in the catalog.</p>
+            {{else}}
+            <p class="text-secondary mb-0">DLC information is unavailable because this title is not in the catalog.</p>
+            {{/if}}
+            {{if local_only_dlc && local_only_dlc.length}}
+            <h3 class="game-details-subheading">Collected DLC absent from catalog</h3>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle game-details-table">
+                <thead><tr><th scope="col">DLC</th><th scope="col">Title ID</th><th scope="col">Local version</th><th scope="col">Collection</th><th scope="col">Local file</th></tr></thead>
+                <tbody>
+                  {{for local_only_dlc}}
+                  <tr>
+                    <th scope="row">{{if name}}{{:name}}{{else}}Unnamed local DLC{{/if}}</th>
+                    <td><code>{{:titleId}}</code></td>
+                    <td>{{if has_local_version}}v{{:local_version}}{{else}}Unknown{{/if}}</td>
+                    <td><span class="badge text-bg-success">Collected</span></td>
+                    <td><button type="button" class="btn btn-sm btn-outline-secondary game-details-show-folder" data-path="{{:path}}">Show in Folder</button></td>
+                  </tr>
+                  {{/for}}
+                </tbody>
+              </table>
+            </div>
+            {{/if}}
+          </section>
+          <div id="game-details-action-error" class="alert alert-danger" role="alert" hidden></div>
+        </div>
+      </main>
     </script>
   </body>
 </html>

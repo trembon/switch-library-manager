@@ -1,5 +1,124 @@
 export namespace app {
 	
+	export class GameDLCDetail {
+	    titleId: string;
+	    name: string;
+	    attributes: db.TitleAttributes;
+	    status: string;
+	    update_status: string;
+	    local_version: number;
+	    has_local_version: boolean;
+	    available_version: number;
+	    has_available_version: boolean;
+	    path: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GameDLCDetail(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.titleId = source["titleId"];
+	        this.name = source["name"];
+	        this.attributes = this.convertValues(source["attributes"], db.TitleAttributes);
+	        this.status = source["status"];
+	        this.update_status = source["update_status"];
+	        this.local_version = source["local_version"];
+	        this.has_local_version = source["has_local_version"];
+	        this.available_version = source["available_version"];
+	        this.has_available_version = source["has_available_version"];
+	        this.path = source["path"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class GameUpdateDetail {
+	    version: number;
+	    date: string;
+	    status: string;
+	    path: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GameUpdateDetail(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.date = source["date"];
+	        this.status = source["status"];
+	        this.path = source["path"];
+	    }
+	}
+	export class GameDetails {
+	    attributes: db.TitleAttributes;
+	    titleId: string;
+	    name: string;
+	    release_date_text: string;
+	    remote_available: boolean;
+	    metadata_available: boolean;
+	    base_collected: boolean;
+	    base_path: string;
+	    updates: GameUpdateDetail[];
+	    local_only_updates: GameUpdateDetail[];
+	    dlc: GameDLCDetail[];
+	    local_only_dlc: GameDLCDetail[];
+	
+	    static createFrom(source: any = {}) {
+	        return new GameDetails(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.attributes = this.convertValues(source["attributes"], db.TitleAttributes);
+	        this.titleId = source["titleId"];
+	        this.name = source["name"];
+	        this.release_date_text = source["release_date_text"];
+	        this.remote_available = source["remote_available"];
+	        this.metadata_available = source["metadata_available"];
+	        this.base_collected = source["base_collected"];
+	        this.base_path = source["base_path"];
+	        this.updates = this.convertValues(source["updates"], GameUpdateDetail);
+	        this.local_only_updates = this.convertValues(source["local_only_updates"], GameUpdateDetail);
+	        this.dlc = this.convertValues(source["dlc"], GameDLCDetail);
+	        this.local_only_dlc = this.convertValues(source["local_only_dlc"], GameDLCDetail);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class LibraryTemplateData {
 	    id: number;
 	    name: string;
