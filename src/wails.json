@@ -3,7 +3,7 @@
   "name": "switch-library-manager",
   "outputfilename": "switch-library-manager",
   "frontend:dir": "./frontend",
-  "wailsjsdir": "./frontend/wailsjs",
+  "wailsjsdir": "./frontend",
   "author": {
     "name": "trembon"
   },

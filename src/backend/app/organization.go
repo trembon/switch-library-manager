@@ -51,6 +51,5 @@ func (a *App) OrganizeLibrary() error {
 		process.DeleteOldUpdates(a.baseFolder, a.state.localDB, progress)
 	}
 	process.OrganizeByFolders(settingsObj.Paths.LibraryFolder, a.state.localDB, a.state.switchDB, progress)
-	}
 	return nil
 }
