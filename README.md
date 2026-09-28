@@ -1,10 +1,11 @@
-# Update 2026-01-06
+# Version 2 beta is available
 
-As seen there havent been much activity in this repo lately which is because the motivation from my side has been low as I dont use this application that much anymore.
+To clean up this application and make it a bit more modern, version 2 beta is currently available with the migrations to a different build platform (astilectron to wails).
+Wails is under active development and will also result in better performance and smaller build sizes.
 
-I have no problem to continue to keep this repo alive, with viewing/closing issues/pull requests and creating releases, but I have seen some forks created with some continued work that maybe will get more active by time.
+With this I am also doing a lot of the changes I have wanted under the years.
 
-So, if any of the forks mature more and seems like the more go-to version, create an issue and I can edit the readme to refer to that repo instead.
+Updates are available under the release tab and make sure to read what changes are done, as some are breaking changes from version 1 (like the new settings.json structure)
 
 # Switch library manager
 
