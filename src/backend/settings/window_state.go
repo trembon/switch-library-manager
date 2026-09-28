@@ -15,10 +15,12 @@ const (
 
 // WindowState contains the last normal window bounds saved by the GUI.
 type WindowState struct {
-	Width  int `json:"width"`
-	Height int `json:"height"`
-	X      int `json:"x"`
-	Y      int `json:"y"`
+	Width        int `json:"width"`
+	Height       int `json:"height"`
+	X            int `json:"x"`
+	Y            int `json:"y"`
+	ScreenWidth  int `json:"screen_width"`
+	ScreenHeight int `json:"screen_height"`
 }
 
 // ReadWindowState returns nil when no saved state exists.
@@ -61,11 +63,23 @@ func SaveWindowState(state *WindowState, baseFolder string) error {
 }
 
 func validateWindowState(state *WindowState) error {
+	if state == nil {
+		return errors.New("window state is nil")
+	}
 	if state.Width <= 0 || state.Width > maxWindowDimension {
 		return fmt.Errorf("window state width must be between 1 and %d", maxWindowDimension)
 	}
 	if state.Height <= 0 || state.Height > maxWindowDimension {
 		return fmt.Errorf("window state height must be between 1 and %d", maxWindowDimension)
+	}
+	if (state.ScreenWidth == 0) != (state.ScreenHeight == 0) {
+		return errors.New("window state screen width and height must both be set or both be zero")
+	}
+	if state.ScreenWidth < 0 || state.ScreenWidth > maxWindowDimension {
+		return fmt.Errorf("window state screen width must be between 0 and %d", maxWindowDimension)
+	}
+	if state.ScreenHeight < 0 || state.ScreenHeight > maxWindowDimension {
+		return fmt.Errorf("window state screen height must be between 0 and %d", maxWindowDimension)
 	}
 	return nil
 }

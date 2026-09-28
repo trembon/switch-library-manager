@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/trembon/switch-library-manager/backend/db"
 	"github.com/trembon/switch-library-manager/backend/settings"
+	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
 )
 
@@ -44,7 +46,7 @@ func TestNormalizeSettingsInitializesFrontendLists(t *testing.T) {
 
 func TestWindowStateLoadingIsOptIn(t *testing.T) {
 	base := t.TempDir()
-	want := &settings.WindowState{Width: 1360, Height: 840, X: 40, Y: -20}
+	want := &settings.WindowState{Width: 1360, Height: 840, X: 40, Y: -20, ScreenWidth: 1920, ScreenHeight: 1080}
 	if err := settings.SaveWindowState(want, base); err != nil {
 		t.Fatal(err)
 	}
@@ -101,9 +103,96 @@ func TestWindowStateLoadFallsBackForMalformedState(t *testing.T) {
 	}
 }
 
+func TestResolveWindowStartState(t *testing.T) {
+	current := wailsruntime.Screen{
+		IsCurrent: true,
+		IsPrimary: true,
+	}
+	current.Size.Width = 1366
+	current.Size.Height = 768
+	other := wailsruntime.Screen{}
+	other.Size.Width = 1920
+	other.Size.Height = 1080
+
+	for _, test := range []struct {
+		name      string
+		state     *settings.WindowState
+		screens   []wailsruntime.Screen
+		screenErr error
+		want      windowStartState
+	}{
+		{
+			name: "matching display restores saved bounds",
+			state: &settings.WindowState{
+				Width: 1440, Height: 900, X: 120, Y: 45, ScreenWidth: 1920, ScreenHeight: 1080,
+			},
+			screens: []wailsruntime.Screen{current, other},
+			want: windowStartState{
+				Width: 1440, Height: 900, X: 120, Y: 45, RestorePosition: true,
+			},
+		},
+		{
+			name: "missing display recenters saved size when it fits",
+			state: &settings.WindowState{
+				Width: 1200, Height: 600, X: 1600, Y: 100, ScreenWidth: 1920, ScreenHeight: 1080,
+			},
+			screens: []wailsruntime.Screen{current},
+			want:    windowStartState{Width: 1200, Height: 600, Center: true},
+		},
+		{
+			name: "resolution change clamps and recenters",
+			state: &settings.WindowState{
+				Width: 1600, Height: 900, X: 120, Y: 45, ScreenWidth: 1920, ScreenHeight: 1080,
+			},
+			screens: []wailsruntime.Screen{current},
+			want:    windowStartState{Width: 1366, Height: 768, Center: true},
+		},
+		{
+			name: "window too large for matching display clamps and recenters",
+			state: &settings.WindowState{
+				Width: 1500, Height: 800, X: 120, Y: 45, ScreenWidth: 1366, ScreenHeight: 768,
+			},
+			screens: []wailsruntime.Screen{current, other},
+			want:    windowStartState{Width: 1366, Height: 768, Center: true},
+		},
+		{
+			name: "legacy state recenters saved size",
+			state: &settings.WindowState{
+				Width: 1200, Height: 600, X: -800, Y: 50,
+			},
+			screens: []wailsruntime.Screen{current},
+			want:    windowStartState{Width: 1200, Height: 600, Center: true},
+		},
+		{
+			name: "screen error uses defaults",
+			state: &settings.WindowState{
+				Width: 1440, Height: 900, X: 120, Y: 45, ScreenWidth: 1920, ScreenHeight: 1080,
+			},
+			screens:   []wailsruntime.Screen{current, other},
+			screenErr: errors.New("screen query failed"),
+			want:      windowStartState{Width: defaultWindowWidth, Height: defaultWindowHeight, Center: true},
+		},
+		{
+			name: "no usable screen uses defaults",
+			state: &settings.WindowState{
+				Width: 1440, Height: 900, X: 120, Y: 45, ScreenWidth: 1920, ScreenHeight: 1080,
+			},
+			screens: []wailsruntime.Screen{{IsCurrent: true}},
+			want:    windowStartState{Width: defaultWindowWidth, Height: defaultWindowHeight, Center: true},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got := resolveWindowStartState(test.state, test.screens, test.screenErr)
+			if got != test.want {
+				t.Fatalf("resolveWindowStartState() = %#v, want %#v", got, test.want)
+			}
+		})
+	}
+}
+
 func TestWindowStateSaveIsOptInAndNormalOnly(t *testing.T) {
 	base := t.TempDir()
-	original := &settings.WindowState{Width: 1200, Height: 600, X: 10, Y: 20}
+	original := &settings.WindowState{Width: 1200, Height: 600, X: 10, Y: 20, ScreenWidth: 1920, ScreenHeight: 1080}
 	if err := settings.SaveWindowState(original, base); err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +201,7 @@ func TestWindowStateSaveIsOptInAndNormalOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	changed := &settings.WindowState{Width: 1500, Height: 950, X: -800, Y: 60}
+	changed := &settings.WindowState{Width: 1500, Height: 950, X: -800, Y: 60, ScreenWidth: 2560, ScreenHeight: 1440}
 
 	for _, test := range []struct {
 		name    string
