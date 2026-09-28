@@ -192,13 +192,27 @@ export namespace db {
 
 export namespace process {
 	
+	export class MissingDLC {
+	    id: string;
+	    name: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MissingDLC(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	    }
+	}
 	export class IncompleteTitle {
 	    Attributes: db.TitleAttributes;
 	    Meta?: switchfs.ContentMetaAttributes;
 	    local_update: number;
 	    latest_update: number;
 	    latest_update_date: string;
-	    missing_dlc: string[];
+	    missing_dlc: MissingDLC[];
 	
 	    static createFrom(source: any = {}) {
 	        return new IncompleteTitle(source);
@@ -211,7 +225,7 @@ export namespace process {
 	        this.local_update = source["local_update"];
 	        this.latest_update = source["latest_update"];
 	        this.latest_update_date = source["latest_update_date"];
-	        this.missing_dlc = source["missing_dlc"];
+	        this.missing_dlc = this.convertValues(source["missing_dlc"], MissingDLC);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

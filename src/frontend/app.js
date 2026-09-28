@@ -484,32 +484,31 @@ $(function () {
                     }).catch(error => showError(error.message));
                     return
                 }
-                let html = $(target + "Template").render({folder: state.settings.paths.library_folder,dlc:state.dlc});
+                const missingDlcRows = (state.dlc || []).flatMap(game =>
+                    (game.missing_dlc || []).map(dlc => ({game: game.Attributes, dlc}))
+                );
+                let html = $(target + "Template").render({
+                    folder: state.settings.paths.library_folder,
+                    dlc: state.dlc,
+                    missingDlcCount: missingDlcRows.length
+                });
                 $(target).html(html);
-                if (state.dlc && state.dlc.length) {
+                if (missingDlcRows.length) {
                     createTable("#dlc-table", tableOptions({
                         layout:"fitDataStretch",
                         initialSort:[
-                            {column:"Attributes.name", dir:"asc"}, //sort by this first
+                            {column:"game.name", dir:"asc"},
+                            {column:"dlc.name", dir:"asc"},
+                            {column:"dlc.id", dir:"asc"},
+                            {column:"game.id", dir:"asc"},
                         ],
-                        data: state.dlc,
+                        data: missingDlcRows,
                         columns: [
                             {formatter:"rownum",download:false},
-                            {field: "Attributes.bannerUrl",download:false,formatter:"image", headerSort:false,formatterParams:{height:"60px", width:"60px"}},
-                            {title: "Title", field: "Attributes.name", headerFilter:"input",formatter:"textarea",width:350},
-                            {title: "# Missing", field: "missing_dlc.length"},
-                            {title: "Missing DLC", headerSort:false, field: "missing_dlc",formatter:function(cell){
-                                    const content = document.createDocumentFragment();
-                                    const missingDLC = cell.getValue();
-                                    if (Array.isArray(missingDLC)) {
-                                        for (const name of missingDLC) {
-                                            const item = document.createElement("div");
-                                            item.textContent = name;
-                                            content.appendChild(item);
-                                        }
-                                    }
-                                    return content;
-                                }}
+                            {title: "Missing DLC", field: "dlc.name", headerFilter:"input", formatter:"textarea"},
+                            {title: "DLC ID", field: "dlc.id", headerFilter:"input"},
+                            {title: "Title", field: "game.name", headerFilter:"input", formatter:"textarea", width:350},
+                            {title: "Title ID", field: "game.id", headerFilter:"input"}
                         ],
                     }), "missing_dlc");
                 }

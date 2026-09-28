@@ -1,7 +1,6 @@
 package process
 
 import (
-	"fmt"
 	"sort"
 	"strconv"
 
@@ -10,13 +9,18 @@ import (
 	"go.uber.org/zap"
 )
 
+type MissingDLC struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+}
+
 type IncompleteTitle struct {
 	Attributes       db.TitleAttributes
 	Meta             *switchfs.ContentMetaAttributes
-	LocalUpdate      int      `json:"local_update"`
-	LatestUpdate     int      `json:"latest_update"`
-	LatestUpdateDate string   `json:"latest_update_date"`
-	MissingDLC       []string `json:"missing_dlc"`
+	LocalUpdate      int          `json:"local_update"`
+	LatestUpdate     int          `json:"latest_update"`
+	LatestUpdateDate string       `json:"latest_update_date"`
+	MissingDLC       []MissingDLC `json:"missing_dlc"`
 }
 
 func ScanForMissingUpdates(localDB map[string]*db.SwitchGameFiles,
@@ -146,7 +150,7 @@ func ScanForMissingDLC(localDB map[string]*db.SwitchGameFiles,
 				}
 
 				if _, ok := switchFile.Dlc[k]; !ok {
-					switchTitle.MissingDLC = append(switchTitle.MissingDLC, fmt.Sprintf("%v [%v]", v.Name, v.Id))
+					switchTitle.MissingDLC = append(switchTitle.MissingDLC, MissingDLC{Id: v.Id, Name: v.Name})
 				}
 			}
 			if len(switchTitle.MissingDLC) != 0 {

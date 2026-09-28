@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -286,8 +287,9 @@ func (c *Console) processMissingDLC(localDB *db.LocalSwitchFilesDB, titlesDB *db
 		ignoreIds[strings.ToLower(id)] = struct{}{}
 	}
 	incompleteTitles := process.ScanForMissingDLC(localDB.TitlesMap, titlesDB.TitlesMap, ignoreIds)
-	if len(incompleteTitles) != 0 {
-		fmt.Print("\nFound missing DLCS:\n\n")
+	rows := flattenMissingDLC(incompleteTitles)
+	if len(rows) != 0 {
+		fmt.Print("\nFound missing DLCs:\n\n")
 	} else {
 		fmt.Print("\nYou have all the DLCS!\n\n")
 		return
@@ -298,20 +300,49 @@ func (c *Console) processMissingDLC(localDB *db.LocalSwitchFilesDB, titlesDB *db
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
 	t.SetStyle(table.StyleColoredBright)
-	t.AppendHeader(table.Row{"#", "Title", "TitleId", "Missing DLCs (titleId - Name)"})
+	t.AppendHeader(table.Row{"#", "Missing DLC", "DLC TitleId", "Title", "TitleId"})
 	i := 0
-	for _, v := range incompleteTitles {
-		for _, dlc := range v.MissingDLC {
-			csv.Write([]string{v.Attributes.Name, v.Attributes.Id, dlc})
-		}
-
-		t.AppendRow([]interface{}{i, v.Attributes.Name, v.Attributes.Id, strings.Join(v.MissingDLC, "\n")})
+	for _, row := range rows {
+		csv.Write(missingDLCCSVRow(row))
+		t.AppendRow([]interface{}{i, row.DLC.Name, row.DLC.Id, row.Game.Name, row.Game.Id})
 		i++
 	}
-	t.AppendFooter(table.Row{"", "", "", "", "Total", len(incompleteTitles)})
+	t.AppendFooter(table.Row{"", "Total", len(rows), "", ""})
 	t.Render()
 
 	csv.Close()
+}
+
+type missingDLCRow struct {
+	Game db.TitleAttributes
+	DLC  process.MissingDLC
+}
+
+func missingDLCCSVRow(row missingDLCRow) []string {
+	return []string{row.Game.Name, row.Game.Id, fmt.Sprintf("%s [%s]", row.DLC.Name, row.DLC.Id)}
+}
+
+func flattenMissingDLC(titles map[string]process.IncompleteTitle) []missingDLCRow {
+	rows := make([]missingDLCRow, 0)
+	for _, title := range titles {
+		for _, dlc := range title.MissingDLC {
+			rows = append(rows, missingDLCRow{Game: title.Attributes, DLC: dlc})
+		}
+	}
+
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Game.Name != rows[j].Game.Name {
+			return rows[i].Game.Name < rows[j].Game.Name
+		}
+		if rows[i].DLC.Name != rows[j].DLC.Name {
+			return rows[i].DLC.Name < rows[j].DLC.Name
+		}
+		if rows[i].DLC.Id != rows[j].DLC.Id {
+			return rows[i].DLC.Id < rows[j].DLC.Id
+		}
+		return rows[i].Game.Id < rows[j].Game.Id
+	})
+	return rows
 }
 
 func (c *Console) UpdateProgress(curr int, total int, message string) {

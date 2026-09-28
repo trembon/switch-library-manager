@@ -344,12 +344,16 @@
       {{if folder}}
            {{if dlc && dlc.length}}
                <div class="alert center alert-warning" role="alert">
-                   There are {{:dlc.length}} games with missing DLC's in your local library.
+                   {{if missingDlcCount === 1}}
+                       There is 1 missing DLC in your local library.
+                   {{else}}
+                       There are {{:missingDlcCount}} missing DLCs in your local library.
+                   {{/if}}
                </div>
                <section id="dlc-table" class="content"></section>
            {{else}}
                <div class="alert center alert-success" role="alert">
-                   All games are up to date, you are not missing any DLC's!
+                   You are not missing any DLCs!
                </div>
            {{/if}}
        {{else}}

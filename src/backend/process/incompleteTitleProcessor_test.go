@@ -118,23 +118,47 @@ func TestScanForMissingDLC(t *testing.T) {
 	baseID := "0100abcd00001000"
 	missingID := "0100abcd00001a01"
 	ignoredID := "0100abcd00001a02"
+	presentID := "0100abcd00001a03"
+	secondMissingID := "0100abcd00001a04"
 	remote := map[string]*db.SwitchTitle{
 		"0100abcd00001": {Attributes: db.TitleAttributes{Id: baseID}, Dlc: map[string]db.TitleAttributes{
-			missingID: {Name: "Expansion", Id: missingID},
-			ignoredID: {Name: "Ignored", Id: ignoredID},
+			missingID:       {Name: "Expansion", Id: missingID},
+			ignoredID:       {Name: "Ignored", Id: ignoredID},
+			presentID:       {Name: "Already installed", Id: presentID},
+			secondMissingID: {Name: "Extra Story", Id: secondMissingID},
 		}},
 	}
 	local := map[string]*db.SwitchGameFiles{
-		"0100abcd00001": {BaseExist: true, Dlc: map[string]db.SwitchFileInfo{ignoredID: {}}},
-		"missing-base":  {BaseExist: false},
-		"not-remote":    {BaseExist: true},
+		"0100abcd00001": {BaseExist: true, Dlc: map[string]db.SwitchFileInfo{
+			ignoredID: {},
+			presentID: {},
+		}},
+		"missing-base": {BaseExist: false},
+		"not-remote":   {BaseExist: true},
 	}
 	result := ScanForMissingDLC(local, remote, map[string]struct{}{ignoredID: {}})
 	game, ok := result[baseID]
-	if !ok || len(game.MissingDLC) != 1 || game.MissingDLC[0] != "Expansion ["+missingID+"]" {
+	if !ok || len(game.MissingDLC) != 2 {
 		t.Fatalf("missing DLC result = %#v, present = %v", game, ok)
 	}
-	if got := ScanForMissingDLC(local, remote, map[string]struct{}{missingID: {}, ignoredID: {}}); len(got) != 0 {
+	gotDLC := make(map[string]string, len(game.MissingDLC))
+	for _, dlc := range game.MissingDLC {
+		gotDLC[dlc.Id] = dlc.Name
+	}
+	if gotDLC[missingID] != "Expansion" || gotDLC[secondMissingID] != "Extra Story" {
+		t.Fatalf("structured missing DLC values = %#v", gotDLC)
+	}
+	encodedDLC, err := json.Marshal(MissingDLC{Id: missingID, Name: "Expansion"})
+	if err != nil {
+		t.Fatalf("marshal missing DLC: %v", err)
+	}
+	if string(encodedDLC) != `{"id":"`+missingID+`","name":"Expansion"}` {
+		t.Fatalf("missing DLC JSON = %s", encodedDLC)
+	}
+	if _, exists := gotDLC[presentID]; exists {
+		t.Fatalf("locally present DLC was reported: %#v", gotDLC)
+	}
+	if got := ScanForMissingDLC(local, remote, map[string]struct{}{missingID: {}, ignoredID: {}, secondMissingID: {}}); len(got) != 0 {
 		t.Fatalf("fully ignored result = %#v", got)
 	}
 	if got := ScanForMissingDLC(map[string]*db.SwitchGameFiles{}, remote, nil); len(got) != 0 {

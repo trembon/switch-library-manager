@@ -3,6 +3,9 @@ package consoleapp
 import (
 	"testing"
 	"time"
+
+	"github.com/trembon/switch-library-manager/backend/db"
+	"github.com/trembon/switch-library-manager/backend/process"
 )
 
 func TestCsvExportFilename(t *testing.T) {
@@ -21,5 +24,42 @@ func TestCsvExportFilename(t *testing.T) {
 				t.Fatalf("csvExportFilename(%q) = %q, want %q", kind, got, want)
 			}
 		})
+	}
+}
+
+func TestFlattenMissingDLC(t *testing.T) {
+	titles := map[string]process.IncompleteTitle{
+		"game-z": {
+			Attributes: db.TitleAttributes{Id: "game-z-id", Name: "Zulu"},
+			MissingDLC: []process.MissingDLC{
+				{Id: "dlc-z-id", Name: "Expansion"},
+				{Id: "dlc-a-id", Name: "Adventure"},
+				{Id: "dlc-y-id", Name: "Expansion"},
+			},
+		},
+		"game-a": {
+			Attributes: db.TitleAttributes{Id: "game-a-id", Name: "Alpha"},
+			MissingDLC: []process.MissingDLC{{Id: "dlc-b-id", Name: "Bonus"}},
+		},
+	}
+
+	rows := flattenMissingDLC(titles)
+	if len(rows) != 4 {
+		t.Fatalf("flattened missing DLC rows = %d, want 4", len(rows))
+	}
+	want := []struct{ game, gameID, dlc, dlcID string }{
+		{"Alpha", "game-a-id", "Bonus", "dlc-b-id"},
+		{"Zulu", "game-z-id", "Adventure", "dlc-a-id"},
+		{"Zulu", "game-z-id", "Expansion", "dlc-y-id"},
+		{"Zulu", "game-z-id", "Expansion", "dlc-z-id"},
+	}
+	for i, row := range rows {
+		if row.Game.Name != want[i].game || row.Game.Id != want[i].gameID || row.DLC.Name != want[i].dlc || row.DLC.Id != want[i].dlcID {
+			t.Errorf("row %d = (%q, %q, %q, %q), want (%q, %q, %q, %q)", i, row.Game.Name, row.Game.Id, row.DLC.Name, row.DLC.Id, want[i].game, want[i].gameID, want[i].dlc, want[i].dlcID)
+		}
+		csvRow := missingDLCCSVRow(row)
+		if len(csvRow) != 3 || csvRow[0] != want[i].game || csvRow[1] != want[i].gameID || csvRow[2] != want[i].dlc+" ["+want[i].dlcID+"]" {
+			t.Errorf("CSV row %d = %#v", i, csvRow)
+		}
 	}
 }
