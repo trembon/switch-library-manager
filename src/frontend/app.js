@@ -33,9 +33,26 @@ $(function () {
 
     let currTable
     let currTableExportKind
+    const activeTables = new Set();
     let themeMediaQuery
     let themeMediaQueryHandler
     let restartRequired = false
+
+    function createTable(element, options, exportKind) {
+        currTable = new Tabulator(element, options);
+        activeTables.add(currTable);
+        currTableExportKind = exportKind;
+    }
+
+    function destroyTables() {
+        for (const table of activeTables) {
+            table.destroy();
+        }
+
+        activeTables.clear();
+        currTable = undefined;
+        currTableExportKind = undefined;
+    }
 
     function updatePaginationVisibility(table) {
         const paginator = table.element.querySelector(".tabulator-paginator");
@@ -438,7 +455,7 @@ $(function () {
                 let html = $(target + "Template").render({folder: state.settings.paths.library_folder,updates:state.updates})
                 $(target).html(html);
                 if (state.updates && state.updates.length) {
-                    currTable = new Tabulator("#updates-table", tableOptions({
+                    createTable("#updates-table", tableOptions({
                         layout:"fitDataStretch",
                         initialSort:[
                             {column:"latest_update_date", dir:"desc"}, //sort by this first
@@ -454,8 +471,7 @@ $(function () {
                             {title: "Available version", headerSort:false, field: "latest_update", hozAlign: "right"},
                             {title: "Update date", headerSort:true, field: "latest_update_date",sorter:"date", sorterParams:{format:"YYYY-MM-DD"}}
                         ],
-                    }));
-                    currTableExportKind = "missing_updates";
+                    }), "missing_updates");
                 }
             } else if (target === "#dlc") {
                 if (state.settings.paths.library_folder && !state.library){
@@ -471,7 +487,7 @@ $(function () {
                 let html = $(target + "Template").render({folder: state.settings.paths.library_folder,dlc:state.dlc});
                 $(target).html(html);
                 if (state.dlc && state.dlc.length) {
-                    currTable = new Tabulator("#dlc-table", tableOptions({
+                    createTable("#dlc-table", tableOptions({
                         layout:"fitDataStretch",
                         initialSort:[
                             {column:"Attributes.name", dir:"asc"}, //sort by this first
@@ -495,8 +511,7 @@ $(function () {
                                     return content;
                                 }}
                         ],
-                    }));
-                    currTableExportKind = "missing_dlc";
+                    }), "missing_dlc");
                 }
             } else if (target === "#status") {
                 if (state.settings.paths.library_folder && !state.library){
@@ -505,7 +520,7 @@ $(function () {
                 let html = $(target + "Template").render({folder: state.settings.paths.library_folder,library:state.library ? state.library.issues: undefined,numFiles:state.library ? state.library.num_files:-1});
                 $(target).html(html);
                 if (state.library.issues && state.library.issues.length) {
-                    currTable = new Tabulator("#status-table", tableOptions({
+                    createTable("#status-table", tableOptions({
                         layout:"fitDataStretch",
                         data: state.library.issues,
                         columns: [
@@ -522,8 +537,7 @@ $(function () {
                                 }
                             }
                         ],
-                    }));
-                    currTableExportKind = "issues";
+                    }), "issues");
                 }
             } else if (target === "#library") {
                 if (state.settings.paths.library_folder && !state.library){
@@ -539,7 +553,7 @@ $(function () {
                     })
                 $(target).html(html);
                 if (state.library && state.library.library_data.length) {
-                    currTable = new Tabulator("#library-table", tableOptions({
+                    createTable("#library-table", tableOptions({
                         initialSort:[
                             {column:"name", dir:"asc"}, //sort by this first
                         ],
@@ -562,8 +576,7 @@ $(function () {
                                 }
                             }
                         ],
-                    }));
-                    currTableExportKind = "games";
+                    }), "games");
                 }
             } else if (target === "#missing") {
                 if (state.settings.paths.library_folder && !state.library){
@@ -579,7 +592,7 @@ $(function () {
                 let html = $(target + "Template").render({folder: state.settings.paths.library_folder,missingGames:state.missingGames});
                 $(target).html(html);
                 if (state.missingGames && state.missingGames.length) {
-                    currTable = new Tabulator("#missingGames-table", tableOptions({
+                    createTable("#missingGames-table", tableOptions({
                         layout:"fitDataStretch",
                         initialSort:[
                             {column:"name", dir:"asc"}, //sort by this first
@@ -593,8 +606,7 @@ $(function () {
                             {title: "Region", headerSort:true,headerFilter:"input",formatter:"textarea", field: "region"},
                             {title: "Release date", headerSort:true, field: "release_date", sorter:"date", sorterParams:{format:"YYYY-MM-DD"}},
                         ],
-                    }));
-                    currTableExportKind = "missing_games";
+                    }), "missing_games");
                 }
             }
         }
@@ -714,6 +726,7 @@ $(function () {
         });
 
         function hideCurrentTab() {
+            destroyTables();
             $("#tab_btns a").removeClass("active").attr('aria-selected', 'false');
             let tabgroup = $("#tab_btns").data('tabgroup');
             $("#" + tabgroup).children('div').hide();
