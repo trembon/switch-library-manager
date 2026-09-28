@@ -50,11 +50,12 @@ const (
 )
 
 type GUISettings struct {
-	Enabled          bool   `json:"enabled"`
-	PageSize         int    `json:"page_size"`
-	HideMissingGames bool   `json:"hide_missing_games"`
-	HideDemoGames    bool   `json:"hide_demo_games"`
-	Theme            string `json:"theme"`
+	Enabled             bool   `json:"enabled"`
+	PageSize            int    `json:"page_size"`
+	HideMissingGames    bool   `json:"hide_missing_games"`
+	HideDemoGames       bool   `json:"hide_demo_games"`
+	RememberWindowState bool   `json:"remember_window_state"`
+	Theme               string `json:"theme"`
 }
 
 type PathSettings struct {

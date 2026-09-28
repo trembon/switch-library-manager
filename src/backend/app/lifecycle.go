@@ -13,7 +13,13 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	migrationInfo := a.migrationInfo
 	a.migrationInfo = nil
+	windowState := a.windowState
+	rememberWindowState := a.rememberWindowState
 	a.state.mu.Unlock()
+
+	if rememberWindowState && windowState != nil {
+		wailsruntime.WindowSetPosition(ctx, windowState.X, windowState.Y)
+	}
 
 	if migrationInfo == nil {
 		return

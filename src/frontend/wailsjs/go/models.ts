@@ -348,6 +348,7 @@ export namespace settings {
 	    page_size: number;
 	    hide_missing_games: boolean;
 	    hide_demo_games: boolean;
+	    remember_window_state: boolean;
 	    theme: string;
 	
 	    static createFrom(source: any = {}) {
@@ -360,6 +361,7 @@ export namespace settings {
 	        this.page_size = source["page_size"];
 	        this.hide_missing_games = source["hide_missing_games"];
 	        this.hide_demo_games = source["hide_demo_games"];
+	        this.remember_window_state = source["remember_window_state"];
 	        this.theme = source["theme"];
 	    }
 	}

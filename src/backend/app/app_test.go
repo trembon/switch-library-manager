@@ -42,6 +42,123 @@ func TestNormalizeSettingsInitializesFrontendLists(t *testing.T) {
 	}
 }
 
+func TestWindowStateLoadingIsOptIn(t *testing.T) {
+	base := t.TempDir()
+	want := &settings.WindowState{Width: 1360, Height: 840, X: 40, Y: -20}
+	if err := settings.SaveWindowState(want, base); err != nil {
+		t.Fatal(err)
+	}
+	filename := filepath.Join(base, settings.WINDOW_STATE_FILENAME)
+	before, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := loadWindowState(base, false, zap.NewNop().Sugar()); got != nil {
+		t.Fatalf("disabled load returned %#v; want nil", got)
+	}
+	disabledWidth, disabledHeight := windowSizeForStart(false, want)
+	if disabledWidth != defaultWindowWidth || disabledHeight != defaultWindowHeight {
+		t.Fatalf("disabled startup size = %dx%d; want %dx%d", disabledWidth, disabledHeight, defaultWindowWidth, defaultWindowHeight)
+	}
+	after, err := os.ReadFile(filename)
+	if err != nil || string(after) != string(before) {
+		t.Fatalf("disabled load changed saved state: err=%v", err)
+	}
+
+	got := loadWindowState(base, true, zap.NewNop().Sugar())
+	if got == nil || *got != *want {
+		t.Fatalf("enabled load = %#v; want %#v", got, want)
+	}
+	enabledWidth, enabledHeight := windowSizeForStart(true, got)
+	if enabledWidth != want.Width || enabledHeight != want.Height {
+		t.Fatalf("enabled startup size = %dx%d; want %dx%d", enabledWidth, enabledHeight, want.Width, want.Height)
+	}
+	defaultWidth, defaultHeight := windowSizeForStart(true, nil)
+	if defaultWidth != defaultWindowWidth || defaultHeight != defaultWindowHeight {
+		t.Fatalf("missing-state startup size = %dx%d; want %dx%d", defaultWidth, defaultHeight, defaultWindowWidth, defaultWindowHeight)
+	}
+}
+
+func TestWindowStateLoadFallsBackForMalformedState(t *testing.T) {
+	base := t.TempDir()
+	filename := filepath.Join(base, settings.WINDOW_STATE_FILENAME)
+	malformed := []byte(`{"width":`)
+	if err := os.WriteFile(filename, malformed, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := loadWindowState(base, true, zap.NewNop().Sugar()); got != nil {
+		t.Fatalf("malformed state load returned %#v; want nil", got)
+	}
+	width, height := windowSizeForStart(true, nil)
+	if width != defaultWindowWidth || height != defaultWindowHeight {
+		t.Fatalf("malformed state startup size = %dx%d; want %dx%d", width, height, defaultWindowWidth, defaultWindowHeight)
+	}
+	after, err := os.ReadFile(filename)
+	if err != nil || string(after) != string(malformed) {
+		t.Fatalf("reading malformed state changed its file: err=%v", err)
+	}
+}
+
+func TestWindowStateSaveIsOptInAndNormalOnly(t *testing.T) {
+	base := t.TempDir()
+	original := &settings.WindowState{Width: 1200, Height: 600, X: 10, Y: 20}
+	if err := settings.SaveWindowState(original, base); err != nil {
+		t.Fatal(err)
+	}
+	filename := filepath.Join(base, settings.WINDOW_STATE_FILENAME)
+	before, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := &settings.WindowState{Width: 1500, Height: 950, X: -800, Y: 60}
+
+	for _, test := range []struct {
+		name    string
+		enabled bool
+		normal  bool
+	}{
+		{name: "disabled", enabled: false, normal: true},
+		{name: "not normal", enabled: true, normal: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if err := saveWindowStateIfNeeded(base, test.enabled, test.normal, changed); err != nil {
+				t.Fatal(err)
+			}
+			after, err := os.ReadFile(filename)
+			if err != nil || string(after) != string(before) {
+				t.Fatalf("skipped save changed state: err=%v", err)
+			}
+		})
+	}
+	if err := saveWindowStateIfNeeded(base, true, true, changed); err != nil {
+		t.Fatal(err)
+	}
+	got, err := settings.ReadWindowState(base)
+	if err != nil || got == nil || *got != *changed {
+		t.Fatalf("enabled normal save = %#v, %v; want %#v", got, err, changed)
+	}
+}
+
+func TestSaveSettingsUpdatesRememberWindowStateFlag(t *testing.T) {
+	application := &App{baseFolder: t.TempDir()}
+	if err := application.SaveSettings(settings.AppSettings{
+		GUI: settings.GUISettings{RememberWindowState: true},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !application.rememberWindowState {
+		t.Fatal("remember-window-state flag was not enabled after settings save")
+	}
+	if err := application.SaveSettings(settings.AppSettings{}); err != nil {
+		t.Fatal(err)
+	}
+	if application.rememberWindowState {
+		t.Fatal("remember-window-state flag was not disabled after settings save")
+	}
+}
+
 func TestSettingsMigrationMessageIncludesBackupAndDefaultInstructions(t *testing.T) {
 	message := settingsMigrationMessage(&settings.MigrationInfo{BackupPath: "C:\\app\\settings.old.json"})
 	if !strings.Contains(message, "C:\\app\\settings.old.json") || !strings.Contains(message, "current default values") || !strings.Contains(message, "docs/settings.md") {

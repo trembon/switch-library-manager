@@ -28,7 +28,7 @@ func TestDefaultSettingsAndJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.SchemaVersion != SETTINGS_SCHEMA_VERSION || !s.GUI.Enabled || !s.Scan.Recursive || !s.MissingContent.CheckForUpdates || !s.MissingContent.CheckForDLC || s.GUI.PageSize != 100 || s.GUI.Theme != ThemeInherit {
+	if s.SchemaVersion != SETTINGS_SCHEMA_VERSION || !s.GUI.Enabled || s.GUI.RememberWindowState || !s.Scan.Recursive || !s.MissingContent.CheckForUpdates || !s.MissingContent.CheckForDLC || s.GUI.PageSize != 100 || s.GUI.Theme != ThemeInherit {
 		t.Fatalf("unexpected defaults: %#v", s)
 	}
 	if s.DataSources.TitlesURL != DEFAULT_TITLES_JSON_URL || s.DataSources.VersionsURL != DEFAULT_VERSIONS_JSON_URL || !s.Organization.SwitchSafeFileNames {
@@ -47,6 +47,22 @@ func TestDefaultSettingsAndJSON(t *testing.T) {
 	}
 	if decoded.SchemaVersion != SETTINGS_SCHEMA_VERSION || decoded.Organization.FileNameTemplate == "" {
 		t.Fatalf("invalid default JSON: %#v", decoded)
+	}
+}
+
+func TestRememberWindowStateDefaultsOffForExistingSettings(t *testing.T) {
+	isolateSettings(t)
+	base := t.TempDir()
+	if err := os.WriteFile(filepath.Join(base, SETTINGS_FILENAME), []byte(`{"schema_version":2,"gui":{"enabled":true}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := ReadSettings(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.GUI.RememberWindowState {
+		t.Fatal("existing settings without remember_window_state should default to false")
 	}
 }
 
@@ -124,7 +140,7 @@ func TestSettingsSaveRoundTrip(t *testing.T) {
 		DataSources:   DataSourceSettings{TitlesURL: "https://titles.example", VersionsURL: "https://versions.example"},
 		Paths:         PathSettings{LibraryFolder: "library", ScanFolders: []string{"one", "two"}},
 		Scan:          ScanSettings{IgnoreFileTypes: []string{"txt"}},
-		GUI:           GUISettings{PageSize: 25},
+		GUI:           GUISettings{PageSize: 25, RememberWindowState: true},
 		Organization:  OrganizationSettings{FileNameTemplate: "{TITLE_ID}"},
 	}
 	if err := SaveSettingsWithError(custom, base); err != nil {
@@ -139,7 +155,7 @@ func TestSettingsSaveRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.Paths.LibraryFolder != "library" || loaded.GUI.PageSize != 25 || len(loaded.Paths.ScanFolders) != 2 {
+	if loaded.Paths.LibraryFolder != "library" || loaded.GUI.PageSize != 25 || !loaded.GUI.RememberWindowState || len(loaded.Paths.ScanFolders) != 2 {
 		t.Fatalf("round-trip mismatch: %#v", loaded)
 	}
 	if loaded.DataSources.TitlesURL != custom.DataSources.TitlesURL || loaded.DataSources.VersionsURL != custom.DataSources.VersionsURL {

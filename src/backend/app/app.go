@@ -22,12 +22,14 @@ type State struct {
 }
 
 type App struct {
-	state          State
-	baseFolder     string
-	localDbManager *db.LocalSwitchDBManager
-	sugarLogger    *zap.SugaredLogger
-	migrationInfo  *settings.MigrationInfo
-	ctx            context.Context
+	state               State
+	baseFolder          string
+	localDbManager      *db.LocalSwitchDBManager
+	sugarLogger         *zap.SugaredLogger
+	migrationInfo       *settings.MigrationInfo
+	rememberWindowState bool
+	windowState         *settings.WindowState
+	ctx                 context.Context
 }
 
 // Start prepares the application dependencies and starts the Wails event loop.
@@ -38,6 +40,11 @@ func Start(baseFolder string, sugarLogger *zap.SugaredLogger, assets fs.FS) erro
 // StartWithMigration prepares the application and optionally shows the older
 // settings migration notice after Wails has initialized.
 func StartWithMigration(baseFolder string, sugarLogger *zap.SugaredLogger, assets fs.FS, migrationInfo *settings.MigrationInfo) error {
+	appSettings, err := settings.ReadSettings(baseFolder)
+	if err != nil {
+		return fmt.Errorf("load GUI settings: %w", err)
+	}
+
 	localDbManager, err := db.NewLocalSwitchDBManager(baseFolder)
 	if err != nil {
 		sugarLogger.Error("failed to create local files db", err)
@@ -49,11 +56,13 @@ func StartWithMigration(baseFolder string, sugarLogger *zap.SugaredLogger, asset
 		sugarLogger.Warnf("failed to initialize Switch keys (deep scan disabled): %v", err)
 	}
 	application := &App{
-		baseFolder:     baseFolder,
-		localDbManager: localDbManager,
-		sugarLogger:    sugarLogger,
-		migrationInfo:  migrationInfo,
+		baseFolder:          baseFolder,
+		localDbManager:      localDbManager,
+		sugarLogger:         sugarLogger,
+		migrationInfo:       migrationInfo,
+		rememberWindowState: appSettings.GUI.RememberWindowState,
 	}
+	application.windowState = loadWindowState(baseFolder, application.rememberWindowState, sugarLogger)
 	return application.run(assets)
 }
 
@@ -62,16 +71,18 @@ func (a *App) run(assets fs.FS) error {
 	if err != nil {
 		return fmt.Errorf("prepare frontend assets: %w", err)
 	}
+	width, height := windowSizeForStart(a.rememberWindowState, a.windowState)
 
 	if err := wails.Run(&options.App{
 		Title:            "Switch Library Manager (" + settings.SLM_VERSION + ")",
-		Width:            1200,
-		Height:           600,
+		Width:            width,
+		Height:           height,
 		AlwaysOnTop:      true,
 		BackgroundColour: options.NewRGB(51, 51, 51),
 		AssetServer:      &assetserver.Options{Assets: frontend},
 		OnStartup:        a.startup,
 		OnShutdown:       a.shutdown,
+		OnBeforeClose:    a.beforeClose,
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId: "com.trembon.switch-library-manager",
 		},

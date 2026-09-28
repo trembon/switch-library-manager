@@ -311,6 +311,7 @@ $(function () {
                     page_size: Number(form.elements.gui_page_size.value),
                     hide_missing_games: form.elements.gui_hide_missing_games.checked,
                     hide_demo_games: form.elements.gui_hide_demo_games.checked,
+                    remember_window_state: form.elements.gui_remember_window_state.checked,
                     theme: form.elements.gui_theme.value
                 },
                 paths: {

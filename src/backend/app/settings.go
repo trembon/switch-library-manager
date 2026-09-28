@@ -24,7 +24,11 @@ func (a *App) SaveSettings(value settings.AppSettings) error {
 	a.state.mu.Lock()
 	defer a.state.mu.Unlock()
 	value = normalizeSettings(value)
-	return settings.SaveSettingsWithError(&value, a.baseFolder)
+	if err := settings.SaveSettingsWithError(&value, a.baseFolder); err != nil {
+		return err
+	}
+	a.rememberWindowState = value.GUI.RememberWindowState
+	return nil
 }
 
 func normalizeSettings(value settings.AppSettings) settings.AppSettings {
