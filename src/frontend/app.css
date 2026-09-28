@@ -618,11 +618,7 @@ body {
 }
 
 .game-details-local-file {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    margin-top: 0.75rem;
+    margin: 0.5rem 0 0.75rem;
 }
 
 .game-details-local-file code {
@@ -645,15 +641,53 @@ body {
     overflow-wrap: anywhere;
 }
 
+.game-details-path-info {
+    display: inline-flex;
+    width: 1.5rem;
+    height: 1.5rem;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--bs-secondary-color);
+    cursor: help;
+}
+
+.game-details-path-info svg {
+    width: 1.15rem;
+    height: 1.15rem;
+    overflow: visible;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.25;
+}
+
+.game-details-path-info-badge {
+    fill: var(--bs-body-bg);
+}
+
+.game-details-path-info-mark {
+    stroke-width: 1.5;
+}
+
+.game-details-path-info:hover,
+.game-details-path-info:focus-visible {
+    color: var(--bs-primary);
+}
+
+.game-details-path-info:focus-visible {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: 2px;
+}
+
 .game-details-message {
     max-width: 46rem;
     margin: 3rem auto;
     padding: 1.5rem;
     text-align: center;
-}
-
-#game-details-action-error {
-    margin-bottom: 0;
 }
 
 @media (max-width: 576px) {
@@ -728,10 +762,5 @@ body {
 
     .game-details-section {
         padding: 0.9rem;
-    }
-
-    .game-details-local-file {
-        align-items: flex-start;
-        flex-direction: column;
     }
 }

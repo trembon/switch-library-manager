@@ -121,6 +121,15 @@ func buildGameDetails(
 
 	ignoredUpdates := makeIgnoreIDs(missingSettings.IgnoreUpdateIDs)
 	ignoredDLC := makeIgnoreIDs(missingSettings.IgnoreDLCTitleIDs)
+	latestLocalUpdateVersion, hasLocalUpdate := 0, false
+	if local != nil {
+		for version := range local.Updates {
+			if !hasLocalUpdate || version > latestLocalUpdateVersion {
+				latestLocalUpdateVersion = version
+				hasLocalUpdate = true
+			}
+		}
+	}
 
 	if remote != nil {
 		versions := make([]int, 0, len(remote.Updates))
@@ -134,6 +143,8 @@ func buildGameDetails(
 				if localUpdate, ok := local.Updates[version]; ok {
 					update.Status = "collected"
 					update.Path = switchFilePath(localUpdate)
+				} else if hasLocalUpdate && latestLocalUpdateVersion >= version {
+					update.Status = "collected"
 				}
 			}
 			if update.Status == "missing" {

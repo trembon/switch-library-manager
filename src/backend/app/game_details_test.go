@@ -21,7 +21,6 @@ const (
 func TestBuildGameDetailsResolvesContentIDsAndComparesLocalCollection(t *testing.T) {
 	base := detailsFile("Game.nsp", &switchfs.ContentMetaAttributes{TitleId: detailsBaseID})
 	localUpdate := detailsFile("Game update v3.nsp", &switchfs.ContentMetaAttributes{TitleId: detailsUpdateID, Version: 3})
-	localOnlyUpdate := detailsFile("Game update v99.nsp", &switchfs.ContentMetaAttributes{TitleId: detailsUpdateID, Version: 99})
 	localDLC := detailsFile("Game DLC.nsp", &switchfs.ContentMetaAttributes{TitleId: detailsDLCID, Version: 1})
 	localOnlyDLC := detailsFile("Game extra DLC.nsp", &switchfs.ContentMetaAttributes{TitleId: detailsLocalOnlyDLC, Version: 4})
 
@@ -30,8 +29,7 @@ func TestBuildGameDetailsResolvesContentIDsAndComparesLocalCollection(t *testing
 			BaseExist: true,
 			File:      base,
 			Updates: map[int]db.SwitchFileInfo{
-				3:  localUpdate,
-				99: localOnlyUpdate,
+				3: localUpdate,
 			},
 			Dlc: map[string]db.SwitchFileInfo{
 				detailsDLCID:        localDLC,
@@ -42,7 +40,7 @@ func TestBuildGameDetailsResolvesContentIDsAndComparesLocalCollection(t *testing
 	switchDB := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{
 		detailsPrefix: {
 			Attributes: db.TitleAttributes{Id: detailsBaseID, Name: "Game", Region: "USA"},
-			Updates:    map[int]string{2: "2024-02-01", 3: "2024-03-01", 5: "2024-05-01"},
+			Updates:    map[int]string{2: "2024-02-01", 3: "2024-03-01", 5: "2024-05-01", 100: "2024-10-01"},
 			Dlc: map[string]db.TitleAttributes{
 				detailsDLCID:       {Id: detailsDLCID, Name: "Expansion", Version: json.Number("2")},
 				"0100000000011003": {Id: "0100000000011003", Name: "Bonus Pack", Version: json.Number("1")},
@@ -61,13 +59,13 @@ func TestBuildGameDetailsResolvesContentIDsAndComparesLocalCollection(t *testing
 		if details.BasePath != filepath.Join(base.ExtendedInfo.BaseFolder, base.ExtendedInfo.FileName) {
 			t.Errorf("base path = %q", details.BasePath)
 		}
-		if len(details.Updates) != 3 || details.Updates[0].Version != 5 || details.Updates[0].Status != "missing" || details.Updates[1].Version != 3 || details.Updates[1].Status != "collected" || details.Updates[2].Version != 2 || details.Updates[2].Status != "missing" {
+		if len(details.Updates) != 4 || details.Updates[0].Version != 100 || details.Updates[0].Status != "missing" || details.Updates[1].Version != 5 || details.Updates[1].Status != "missing" || details.Updates[2].Version != 3 || details.Updates[2].Status != "collected" || details.Updates[3].Version != 2 || details.Updates[3].Status != "collected" {
 			t.Errorf("remote update comparison/order = %#v", details.Updates)
 		}
-		if details.Updates[1].Path != filepath.Join(localUpdate.ExtendedInfo.BaseFolder, localUpdate.ExtendedInfo.FileName) {
-			t.Errorf("collected update path = %q", details.Updates[1].Path)
+		if details.Updates[2].Path != filepath.Join(localUpdate.ExtendedInfo.BaseFolder, localUpdate.ExtendedInfo.FileName) {
+			t.Errorf("collected update path = %q", details.Updates[2].Path)
 		}
-		if len(details.LocalOnlyUpdates) != 1 || details.LocalOnlyUpdates[0].Version != 99 || details.LocalOnlyUpdates[0].Status != "collected" {
+		if len(details.LocalOnlyUpdates) != 0 {
 			t.Errorf("local-only updates = %#v", details.LocalOnlyUpdates)
 		}
 		if len(details.DLC) != 2 || details.DLC[0].Name != "Bonus Pack" || details.DLC[0].Status != "missing" || details.DLC[1].Name != "Expansion" || details.DLC[1].Status != "collected" || details.DLC[1].UpdateStatus != "out_of_date" {
@@ -79,9 +77,36 @@ func TestBuildGameDetailsResolvesContentIDsAndComparesLocalCollection(t *testing
 	}
 }
 
+func TestBuildGameDetailsUsesLocalOnlyNewerUpdateForOlderCatalogStatus(t *testing.T) {
+	localUpdate := detailsFile("Game update v99.nsp", &switchfs.ContentMetaAttributes{TitleId: detailsUpdateID, Version: 99})
+	localDB := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{
+		detailsPrefix: {
+			Updates: map[int]db.SwitchFileInfo{99: localUpdate},
+		},
+	}}
+	switchDB := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{
+		detailsPrefix: {
+			Updates: map[int]string{5: "2024-05-01", 100: "2024-10-01"},
+		},
+	}}
+
+	details, err := buildGameDetails(detailsBaseID, localDB, switchDB, settings.MissingContentSettings{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(details.Updates) != 2 || details.Updates[0].Version != 100 || details.Updates[0].Status != "missing" || details.Updates[1].Version != 5 || details.Updates[1].Status != "collected" {
+		t.Fatalf("remote updates should use the highest local version: %#v", details.Updates)
+	}
+	if len(details.LocalOnlyUpdates) != 1 || details.LocalOnlyUpdates[0].Version != 99 || details.LocalOnlyUpdates[0].Status != "collected" {
+		t.Fatalf("local-only newer update should remain visible: %#v", details.LocalOnlyUpdates)
+	}
+}
+
 func TestBuildGameDetailsMarksIgnoredEntriesWithoutHidingThem(t *testing.T) {
 	local := &db.SwitchGameFiles{
-		Updates: map[int]db.SwitchFileInfo{},
+		Updates: map[int]db.SwitchFileInfo{
+			6: detailsFile("Game update v6.nsp", &switchfs.ContentMetaAttributes{TitleId: detailsUpdateID, Version: 6}),
+		},
 		Dlc: map[string]db.SwitchFileInfo{
 			detailsDLCID: detailsFile("Game DLC.nsp", &switchfs.ContentMetaAttributes{TitleId: detailsDLCID, Version: 1}),
 		},
@@ -89,7 +114,7 @@ func TestBuildGameDetailsMarksIgnoredEntriesWithoutHidingThem(t *testing.T) {
 	switchDB := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{
 		detailsPrefix: {
 			Attributes: db.TitleAttributes{Id: detailsBaseID, Name: "Game"},
-			Updates:    map[int]string{5: "2024-05-01"},
+			Updates:    map[int]string{5: "2024-05-01", 7: "2024-07-01"},
 			Dlc: map[string]db.TitleAttributes{
 				detailsDLCID:       {Id: detailsDLCID, Name: "Expansion", Version: json.Number("2")},
 				"0100000000011003": {Id: "0100000000011003", Name: "Ignored DLC", Version: json.Number("1")},
@@ -106,8 +131,11 @@ func TestBuildGameDetailsMarksIgnoredEntriesWithoutHidingThem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(details.Updates) != 1 || details.Updates[0].Status != "ignored" {
-		t.Fatalf("ignored update should remain visible: %#v", details.Updates)
+	if len(details.Updates) != 2 || details.Updates[0].Version != 7 || details.Updates[0].Status != "ignored" || details.Updates[1].Version != 5 || details.Updates[1].Status != "collected" {
+		t.Fatalf("ignored and newer-local update states should remain visible: %#v", details.Updates)
+	}
+	if len(details.LocalOnlyUpdates) != 1 || details.LocalOnlyUpdates[0].Version != 6 || details.LocalOnlyUpdates[0].Status != "collected" {
+		t.Fatalf("locally collected update absent from catalog = %#v", details.LocalOnlyUpdates)
 	}
 	if len(details.DLC) != 2 {
 		t.Fatalf("DLC rows = %#v", details.DLC)

@@ -715,27 +715,6 @@ $(function () {
             }
         });
 
-        $("body").on("click", ".game-details-show-folder", e => {
-            e.preventDefault();
-            e.stopPropagation();
-            const path = e.currentTarget.dataset.path;
-            const errorElement = document.getElementById("game-details-action-error");
-            if (!path) {
-                return;
-            }
-            ShowInFolder(path).then(() => {
-                if (errorElement) {
-                    errorElement.hidden = true;
-                    errorElement.textContent = "";
-                }
-            }).catch(error => {
-                if (errorElement) {
-                    errorElement.textContent = error && error.message ? error.message : "Unable to show the file in its folder.";
-                    errorElement.hidden = false;
-                }
-            });
-        });
-
         $("body").on("click", ".export-btn", e => {
             if (currTable && currTableExportKind) {
                 currTable.download("csv", "slm_" + currTableExportKind + "." + exportDate() + ".csv", {}, "all");
