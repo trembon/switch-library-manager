@@ -47,9 +47,10 @@ func (a *App) OrganizeLibrary() error {
 		return errors.New("the organize options in settings.json are not valid, please check that the template contains file/folder name")
 	}
 	progress := progressReporter{app: a}
-	process.OrganizeByFolders(settingsObj.Paths.LibraryFolder, a.state.localDB, a.state.switchDB, progress)
 	if settingsObj.Organization.DeleteOldUpdateFiles {
 		process.DeleteOldUpdates(a.baseFolder, a.state.localDB, progress)
+	}
+	process.OrganizeByFolders(settingsObj.Paths.LibraryFolder, a.state.localDB, a.state.switchDB, progress)
 	}
 	return nil
 }
