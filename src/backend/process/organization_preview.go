@@ -96,6 +96,7 @@ func organizationPreviewForGame(baseFolder string, options settings.OrganizeOpti
 	result := make([]OrganizationPreviewEntry, 0, 3)
 	if game.BaseExist {
 		templateData[settings.TEMPLATE_TYPE] = "BASE"
+		setFileSizeTemplateData(templateData, game.File.ExtendedInfo.Size)
 		if game.File.Metadata != nil && game.File.Metadata.Ncap != nil {
 			templateData[settings.TEMPLATE_VERSION_TXT] = game.File.Metadata.Ncap.DisplayVersion
 		}
@@ -126,6 +127,7 @@ func organizationPreviewForGame(baseFolder string, options settings.OrganizeOpti
 				templateData[settings.TEMPLATE_TITLE_ID] = update.Metadata.TitleId
 			}
 			templateData[settings.TEMPLATE_VERSION] = strconv.Itoa(version)
+			setFileSizeTemplateData(templateData, update.ExtendedInfo.Size)
 			templateData[settings.TEMPLATE_VERSION_TXT] = ""
 			if update.Metadata != nil && update.Metadata.Ncap != nil {
 				templateData[settings.TEMPLATE_VERSION_TXT] = update.Metadata.Ncap.DisplayVersion
@@ -162,6 +164,7 @@ func organizationPreviewForGame(baseFolder string, options settings.OrganizeOpti
 			}
 			templateData[settings.TEMPLATE_TYPE] = "DLC"
 			templateData[settings.TEMPLATE_DLC_NAME] = getDlcName(title, dlc)
+			setFileSizeTemplateData(templateData, dlc.ExtendedInfo.Size)
 			result = append(result, OrganizationPreviewEntry{
 				Kind: "dlc",
 				Path: organizationPreviewPath(baseFolder, organizationTargetPath(
@@ -192,18 +195,18 @@ func fallbackOrganizationPreview(baseFolder string, options settings.OrganizeOpt
 	game := &db.SwitchGameFiles{
 		BaseExist: true,
 		File: db.SwitchFileInfo{
-			ExtendedInfo: db.ExtendedFileInfo{BaseFolder: sampleFolder, FileName: "example-adventure.nsp"},
+			ExtendedInfo: db.ExtendedFileInfo{BaseFolder: sampleFolder, FileName: "example-adventure.nsp", Size: 600_000_000},
 			Metadata:     previewMetadata(baseID, 0, "1.0.0"),
 		},
 		Updates: map[int]db.SwitchFileInfo{
 			5: {
-				ExtendedInfo: db.ExtendedFileInfo{BaseFolder: sampleFolder, FileName: "example-adventure-update.nsp"},
+				ExtendedInfo: db.ExtendedFileInfo{BaseFolder: sampleFolder, FileName: "example-adventure-update.nsp", Size: 600_000_000},
 				Metadata:     previewMetadata(updateID, 5, "5.0.0"),
 			},
 		},
 		Dlc: map[string]db.SwitchFileInfo{
 			dlcID: {
-				ExtendedInfo: db.ExtendedFileInfo{BaseFolder: sampleFolder, FileName: "example-adventure-dlc.nsp"},
+				ExtendedInfo: db.ExtendedFileInfo{BaseFolder: sampleFolder, FileName: "example-adventure-dlc.nsp", Size: 600_000_000},
 				Metadata:     previewMetadata(dlcID, 1, "1.0.0"),
 			},
 		},

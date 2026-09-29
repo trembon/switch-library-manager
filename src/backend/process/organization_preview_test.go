@@ -16,7 +16,7 @@ func TestBuildOrganizationPreviewUsesActualBaseUpdateAndDLC(t *testing.T) {
 		CreateFolderPerGame: true,
 		FolderNameTemplate:  "{TITLE_NAME}",
 		RenameFiles:         true,
-		FileNameTemplate:    "{TITLE_ID}_{TYPE}_{VERSION}",
+		FileNameTemplate:    "{TITLE_ID}_{TYPE}_{VERSION}_{SIZE_GB}_{SIZE_MB}",
 		UpdatesFolder:       "updates",
 		DlcFolder:           "dlc",
 	}
@@ -29,15 +29,15 @@ func TestBuildOrganizationPreviewUsesActualBaseUpdateAndDLC(t *testing.T) {
 		gameKey: {
 			BaseExist: true,
 			File: db.SwitchFileInfo{
-				ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: "base.nsp"},
+				ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: "base.nsp", Size: 600_000_000},
 				Metadata:     previewTestMetadata(baseID, 0, "1.0.0"),
 			},
 			Updates: map[int]db.SwitchFileInfo{5: {
-				ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: "update.nsp"},
+				ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: "update.nsp", Size: 2_700_000_000},
 				Metadata:     previewTestMetadata(updateID, 5, "5.0.0"),
 			}},
 			Dlc: map[string]db.SwitchFileInfo{dlcID: {
-				ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: "dlc.nsp"},
+				ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: "dlc.nsp", Size: 1_200_000_000},
 				Metadata:     previewTestMetadata(dlcID, 1, "1.0.0"),
 			}},
 		},
@@ -54,13 +54,35 @@ func TestBuildOrganizationPreviewUsesActualBaseUpdateAndDLC(t *testing.T) {
 		t.Fatalf("preview entries = %#v, want three entries", got)
 	}
 	want := map[string]string{
-		"game":   filepath.Join("Preview Game", baseID+"_BASE_0.nsp"),
-		"update": filepath.Join("Preview Game", "updates", updateID+"_UPD_5.nsp"),
-		"dlc":    filepath.Join("Preview Game", "dlc", dlcID+"_DLC_1.nsp"),
+		"game":   filepath.Join("Preview Game", baseID+"_BASE_0_0.6GB_600MB.nsp"),
+		"update": filepath.Join("Preview Game", "updates", updateID+"_UPD_5_2.7GB_2700MB.nsp"),
+		"dlc":    filepath.Join("Preview Game", "dlc", dlcID+"_DLC_1_1.2GB_1200MB.nsp"),
 	}
 	for _, entry := range got {
 		if entry.Path != want[entry.Kind] {
 			t.Errorf("%s preview path = %q, want %q", entry.Kind, entry.Path, want[entry.Kind])
+		}
+	}
+}
+
+func TestBuildOrganizationPreviewFallbackShowsDeterministicSize(t *testing.T) {
+	root := t.TempDir()
+	options := settings.OrganizeOptions{
+		RenameFiles:      true,
+		FileNameTemplate: "{TITLE_NAME}_{SIZE_GB}_{SIZE_MB}",
+		UpdatesFolder:    "updates",
+		DlcFolder:        "dlc",
+	}
+
+	got := BuildOrganizationPreview(root, options, nil, nil)
+	want := map[string]string{
+		"game":   "Example Adventure_0.6GB_600MB.nsp",
+		"update": filepath.Join("updates", "Example Adventure_0.6GB_600MB.nsp"),
+		"dlc":    filepath.Join("dlc", "Example Adventure_0.6GB_600MB.nsp"),
+	}
+	for _, entry := range got {
+		if entry.Path != want[entry.Kind] {
+			t.Errorf("%s fallback preview path = %q, want %q", entry.Kind, entry.Path, want[entry.Kind])
 		}
 	}
 }

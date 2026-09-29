@@ -79,7 +79,7 @@ When using the graphical interface, the Settings tab provides a structured edito
 | `organization.delete_old_update_files`        | boolean      | `false`                                               | Deletes duplicate and old update files during the workflow.                                                                                            |
 | `organization.folder_name_template`           | string       | `"{TITLE_NAME}"`                                      | Template used for game folder names.                                                                                                                   |
 | `organization.switch_safe_file_names`         | boolean      | `true`                                                | Replaces characters that are unsafe for Switch-compatible names.                                                                                       |
-| `organization.file_name_template`             | string       | `"{TITLE_NAME} ({DLC_NAME})[{TITLE_ID}][v{VERSION}]"` | Template used when renaming files.                                                                                                                     |
+| `organization.file_name_template`             | string       | `"{TITLE_NAME} ({DLC_NAME})[{TITLE_ID}][v{VERSION}]"` | Template used when renaming files. See the [naming template guide](naming.md) for available tokens and examples.                                        |
 | `organization.process_when_missing_base_game` | boolean      | `false`                                               | Allows updates and DLC to be organized even when the base game is absent.                                                                              |
 | `missing_content.check_for_updates`           | boolean      | `true`                                                | Runs the missing-updates check.                                                                                                                        |
 | `missing_content.check_for_dlc`               | boolean      | `true`                                                | Runs the missing-DLC check.                                                                                                                            |
@@ -92,17 +92,7 @@ When using the graphical interface, the Settings tab provides a structured edito
 
 ## Organization templates
 
-The following tokens are available in folder and file templates:
-
-- `{TITLE_NAME}`: game name.
-- `{TITLE_ID}`: title ID.
-- `{VERSION}`: numeric content version.
-- `{VERSION_TXT}`: display version such as `1.0.0`.
-- `{REGION}`: title region.
-- `{TYPE}`: `BASE`, `UPD`, or `DLC` content type.
-- `{DLC_NAME}`: DLC name.
-
-When `rename_files` is enabled, `file_name_template` must contain `{TITLE_NAME}` or `{TITLE_ID}`. When `create_folder_per_game` is enabled, `folder_name_template` must contain `{TITLE_NAME}` or `{TITLE_ID}`.
+Folder and file templates use brace-delimited tokens. The [naming template guide](naming.md) lists all tokens, describes which template accepts each one, and gives examples. When `rename_files` is enabled, `file_name_template` must contain `{TITLE_NAME}` or `{TITLE_ID}`. When `create_folder_per_game` is enabled, `folder_name_template` must contain `{TITLE_NAME}` or `{TITLE_ID}`.
 
 ## Internal cache
 

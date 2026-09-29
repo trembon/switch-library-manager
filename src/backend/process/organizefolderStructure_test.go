@@ -35,6 +35,8 @@ func TestApplyTemplate(t *testing.T) {
 		settings.TEMPLATE_REGION:      "US",
 		settings.TEMPLATE_TYPE:        "UPD",
 		settings.TEMPLATE_DLC_NAME:    "The Game - Extra Pack",
+		settings.TEMPLATE_SIZE_GB:     "0.6GB",
+		settings.TEMPLATE_SIZE_MB:     "600MB",
 	}
 
 	tests := []struct {
@@ -44,7 +46,7 @@ func TestApplyTemplate(t *testing.T) {
 		try      int
 		want     string
 	}{
-		{"all placeholders and repeated values", false, "{TITLE_NAME}-{TITLE_NAME}-{TITLE_ID}-{VERSION}-{VERSION_TXT}-{REGION}-{TYPE}-{DLC_NAME}", 0, "The Game  Demo-The Game  Demo-0100ABCD00001000-12-1.2.0-US-UPD-The Game - Extra Pack"},
+		{"all placeholders and repeated values", false, "{TITLE_NAME}-{TITLE_NAME}-{TITLE_ID}-{VERSION}-{VERSION_TXT}-{REGION}-{TYPE}-{DLC_NAME}-{SIZE_GB}-{SIZE_MB}-{SIZE_MB}", 0, "The Game  Demo-The Game  Demo-0100ABCD00001000-12-1.2.0-US-UPD-The Game - Extra Pack-0.6GB-600MB-600MB"},
 		{"safe name", true, "Pokémon™: {TITLE_NAME} [v{VERSION}]", 0, "Pokémon The Game Demo [v12]"},
 		{"collision suffix", false, "name.", 2, "name(2)"},
 		{"cleanup and illegal characters", false, "[]()<>a:b%?", 0, "ab"},
@@ -55,6 +57,33 @@ func TestApplyTemplate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := applyTemplate(data, tt.safe, tt.template, tt.try); got != tt.want {
 				t.Fatalf("applyTemplate() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSetFileSizeTemplateData(t *testing.T) {
+	tests := []struct {
+		name string
+		size int64
+		gb   string
+		mb   string
+	}{
+		{"600 MB", 600_000_000, "0.6GB", "600MB"},
+		{"2.7 GB", 2_700_000_000, "2.7GB", "2700MB"},
+		{"halfway GB rounds up", 1_250_000_000, "1.3GB", "1250MB"},
+		{"halfway MB rounds up", 1_500_000, "0.0GB", "2MB"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := map[string]string{}
+			setFileSizeTemplateData(data, tt.size)
+			if got := data[settings.TEMPLATE_SIZE_GB]; got != tt.gb {
+				t.Errorf("SIZE_GB = %q, want %q", got, tt.gb)
+			}
+			if got := data[settings.TEMPLATE_SIZE_MB]; got != tt.mb {
+				t.Errorf("SIZE_MB = %q, want %q", got, tt.mb)
 			}
 		})
 	}
@@ -160,7 +189,7 @@ func TestOrganizeByFoldersMovesBaseUpdateAndDLC(t *testing.T) {
 		CreateFolderPerGame: true,
 		FolderNameTemplate:  "{TITLE_NAME}",
 		RenameFiles:         true,
-		FileNameTemplate:    "{TITLE_ID}_{TYPE}_{VERSION}_{VERSION_TXT}",
+		FileNameTemplate:    "{TITLE_ID}_{TYPE}_{VERSION}_{VERSION_TXT}_{SIZE_GB}_{SIZE_MB}",
 		UpdatesFolder:       "updates",
 		DlcFolder:           "dlc",
 		SwitchSafeFileNames: false,
@@ -170,12 +199,12 @@ func TestOrganizeByFoldersMovesBaseUpdateAndDLC(t *testing.T) {
 
 	local := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{
 		"0100E95004039": {
-			File:      db.SwitchFileInfo{ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: baseName}, Metadata: contentMetadata(baseID, 0, "1.0.0")},
+			File:      db.SwitchFileInfo{ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: baseName, Size: 600_000_000}, Metadata: contentMetadata(baseID, 0, "1.0.0")},
 			BaseExist: true,
-			Updates:   map[int]db.SwitchFileInfo{5: {ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: updateName}, Metadata: contentMetadata(updateID, 5, "5.0.0")}},
+			Updates:   map[int]db.SwitchFileInfo{5: {ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: updateName, Size: 2_700_000_000}, Metadata: contentMetadata(updateID, 5, "5.0.0")}},
 			Dlc: map[string]db.SwitchFileInfo{
-				dlcOneID: {ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: dlcOneName}, Metadata: metadataForID(dlcOneID, 1)},
-				dlcTwoID: {ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: dlcTwoName}, Metadata: metadataForID(dlcTwoID, 1)},
+				dlcOneID: {ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: dlcOneName, Size: 1_200_000_000}, Metadata: metadataForID(dlcOneID, 1)},
+				dlcTwoID: {ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: dlcTwoName, Size: 3_000_000_000}, Metadata: metadataForID(dlcTwoID, 1)},
 			},
 		},
 	}, Skipped: map[db.ExtendedFileInfo]db.SkippedFile{}}
@@ -190,10 +219,10 @@ func TestOrganizeByFoldersMovesBaseUpdateAndDLC(t *testing.T) {
 	OrganizeByFolders(baseFolder, local, remote, &progress)
 
 	destination := filepath.Join(baseFolder, "Test Game")
-	assertMoved(t, filepath.Join(source, baseName), filepath.Join(destination, baseID+"_BASE_0_1.0.0.nsp"), "base")
-	assertMoved(t, filepath.Join(source, updateName), filepath.Join(destination, "updates", updateID+"_UPD_5_5.0.0.nsp"), "update")
-	assertMoved(t, filepath.Join(source, dlcOneName), filepath.Join(destination, "dlc", dlcOneID+"_DLC_1_.nsp"), "first DLC")
-	assertMoved(t, filepath.Join(source, dlcTwoName), filepath.Join(destination, "dlc", dlcTwoID+"_DLC_1_.nsp"), "second DLC")
+	assertMoved(t, filepath.Join(source, baseName), filepath.Join(destination, baseID+"_BASE_0_1.0.0_0.6GB_600MB.nsp"), "base")
+	assertMoved(t, filepath.Join(source, updateName), filepath.Join(destination, "updates", updateID+"_UPD_5_5.0.0_2.7GB_2700MB.nsp"), "update")
+	assertMoved(t, filepath.Join(source, dlcOneName), filepath.Join(destination, "dlc", dlcOneID+"_DLC_1__1.2GB_1200MB.nsp"), "first DLC")
+	assertMoved(t, filepath.Join(source, dlcTwoName), filepath.Join(destination, "dlc", dlcTwoID+"_DLC_1__3.0GB_3000MB.nsp"), "second DLC")
 	if len(progress.events) == 0 || progress.events[len(progress.events)-1].message != "done" {
 		t.Fatalf("organization progress did not finish: %#v", progress.events)
 	}

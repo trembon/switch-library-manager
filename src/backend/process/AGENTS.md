@@ -19,7 +19,7 @@
 
 ## Templates and Paths
 
-- Supported placeholders are `{TITLE_NAME}`, `{TITLE_ID}`, `{VERSION}`, `{VERSION_TXT}`, `{REGION}`, `{TYPE}`, and `{DLC_NAME}`.
+- Supported placeholders include `{TITLE_NAME}`, `{TITLE_ID}`, `{VERSION}`, `{VERSION_TXT}`, `{REGION}`, `{TYPE}`, and `{DLC_NAME}`. File-name templates also support `{SIZE_GB}` and `{SIZE_MB}` based on the physical file size.
 - Template output becomes a filesystem path after safe-name conversion. Validate empty output, illegal separators, traversal, reserved names, and collisions.
 - `UpdatesFolder` and `DlcFolder` need explicit root semantics. Do not assume a relative destination is relative to the configured library folder unless the code makes that explicit.
 - Safe-name transliteration can collapse different titles to the same name. Test collision numbering and pre-existing destination files.

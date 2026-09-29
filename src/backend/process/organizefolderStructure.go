@@ -182,6 +182,7 @@ func OrganizeByFolders(baseFolder string,
 		//process base title
 		if v.BaseExist {
 			templateData[settings.TEMPLATE_TYPE] = "BASE"
+			setFileSizeTemplateData(templateData, v.File.ExtendedInfo.Size)
 			from = filepath.Join(v.File.ExtendedInfo.BaseFolder, v.File.ExtendedInfo.FileName)
 			to = organizationTargetPath(destinationPath, v.File.ExtendedInfo.BaseFolder, v.File.ExtendedInfo.FileName, options, "base", templateData, 0)
 			err = moveFile(from, to)
@@ -204,6 +205,7 @@ func OrganizeByFolders(baseFolder string,
 			}
 			templateData[settings.TEMPLATE_VERSION] = strconv.Itoa(update)
 			templateData[settings.TEMPLATE_TYPE] = "UPD"
+			setFileSizeTemplateData(templateData, updateInfo.ExtendedInfo.Size)
 			if updateInfo.Metadata != nil && updateInfo.Metadata.Ncap != nil {
 				templateData[settings.TEMPLATE_VERSION_TXT] = updateInfo.Metadata.Ncap.DisplayVersion
 			} else {
@@ -241,6 +243,7 @@ func OrganizeByFolders(baseFolder string,
 			templateData[settings.TEMPLATE_TYPE] = "DLC"
 			templateData[settings.TEMPLATE_TITLE_ID] = id
 			templateData[settings.TEMPLATE_DLC_NAME] = getDlcName(title, dlc)
+			setFileSizeTemplateData(templateData, dlc.ExtendedInfo.Size)
 			from = filepath.Join(dlc.ExtendedInfo.BaseFolder, dlc.ExtendedInfo.FileName)
 
 			dlcNameTry := 0
@@ -422,6 +425,8 @@ func applyTemplate(templateData map[string]string, useSafeNames bool, template s
 	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_TYPE+"}", templateData[settings.TEMPLATE_TYPE])
 	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_VERSION_TXT+"}", templateData[settings.TEMPLATE_VERSION_TXT])
 	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_REGION+"}", templateData[settings.TEMPLATE_REGION])
+	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_SIZE_GB+"}", templateData[settings.TEMPLATE_SIZE_GB])
+	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_SIZE_MB+"}", templateData[settings.TEMPLATE_SIZE_MB])
 
 	//remove title name from dlc name
 	dlcName := strings.Replace(templateData[settings.TEMPLATE_DLC_NAME], templateData[settings.TEMPLATE_TITLE_NAME], "", 1)
@@ -455,6 +460,26 @@ func applyTemplate(templateData map[string]string, useSafeNames bool, template s
 
 	result = strings.TrimSpace(result)
 	return folderIllegalCharsRegex.ReplaceAllString(result, "")
+}
+
+func setFileSizeTemplateData(templateData map[string]string, size int64) {
+	const (
+		bytesPerTenthGB = int64(100_000_000)
+		bytesPerMB      = int64(1_000_000)
+	)
+
+	gbTenths := size / bytesPerTenthGB
+	if size%bytesPerTenthGB >= bytesPerTenthGB/2 {
+		gbTenths++
+	}
+
+	mb := size / bytesPerMB
+	if size%bytesPerMB >= bytesPerMB/2 {
+		mb++
+	}
+
+	templateData[settings.TEMPLATE_SIZE_GB] = strconv.FormatInt(gbTenths/10, 10) + "." + strconv.FormatInt(gbTenths%10, 10) + "GB"
+	templateData[settings.TEMPLATE_SIZE_MB] = strconv.FormatInt(mb, 10) + "MB"
 }
 
 func createFolder(path string, logger *zap.SugaredLogger) error {

@@ -41,7 +41,7 @@ Note: Only the header_key, and the key_area_key_application_XX keys are required
 
 ## Settings
 
-The application creates a current `settings.json` on first launch. You can customize paths, scanning, organization, missing-content checks, and GUI behavior there. See the [complete settings reference](docs/settings.md) for the format, templates, cache behavior, and migration instructions.
+The application creates a current `settings.json` on first launch. You can customize paths, scanning, organization, missing-content checks, and GUI behavior there. See the [complete settings reference](docs/settings.md) for the format, cache behavior, and migration instructions, and the [naming template guide](docs/naming.md) for file and folder naming options.
 
 ## Usage
 

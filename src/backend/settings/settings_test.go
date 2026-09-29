@@ -34,6 +34,9 @@ func TestDefaultSettingsAndJSON(t *testing.T) {
 	if s.DataSources.TitlesURL != DEFAULT_TITLES_JSON_URL || s.DataSources.VersionsURL != DEFAULT_VERSIONS_JSON_URL || !s.Organization.SwitchSafeFileNames {
 		t.Fatalf("unexpected default URLs/options: %#v", s)
 	}
+	if s.Organization.FileNameTemplate != "{TITLE_NAME} ({DLC_NAME})[{TITLE_ID}][v{VERSION}]" {
+		t.Fatalf("default file-name template changed unexpectedly: %q", s.Organization.FileNameTemplate)
+	}
 	if _, err := os.Stat(filepath.Join(base, SETTINGS_FILENAME)); err != nil {
 		t.Fatal(err)
 	}
