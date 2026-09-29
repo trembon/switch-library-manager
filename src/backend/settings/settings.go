@@ -67,8 +67,9 @@ type PathSettings struct {
 }
 
 type ScanSettings struct {
-	Recursive       bool     `json:"recursive"`
-	IgnoreFileTypes []string `json:"ignore_file_types"`
+	Recursive                  bool     `json:"recursive"`
+	IgnoreFileTypes            []string `json:"ignore_file_types"`
+	IgnoreUnsupportedFileTypes bool     `json:"ignore_unsupported_file_types"`
 }
 
 type MissingContentSettings struct {

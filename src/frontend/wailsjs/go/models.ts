@@ -449,6 +449,7 @@ export namespace settings {
 	export class ScanSettings {
 	    recursive: boolean;
 	    ignore_file_types: string[];
+	    ignore_unsupported_file_types: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ScanSettings(source);
@@ -458,6 +459,7 @@ export namespace settings {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.recursive = source["recursive"];
 	        this.ignore_file_types = source["ignore_file_types"];
+	        this.ignore_unsupported_file_types = source["ignore_unsupported_file_types"];
 	    }
 	}
 	export class PathSettings {

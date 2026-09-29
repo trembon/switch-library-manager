@@ -139,6 +139,10 @@
             <input class="form-check-input" type="checkbox" name="scan_recursive" id="settings-scan-recursive" {{if scan.recursive}}checked{{/if}}>
             <label class="form-check-label" for="settings-scan-recursive">Scan subfolders recursively</label>
           </div>
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" name="scan_ignore_unsupported_file_types" id="settings-scan-ignore-unsupported-file-types" {{if scan.ignore_unsupported_file_types}}checked{{/if}}>
+            <label class="form-check-label" for="settings-scan-ignore-unsupported-file-types">Ignore unsupported file types</label>
+          </div>
           <label class="form-label">Ignored file extensions</label>
           <div data-settings-list-container="ignore_file_types">
             {{for scan.ignore_file_types}}

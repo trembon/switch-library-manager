@@ -235,6 +235,35 @@ func TestScanFolderAndClassifyFilenameFallback(t *testing.T) {
 	}
 }
 
+func TestScannerCanIgnoreUnsupportedFileTypes(t *testing.T) {
+	base := t.TempDir()
+	resetDBSettings(t, base, func(s *settings.AppSettings) {
+		s.Scan.IgnoreFileTypes = []string{"ignored"}
+		s.Scan.IgnoreUnsupportedFileTypes = true
+	})
+	manager, err := NewLocalSwitchDBManager(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	files := []ExtendedFileInfo{
+		{FileName: "sidecar.txt", BaseFolder: base},
+		{FileName: "manually-ignored.ignored", BaseFolder: base},
+		{FileName: "unknown.nsp", BaseFolder: base},
+	}
+	skipped := map[ExtendedFileInfo]SkippedFile{}
+	manager.processLocalFiles(files, nil, map[string]*SwitchGameFiles{}, skipped)
+
+	if _, ok := findSkipped(skipped, "sidecar.txt"); ok {
+		t.Fatal("unsupported extension should be omitted when configured")
+	}
+	if _, ok := findSkipped(skipped, "manually-ignored.ignored"); ok {
+		t.Fatal("explicitly ignored extension should remain omitted")
+	}
+	assertSkippedReason(t, skipped, "unknown.nsp", REASON_UNRECOGNISED)
+}
+
 func assertSkippedReason(t *testing.T, skipped map[ExtendedFileInfo]SkippedFile, name string, reason int) {
 	t.Helper()
 	entry, ok := findSkipped(skipped, name)

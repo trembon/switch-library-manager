@@ -240,7 +240,8 @@ func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,
 		// only handle XCI/XCZ and NSP/NSZ files
 		fileExtension := filepath.Ext(fileName)
 		if !isSplit && fileExtension != ".xci" && fileExtension != ".xcz" && fileExtension != ".nsp" && fileExtension != ".nsz" {
-			if _, ok := ignoreFileTypes[fileExtension]; !ok {
+			_, explicitlyIgnored := ignoreFileTypes[fileExtension]
+			if !explicitlyIgnored && !settingsObj.Scan.IgnoreUnsupportedFileTypes {
 				skipped[file] = SkippedFile{ReasonCode: REASON_UNSUPPORTED_TYPE, ReasonText: "file type is not supported"}
 			}
 			continue

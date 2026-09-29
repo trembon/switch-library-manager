@@ -24,7 +24,8 @@ When using the graphical interface, the Settings tab provides a structured edito
   },
   "scan": {
     "recursive": true,
-    "ignore_file_types": []
+    "ignore_file_types": [],
+    "ignore_unsupported_file_types": false
   },
   "organization": {
     "create_folder_per_game": false,
@@ -71,6 +72,7 @@ When using the graphical interface, the Settings tab provides a structured edito
 | `paths.prod_keys`                             | string       | `""`                                                  | Optional file or directory containing `prod.keys`. If it does not resolve, the application checks the executable folder and the home `.switch` folder. |
 | `scan.recursive`                              | boolean      | `true`                                                | Scans subdirectories. The `-r` flag overrides it for a console run.                                                                                    |
 | `scan.ignore_file_types`                      | string array | `[]`                                                  | File extensions ignored when reporting unsupported file types. Extensions may include or omit the leading dot.                                         |
+| `scan.ignore_unsupported_file_types`           | boolean      | `false`                                               | Suppresses diagnostics for files with unsupported extensions. When false, unsupported files are reported; errors for supported extensions are still reported. |
 | `organization.create_folder_per_game`         | boolean      | `false`                                               | Creates a folder for each game during organization.                                                                                                    |
 | `organization.dlc_folder`                     | string       | `""`                                                  | Optional subfolder for DLC files.                                                                                                                      |
 | `organization.updates_folder`                 | string       | `""`                                                  | Optional subfolder for update files.                                                                                                                   |

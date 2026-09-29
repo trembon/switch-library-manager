@@ -438,7 +438,8 @@ $(function () {
                 },
                 scan: {
                     recursive: form.elements.scan_recursive.checked,
-                    ignore_file_types: listValues(form, "ignore_file_types")
+                    ignore_file_types: listValues(form, "ignore_file_types"),
+                    ignore_unsupported_file_types: form.elements.scan_ignore_unsupported_file_types.checked
                 },
                 organization: {
                     create_folder_per_game: form.elements.organization_create_folder_per_game.checked,
