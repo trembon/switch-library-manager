@@ -119,25 +119,7 @@ func OrganizeByFolders(baseFolder string,
 			templateData[settings.TEMPLATE_REGION] = title.Attributes.Region
 		}
 
-		if v.MultiContent && len(v.Updates) > 0 {
-			var latestUpdate = 0
-			for update := range v.Updates {
-				if update > latestUpdate {
-					latestUpdate = update
-				}
-			}
-			templateData[settings.TEMPLATE_VERSION] = strconv.Itoa(latestUpdate)
-
-			if latestUpdate > 0 && v.Updates[latestUpdate].Metadata != nil && v.Updates[latestUpdate].Metadata.Ncap != nil {
-				templateData[settings.TEMPLATE_VERSION_TXT] = v.Updates[latestUpdate].Metadata.Ncap.DisplayVersion
-			}
-		} else {
-			templateData[settings.TEMPLATE_VERSION] = "0"
-
-			if v.File.Metadata != nil && v.File.Metadata.Ncap != nil {
-				templateData[settings.TEMPLATE_VERSION_TXT] = v.File.Metadata.Ncap.DisplayVersion
-			}
-		}
+		setBaseFileVersionTemplateData(templateData, v)
 
 		var destinationPath = v.File.ExtendedInfo.BaseFolder
 
@@ -194,8 +176,8 @@ func OrganizeByFolders(baseFolder string,
 
 		//process updates
 		for update, updateInfo := range v.Updates {
-			// if the current title is multi content and the update is contained in the main file, skip
-			if v.MultiContent && v.BaseExist && v.File.ExtendedInfo == updateInfo.ExtendedInfo {
+			// An update in the base file is part of the package, not a separate move.
+			if v.BaseExist && samePhysicalFilePath(v.File.ExtendedInfo, updateInfo.ExtendedInfo) {
 				logger.Infof("Skipping organizing %v update %v, reason: Update is multi-part with main file", titleName, update)
 				continue
 			}
@@ -229,8 +211,8 @@ func OrganizeByFolders(baseFolder string,
 		//process DLC
 		existingDlcs := map[string]string{}
 		for id, dlc := range v.Dlc {
-			// if the current title is multi content and the dlc is contained in the main file, skip
-			if v.MultiContent && v.BaseExist && v.File.ExtendedInfo == dlc.ExtendedInfo {
+			// DLC content in the base file is part of the package, not a separate move.
+			if v.BaseExist && samePhysicalFilePath(v.File.ExtendedInfo, dlc.ExtendedInfo) {
 				logger.Infof("Skipping organizing %v dlc %v, reason: DLC is multi-part with main file", titleName, dlc)
 				continue
 			}
@@ -379,6 +361,59 @@ func getFileName(options settings.OrganizeOptions, originalName string, template
 	ext := path.Ext(originalName)
 	result := applyTemplate(templateData, options.SwitchSafeFileNames, options.FileNameTemplate, nameTry)
 	return result + ext
+}
+
+func setBaseFileVersionTemplateData(templateData map[string]string, game *db.SwitchGameFiles) {
+	templateData[settings.TEMPLATE_VERSION] = "0"
+	templateData[settings.TEMPLATE_VERSION_TXT] = ""
+	if game == nil {
+		return
+	}
+
+	if game.File.Metadata != nil && game.File.Metadata.Ncap != nil {
+		templateData[settings.TEMPLATE_VERSION_TXT] = game.File.Metadata.Ncap.DisplayVersion
+	}
+
+	version, update, found := highestBundledUpdate(game)
+	if !found {
+		return
+	}
+
+	templateData[settings.TEMPLATE_VERSION] = strconv.Itoa(version)
+	templateData[settings.TEMPLATE_VERSION_TXT] = ""
+	if update.Metadata != nil && update.Metadata.Ncap != nil {
+		templateData[settings.TEMPLATE_VERSION_TXT] = update.Metadata.Ncap.DisplayVersion
+	}
+}
+
+func highestBundledUpdate(game *db.SwitchGameFiles) (int, db.SwitchFileInfo, bool) {
+	if game == nil || !game.BaseExist {
+		return 0, db.SwitchFileInfo{}, false
+	}
+
+	latestVersion := 0
+	var latestUpdate db.SwitchFileInfo
+	found := false
+	for version, update := range game.Updates {
+		if !samePhysicalFilePath(game.File.ExtendedInfo, update.ExtendedInfo) {
+			continue
+		}
+		if !found || version > latestVersion {
+			latestVersion = version
+			latestUpdate = update
+			found = true
+		}
+	}
+	return latestVersion, latestUpdate, found
+}
+
+func samePhysicalFilePath(left, right db.ExtendedFileInfo) bool {
+	if left.FileName == "" || right.FileName == "" {
+		return false
+	}
+	leftPath := filepath.Clean(filepath.Join(left.BaseFolder, left.FileName))
+	rightPath := filepath.Clean(filepath.Join(right.BaseFolder, right.FileName))
+	return leftPath == rightPath
 }
 
 func organizationTargetPath(destinationPath, sourceFolder, originalName string, options settings.OrganizeOptions, contentKind string, templateData map[string]string, nameTry int) string {

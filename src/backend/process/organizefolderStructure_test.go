@@ -230,6 +230,87 @@ func TestOrganizeByFoldersMovesBaseUpdateAndDLC(t *testing.T) {
 	OrganizeByFolders(baseFolder, local, remote, nil)
 }
 
+func TestOrganizeByFoldersUsesHighestBundledUpdateVersion(t *testing.T) {
+	baseFolder := t.TempDir()
+	source := filepath.Join(baseFolder, "incoming")
+	mustMkdir(t, source)
+
+	baseID := "010087E01FCD6000"
+	updateID := "010087E01FCD6800"
+	baseName := "Cuisineer [010087E01FCD6000][v0].xci"
+	standaloneUpdateName := "Cuisineer [010087E01FCD6800][v196608].nsp"
+	writeFixture(t, filepath.Join(source, baseName), "synthetic super XCI")
+	writeFixture(t, filepath.Join(source, standaloneUpdateName), "synthetic patch NSP")
+	baseFile := db.ExtendedFileInfo{BaseFolder: source, FileName: baseName, Size: 20}
+	standaloneUpdateFile := db.ExtendedFileInfo{BaseFolder: source, FileName: standaloneUpdateName, Size: 18}
+
+	setProcessSettings(t, baseFolder, settings.OrganizeOptions{
+		RenameFiles:         true,
+		FileNameTemplate:    "{TITLE_NAME} [{TITLE_ID}][{TYPE}][v{VERSION}][{VERSION_TXT}]",
+		SwitchSafeFileNames: false,
+	})
+	local := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{
+		"010087e01fcd6": {
+			BaseExist: true,
+			File: db.SwitchFileInfo{
+				ExtendedInfo: baseFile,
+				Metadata:     contentMetadata(baseID, 0, "1.0.100"),
+			},
+			// Leave MultiContent false to ensure source identity, rather than
+			// the aggregate flag, controls bundled update handling.
+			Updates: map[int]db.SwitchFileInfo{
+				65536: {
+					ExtendedInfo: baseFile,
+					Metadata:     contentMetadata(updateID, 65536, "1.0.185"),
+				},
+				196608: {
+					ExtendedInfo: standaloneUpdateFile,
+					Metadata:     contentMetadata(updateID, 196608, "2.0.27"),
+				},
+			},
+			LatestUpdate: 196608,
+		},
+	}}
+	remote := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{
+		"010087e01fcd6": {Attributes: db.TitleAttributes{Id: baseID, Name: "Cuisineer"}},
+	}}
+
+	OrganizeByFolders(baseFolder, local, remote, nil)
+
+	assertMoved(t,
+		filepath.Join(source, baseName),
+		filepath.Join(source, "Cuisineer [010087E01FCD6000][BASE][v65536][1.0.185].xci"),
+		"bundled update XCI",
+	)
+	assertMoved(t,
+		filepath.Join(source, standaloneUpdateName),
+		filepath.Join(source, "Cuisineer [010087E01FCD6800][UPD][v196608][2.0.27].nsp"),
+		"standalone update",
+	)
+}
+
+func TestDeleteOldUpdatesPreservesPackageAndDeletesStandaloneUpdate(t *testing.T) {
+	baseFolder := t.TempDir()
+	source := filepath.Join(baseFolder, "library")
+	mustMkdir(t, source)
+	packagePath := filepath.Join(source, "Cuisineer [010087E01FCD6000][v65536].xci")
+	oldUpdatePath := filepath.Join(source, "Cuisineer [010087E01FCD6800][v32768].nsp")
+	writeFixture(t, packagePath, "synthetic super XCI")
+	writeFixture(t, oldUpdatePath, "synthetic old patch NSP")
+	setProcessSettings(t, baseFolder, settings.OrganizeOptions{})
+
+	local := &db.LocalSwitchFilesDB{Skipped: map[db.ExtendedFileInfo]db.SkippedFile{
+		{BaseFolder: source, FileName: "Cuisineer [010087E01FCD6800][v32768].nsp"}: {
+			ReasonCode: db.REASON_OLD_UPDATE,
+			ReasonText: "older standalone update",
+		},
+	}}
+	DeleteOldUpdates(baseFolder, local, nil)
+
+	assertExists(t, packagePath)
+	assertNotExists(t, oldUpdatePath)
+}
+
 func TestOrganizeByFoldersProcessesMissingBaseAndNilMetadata(t *testing.T) {
 	baseFolder := t.TempDir()
 	source := filepath.Join(baseFolder, "incoming")

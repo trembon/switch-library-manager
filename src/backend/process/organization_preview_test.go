@@ -65,6 +65,56 @@ func TestBuildOrganizationPreviewUsesActualBaseUpdateAndDLC(t *testing.T) {
 	}
 }
 
+func TestBuildOrganizationPreviewUsesBundledVersionForBaseFile(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "incoming")
+	baseID := "010087E01FCD6000"
+	updateID := "010087E01FCD6800"
+	baseFile := db.ExtendedFileInfo{BaseFolder: source, FileName: "package.xci", Size: 20}
+	standaloneUpdate := db.ExtendedFileInfo{BaseFolder: source, FileName: "update.nsp", Size: 18}
+	options := settings.OrganizeOptions{
+		RenameFiles:         true,
+		FileNameTemplate:    "{TITLE_NAME} [{TITLE_ID}][{TYPE}][v{VERSION}][{VERSION_TXT}]",
+		SwitchSafeFileNames: false,
+	}
+	local := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{
+		"010087e01fcd6": {
+			BaseExist: true,
+			File: db.SwitchFileInfo{
+				ExtendedInfo: baseFile,
+				Metadata:     previewTestMetadata(baseID, 0, "1.0.100"),
+			},
+			Updates: map[int]db.SwitchFileInfo{
+				65536: {
+					ExtendedInfo: baseFile,
+					Metadata:     previewTestMetadata(updateID, 65536, "1.0.185"),
+				},
+				196608: {
+					ExtendedInfo: standaloneUpdate,
+					Metadata:     previewTestMetadata(updateID, 196608, "2.0.27"),
+				},
+			},
+		},
+	}}
+	remote := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{
+		"010087e01fcd6": {Attributes: db.TitleAttributes{Id: baseID, Name: "Cuisineer"}},
+	}}
+
+	got := BuildOrganizationPreview(root, options, local, remote)
+	paths := map[string]string{}
+	for _, entry := range got {
+		paths[entry.Kind] = entry.Path
+	}
+	wantBase := filepath.Join("incoming", "Cuisineer [010087E01FCD6000][BASE][v65536][1.0.185].xci")
+	wantUpdate := filepath.Join("incoming", "Cuisineer [010087E01FCD6800][UPD][v196608][2.0.27].nsp")
+	if paths["game"] != wantBase {
+		t.Fatalf("base preview path = %q, want %q", paths["game"], wantBase)
+	}
+	if paths["update"] != wantUpdate {
+		t.Fatalf("update preview path = %q, want %q", paths["update"], wantUpdate)
+	}
+}
+
 func TestBuildOrganizationPreviewFallbackShowsDeterministicSize(t *testing.T) {
 	root := t.TempDir()
 	options := settings.OrganizeOptions{

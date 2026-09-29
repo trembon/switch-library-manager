@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -696,6 +697,100 @@ func TestScannerClassifiesCachedMultiContentAndDlcEdges(t *testing.T) {
 	}
 	assertSkippedReason(t, skipped, "update old", REASON_OLD_UPDATE)
 	assertSkippedReason(t, skipped, "dlc duplicate", REASON_DUPLICATE)
+}
+
+func TestScannerKeepsPackagedUpdatesOutOfRemovableUpdateIssues(t *testing.T) {
+	testCases := []struct {
+		name                string
+		packageVersion      int
+		standaloneVersion   int
+		packageFirst        bool
+		wantStandaloneIssue int
+	}{
+		{"package older scanned first", 65536, 196608, true, 0},
+		{"package older scanned last", 65536, 196608, false, 0},
+		{"standalone older scanned first", 65536, 32768, false, REASON_OLD_UPDATE},
+		{"standalone older scanned last", 65536, 32768, true, REASON_OLD_UPDATE},
+		{"duplicate standalone scanned first", 65536, 65536, false, REASON_DUPLICATE},
+		{"duplicate standalone scanned last", 65536, 65536, true, REASON_DUPLICATE},
+	}
+
+	const (
+		baseID   = "010087e01fcd6000"
+		updateID = "010087e01fcd6800"
+	)
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			base := t.TempDir()
+			resetDBSettings(t, base, func(s *settings.AppSettings) {})
+			keyPath := filepath.Join(base, "prod.keys")
+			if err := os.WriteFile(keyPath, []byte("header_key = synthetic\n"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			settings.SaveSettings(&settings.AppSettings{Paths: settings.PathSettings{ProdKeys: keyPath, ScanFolders: []string{}}}, base)
+			if _, err := settings.InitSwitchKeys(base); err != nil {
+				t.Fatal(err)
+			}
+			manager, err := NewLocalSwitchDBManager(base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer manager.Close()
+
+			packageFile := addCachedScannerFixture(t, manager, base, "package.xci", map[string]*switchfs.ContentMetaAttributes{
+				baseID:   {TitleId: baseID, Version: 0},
+				updateID: {TitleId: updateID, Version: test.packageVersion},
+			})
+			standaloneFile := addCachedScannerFixture(t, manager, base, "standalone.nsp", map[string]*switchfs.ContentMetaAttributes{
+				updateID: {TitleId: updateID, Version: test.standaloneVersion},
+			})
+
+			files := []ExtendedFileInfo{packageFile, standaloneFile}
+			if !test.packageFirst {
+				files[0], files[1] = files[1], files[0]
+			}
+			titles := map[string]*SwitchGameFiles{}
+			skipped := map[ExtendedFileInfo]SkippedFile{}
+			manager.processLocalFiles(files, nil, titles, skipped)
+
+			game := titles["010087e01fcd6"]
+			if game == nil {
+				t.Fatal("expected Cuisineer title group")
+			}
+			wantLatest := test.packageVersion
+			if test.standaloneVersion > wantLatest {
+				wantLatest = test.standaloneVersion
+			}
+			if game.LatestUpdate != wantLatest {
+				t.Fatalf("LatestUpdate = %d, want %d", game.LatestUpdate, wantLatest)
+			}
+			if got := game.Updates[test.packageVersion].ExtendedInfo.FileName; got != packageFile.FileName {
+				t.Fatalf("packaged update source = %q, want %q", got, packageFile.FileName)
+			}
+			if issue, ok := skipped[packageFile]; ok {
+				t.Fatalf("package XCI was marked as a removable update issue: %#v", issue)
+			}
+			if got := skipped[standaloneFile].ReasonCode; got != test.wantStandaloneIssue {
+				t.Fatalf("standalone issue reason = %d, want %d (all diagnostics: %#v)", got, test.wantStandaloneIssue, skipped)
+			}
+		})
+	}
+}
+
+func addCachedScannerFixture(t *testing.T, manager *LocalSwitchDBManager, base, name string, metadata map[string]*switchfs.ContentMetaAttributes) ExtendedFileInfo {
+	t.Helper()
+	contents := []byte("synthetic container fixture")
+	filePath := filepath.Join(base, name)
+	if err := os.WriteFile(filePath, contents, 0644); err != nil {
+		t.Fatal(err)
+	}
+	file := ExtendedFileInfo{FileName: name, BaseFolder: base, Size: int64(len(contents))}
+	cacheKey := filePath + "|" + file.FileName + "|" + strconv.Itoa(int(file.Size))
+	if err := manager.db.AddEntry(DB_TABLE_FILE_SCAN_METADATA, cacheKey, metadata); err != nil {
+		t.Fatal(err)
+	}
+	return file
 }
 
 func TestScannerRecordsInvalidCachedMetadataAndSplitErrors(t *testing.T) {

@@ -166,6 +166,15 @@ func scanFolder(folder string, recursive bool, files *[]ExtendedFileInfo, progre
 	})
 }
 
+func sameExtendedFilePath(left, right ExtendedFileInfo) bool {
+	if left.FileName == "" || right.FileName == "" {
+		return false
+	}
+	leftPath := filepath.Clean(filepath.Join(left.BaseFolder, left.FileName))
+	rightPath := filepath.Clean(filepath.Join(right.BaseFolder, right.FileName))
+	return leftPath == rightPath
+}
+
 func (ldb *LocalSwitchDBManager) ClearScanData() error {
 	err := ldb.db.ClearTable(DB_TABLE_FILE_SCAN_METADATA)
 	if errors.Is(err, bolt.ErrBucketNotFound) {
@@ -246,6 +255,24 @@ func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,
 			continue
 		}
 
+		// A file containing a base title and one of its updates is a package,
+		// not an independently removable update file. Record this per title
+		// before processing the map because its iteration order is unspecified.
+		fileBasePrefixes := map[string]struct{}{}
+		for _, contentMetadata := range contentMap {
+			if contentMetadata == nil {
+				continue
+			}
+			contentID := strings.ToLower(contentMetadata.TitleId)
+			if !strings.HasSuffix(contentID, "000") {
+				continue
+			}
+			prefix, err := titleIDPrefix(contentID)
+			if err == nil {
+				fileBasePrefixes[prefix] = struct{}{}
+			}
+		}
+
 		for _, metadata := range contentMap {
 
 			id := strings.ToLower(metadata.TitleId)
@@ -268,14 +295,31 @@ func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,
 			if t, ok := titles[idPrefix]; ok {
 				switchTitle = t
 			}
+			switchTitle.MultiContent = switchTitle.MultiContent || multiContent
 			titles[idPrefix] = switchTitle
 
 			//process Updates
 			if strings.HasSuffix(metadata.TitleId, "800") {
 				metadata.Type = "Update"
 
+				_, currentFileHasBase := fileBasePrefixes[idPrefix]
+				currentIsPackaged := currentFileHasBase || (switchTitle.BaseExist && sameExtendedFilePath(file, switchTitle.File.ExtendedInfo))
 				if update, ok := switchTitle.Updates[metadata.Version]; ok {
-					skipped[file] = SkippedFile{ReasonCode: REASON_DUPLICATE, ReasonText: "duplicate update file\n" + filepath.Join(update.ExtendedInfo.BaseFolder, update.ExtendedInfo.FileName) + "\n" + filepath.Join(file.BaseFolder, file.FileName)}
+					reason := "duplicate update file\n" + filepath.Join(update.ExtendedInfo.BaseFolder, update.ExtendedInfo.FileName) + "\n" + filepath.Join(file.BaseFolder, file.FileName)
+					existingIsPackaged := switchTitle.BaseExist && sameExtendedFilePath(update.ExtendedInfo, switchTitle.File.ExtendedInfo)
+					if currentIsPackaged && !existingIsPackaged {
+						// Prefer the package record for naming its base file. The
+						// standalone duplicate is the removable file.
+						skipped[update.ExtendedInfo] = SkippedFile{ReasonCode: REASON_DUPLICATE, ReasonText: reason}
+						switchTitle.Updates[metadata.Version] = SwitchFileInfo{ExtendedInfo: file, Metadata: metadata}
+					} else {
+						// A bundled update is never a removable duplicate update on its
+						// own. A duplicate package may still be reported as a duplicate
+						// file when the existing update is also bundled.
+						if !currentIsPackaged || existingIsPackaged {
+							skipped[file] = SkippedFile{ReasonCode: REASON_DUPLICATE, ReasonText: reason}
+						}
+					}
 					zap.S().Warnf("-->Duplicate update file found [%v] and [%v]", update.ExtendedInfo.FileName, file.FileName)
 					continue
 				}
@@ -283,12 +327,16 @@ func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,
 				if metadata.Version > switchTitle.LatestUpdate {
 					if switchTitle.LatestUpdate != 0 {
 						oldUpdate := switchTitle.Updates[switchTitle.LatestUpdate]
-						skipped[switchTitle.Updates[switchTitle.LatestUpdate].ExtendedInfo] = SkippedFile{ReasonCode: REASON_OLD_UPDATE, ReasonText: "old update file, newer update exist locally\nnew: " + filepath.Join(file.BaseFolder, file.FileName) + "\nold:" + filepath.Join(oldUpdate.ExtendedInfo.BaseFolder, oldUpdate.ExtendedInfo.FileName)}
+						if !(switchTitle.BaseExist && sameExtendedFilePath(oldUpdate.ExtendedInfo, switchTitle.File.ExtendedInfo)) {
+							skipped[oldUpdate.ExtendedInfo] = SkippedFile{ReasonCode: REASON_OLD_UPDATE, ReasonText: "old update file, newer update exist locally\nnew: " + filepath.Join(file.BaseFolder, file.FileName) + "\nold:" + filepath.Join(oldUpdate.ExtendedInfo.BaseFolder, oldUpdate.ExtendedInfo.FileName)}
+						}
 					}
 					switchTitle.LatestUpdate = metadata.Version
 				} else {
-					newerUpdate := switchTitle.Updates[switchTitle.LatestUpdate]
-					skipped[file] = SkippedFile{ReasonCode: REASON_OLD_UPDATE, ReasonText: "old update file, newer update exist locally\nnew: " + filepath.Join(newerUpdate.ExtendedInfo.BaseFolder, newerUpdate.ExtendedInfo.FileName) + "\nold:" + filepath.Join(file.BaseFolder, file.FileName)}
+					if !currentIsPackaged {
+						newerUpdate := switchTitle.Updates[switchTitle.LatestUpdate]
+						skipped[file] = SkippedFile{ReasonCode: REASON_OLD_UPDATE, ReasonText: "old update file, newer update exist locally\nnew: " + filepath.Join(newerUpdate.ExtendedInfo.BaseFolder, newerUpdate.ExtendedInfo.FileName) + "\nold:" + filepath.Join(file.BaseFolder, file.FileName)}
+					}
 				}
 				continue
 			}

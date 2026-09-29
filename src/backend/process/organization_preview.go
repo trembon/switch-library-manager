@@ -96,10 +96,8 @@ func organizationPreviewForGame(baseFolder string, options settings.OrganizeOpti
 	result := make([]OrganizationPreviewEntry, 0, 3)
 	if game.BaseExist {
 		templateData[settings.TEMPLATE_TYPE] = "BASE"
+		setBaseFileVersionTemplateData(templateData, game)
 		setFileSizeTemplateData(templateData, game.File.ExtendedInfo.Size)
-		if game.File.Metadata != nil && game.File.Metadata.Ncap != nil {
-			templateData[settings.TEMPLATE_VERSION_TXT] = game.File.Metadata.Ncap.DisplayVersion
-		}
 		result = append(result, OrganizationPreviewEntry{
 			Kind: "game",
 			Path: organizationPreviewPath(baseFolder, organizationTargetPath(
@@ -119,33 +117,35 @@ func organizationPreviewForGame(baseFolder string, options settings.OrganizeOpti
 		updateVersions = append(updateVersions, version)
 	}
 	sort.Ints(updateVersions)
-	if len(updateVersions) > 0 {
-		version := updateVersions[len(updateVersions)-1]
+	for i := len(updateVersions) - 1; i >= 0; i-- {
+		version := updateVersions[i]
 		update := game.Updates[version]
-		if !(game.MultiContent && game.BaseExist && game.File.ExtendedInfo == update.ExtendedInfo) {
-			if update.Metadata != nil {
-				templateData[settings.TEMPLATE_TITLE_ID] = update.Metadata.TitleId
-			}
-			templateData[settings.TEMPLATE_VERSION] = strconv.Itoa(version)
-			setFileSizeTemplateData(templateData, update.ExtendedInfo.Size)
-			templateData[settings.TEMPLATE_VERSION_TXT] = ""
-			if update.Metadata != nil && update.Metadata.Ncap != nil {
-				templateData[settings.TEMPLATE_VERSION_TXT] = update.Metadata.Ncap.DisplayVersion
-			}
-			templateData[settings.TEMPLATE_TYPE] = "UPD"
-			result = append(result, OrganizationPreviewEntry{
-				Kind: "update",
-				Path: organizationPreviewPath(baseFolder, organizationTargetPath(
-					destinationPath,
-					update.ExtendedInfo.BaseFolder,
-					update.ExtendedInfo.FileName,
-					options,
-					"update",
-					templateData,
-					0,
-				)),
-			})
+		if game.BaseExist && samePhysicalFilePath(game.File.ExtendedInfo, update.ExtendedInfo) {
+			continue
 		}
+		if update.Metadata != nil {
+			templateData[settings.TEMPLATE_TITLE_ID] = update.Metadata.TitleId
+		}
+		templateData[settings.TEMPLATE_VERSION] = strconv.Itoa(version)
+		setFileSizeTemplateData(templateData, update.ExtendedInfo.Size)
+		templateData[settings.TEMPLATE_VERSION_TXT] = ""
+		if update.Metadata != nil && update.Metadata.Ncap != nil {
+			templateData[settings.TEMPLATE_VERSION_TXT] = update.Metadata.Ncap.DisplayVersion
+		}
+		templateData[settings.TEMPLATE_TYPE] = "UPD"
+		result = append(result, OrganizationPreviewEntry{
+			Kind: "update",
+			Path: organizationPreviewPath(baseFolder, organizationTargetPath(
+				destinationPath,
+				update.ExtendedInfo.BaseFolder,
+				update.ExtendedInfo.FileName,
+				options,
+				"update",
+				templateData,
+				0,
+			)),
+		})
+		break
 	}
 
 	dlcIDs := make([]string, 0, len(game.Dlc))
@@ -155,7 +155,7 @@ func organizationPreviewForGame(baseFolder string, options settings.OrganizeOpti
 	sort.Strings(dlcIDs)
 	if len(dlcIDs) > 0 {
 		dlc := game.Dlc[dlcIDs[0]]
-		if !(game.MultiContent && game.BaseExist && game.File.ExtendedInfo == dlc.ExtendedInfo) {
+		if !(game.BaseExist && samePhysicalFilePath(game.File.ExtendedInfo, dlc.ExtendedInfo)) {
 			templateData[settings.TEMPLATE_VERSION] = "0"
 			templateData[settings.TEMPLATE_VERSION_TXT] = ""
 			templateData[settings.TEMPLATE_TITLE_ID] = dlcIDs[0]
