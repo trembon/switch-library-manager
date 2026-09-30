@@ -28,15 +28,16 @@ func (p *progressRecorder) UpdateProgress(curr int, total int, message string) {
 
 func TestApplyTemplate(t *testing.T) {
 	data := map[string]string{
-		settings.TEMPLATE_TITLE_NAME:  "The Game / Demo",
-		settings.TEMPLATE_TITLE_ID:    "0100abcd00001000",
-		settings.TEMPLATE_VERSION:     "12",
-		settings.TEMPLATE_VERSION_TXT: "1.2.0",
-		settings.TEMPLATE_REGION:      "US",
-		settings.TEMPLATE_TYPE:        "UPD",
-		settings.TEMPLATE_DLC_NAME:    "The Game - Extra Pack",
-		settings.TEMPLATE_SIZE_GB:     "0.6GB",
-		settings.TEMPLATE_SIZE_MB:     "600MB",
+		settings.TEMPLATE_TITLE_NAME:       "The Game / Demo",
+		settings.TEMPLATE_TITLE_ID:         "0100abcd00001000",
+		settings.TEMPLATE_VERSION:          "12",
+		settings.TEMPLATE_VERSION_TXT:      "1.2.0",
+		settings.TEMPLATE_REGION:           "US",
+		settings.TEMPLATE_TYPE:             "UPD",
+		settings.TEMPLATE_DLC_NAME:         "The Game - Extra Pack",
+		settings.TEMPLATE_SIZE_GB:          "0.6GB",
+		settings.TEMPLATE_SIZE_MB:          "600MB",
+		settings.TEMPLATE_PACKAGE_CONTENTS: "1G+1U+1D",
 	}
 
 	tests := []struct {
@@ -46,7 +47,8 @@ func TestApplyTemplate(t *testing.T) {
 		try      int
 		want     string
 	}{
-		{"all placeholders and repeated values", false, "{TITLE_NAME}-{TITLE_NAME}-{TITLE_ID}-{VERSION}-{VERSION_TXT}-{REGION}-{TYPE}-{DLC_NAME}-{SIZE_GB}-{SIZE_MB}-{SIZE_MB}", 0, "The Game  Demo-The Game  Demo-0100ABCD00001000-12-1.2.0-US-UPD-The Game - Extra Pack-0.6GB-600MB-600MB"},
+		{"all placeholders and repeated values", false, "{TITLE_NAME}-{TITLE_NAME}-{TITLE_ID}-{VERSION}-{VERSION_TXT}-{REGION}-{TYPE}-{DLC_NAME}-{SIZE_GB}-{SIZE_MB}-{SIZE_MB} ({PACKAGE_CONTENTS})", 0, "The Game  Demo-The Game  Demo-0100ABCD00001000-12-1.2.0-US-UPD-The Game - Extra Pack-0.6GB-600MB-600MB (1G+1U+1D)"},
+		{"package contents placeholder omitted", false, "{TITLE_NAME}[{TITLE_ID}]", 0, "The Game  Demo[0100ABCD00001000]"},
 		{"safe name", true, "Pokémon™: {TITLE_NAME} [v{VERSION}]", 0, "Pokémon The Game Demo [v12]"},
 		{"collision suffix", false, "name.", 2, "name(2)"},
 		{"cleanup and illegal characters", false, "[]()<>a:b%?", 0, "ab"},
@@ -59,6 +61,14 @@ func TestApplyTemplate(t *testing.T) {
 				t.Fatalf("applyTemplate() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+
+	emptyData := map[string]string{
+		settings.TEMPLATE_TITLE_NAME:       "The Game",
+		settings.TEMPLATE_PACKAGE_CONTENTS: "",
+	}
+	if got := applyTemplate(emptyData, false, "{TITLE_NAME} {PACKAGE_CONTENTS}", 0); got != "The Game" {
+		t.Fatalf("applyTemplate() with empty package contents = %q, want %q", got, "The Game")
 	}
 }
 
@@ -107,6 +117,144 @@ func TestTemplateHelpers(t *testing.T) {
 	if got := getFileName(options, "original.nsp", data, 4); got != "original.nsp" {
 		t.Fatalf("getFileName() with rename disabled = %q", got)
 	}
+}
+
+func TestPackageContents(t *testing.T) {
+	base := db.ExtendedFileInfo{BaseFolder: "library", FileName: "package.xci"}
+	other := db.ExtendedFileInfo{BaseFolder: "library", FileName: "standalone.nsp"}
+	file := func(name string) db.ExtendedFileInfo {
+		return db.ExtendedFileInfo{BaseFolder: base.BaseFolder, FileName: name}
+	}
+
+	tests := []struct {
+		name string
+		game *db.SwitchGameFiles
+		want string
+	}{
+		{
+			name: "base only ignores standalone content",
+			game: &db.SwitchGameFiles{
+				BaseExist: true,
+				File:      db.SwitchFileInfo{ExtendedInfo: base},
+				Updates:   map[int]db.SwitchFileInfo{1: {ExtendedInfo: other}},
+				Dlc:       map[string]db.SwitchFileInfo{"dlc": {ExtendedInfo: other}},
+			},
+		},
+		{
+			name: "one bundled update",
+			game: &db.SwitchGameFiles{
+				BaseExist: true,
+				File:      db.SwitchFileInfo{ExtendedInfo: base},
+				Updates:   map[int]db.SwitchFileInfo{1: {ExtendedInfo: base}},
+			},
+			want: "1G+1U",
+		},
+		{
+			name: "multiple bundled updates and DLCs",
+			game: &db.SwitchGameFiles{
+				BaseExist: true,
+				File:      db.SwitchFileInfo{ExtendedInfo: base},
+				Updates: map[int]db.SwitchFileInfo{
+					1: {ExtendedInfo: base},
+					2: {ExtendedInfo: base},
+					3: {ExtendedInfo: other},
+				},
+				Dlc: map[string]db.SwitchFileInfo{
+					"dlc-one":     {ExtendedInfo: base},
+					"dlc-two":     {ExtendedInfo: base},
+					"dlc-outside": {ExtendedInfo: other},
+				},
+			},
+			want: "1G+2U+2D",
+		},
+		{
+			name: "filename fallback preserves recognized marker",
+			game: &db.SwitchGameFiles{
+				BaseExist: true,
+				File:      db.SwitchFileInfo{ExtendedInfo: file("Game [0100000000010000][v1] (1g+1u+2d).nsp")},
+			},
+			want: "1G+1U+2D",
+		},
+		{
+			name: "filename fallback ignores unrecognized order",
+			game: &db.SwitchGameFiles{
+				BaseExist: true,
+				File:      db.SwitchFileInfo{ExtendedInfo: file("Game (1G+1D+1U).nsp")},
+			},
+		},
+		{
+			name: "missing base has no package marker",
+			game: &db.SwitchGameFiles{File: db.SwitchFileInfo{ExtendedInfo: file("Game (1G+1U).nsp")}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := packageContents(tt.game); got != tt.want {
+				t.Fatalf("packageContents() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestOrganizeByFoldersExpandsPackageContentsOnlyForBundledPackage(t *testing.T) {
+	baseFolder := t.TempDir()
+	source := filepath.Join(baseFolder, "incoming")
+	mustMkdir(t, source)
+
+	baseName := "package.xci"
+	standaloneUpdateName := "standalone-update.nsp"
+	standaloneDLCName := "standalone-dlc.nsp"
+	for _, name := range []string{baseName, standaloneUpdateName, standaloneDLCName} {
+		writeFixture(t, filepath.Join(source, name), "synthetic content")
+	}
+
+	baseFile := db.ExtendedFileInfo{BaseFolder: source, FileName: baseName}
+	standaloneUpdate := db.ExtendedFileInfo{BaseFolder: source, FileName: standaloneUpdateName}
+	standaloneDLC := db.ExtendedFileInfo{BaseFolder: source, FileName: standaloneDLCName}
+	setProcessSettings(t, baseFolder, settings.OrganizeOptions{
+		RenameFiles:         true,
+		FileNameTemplate:    "{TITLE_NAME}_{TYPE} ({PACKAGE_CONTENTS})",
+		SwitchSafeFileNames: false,
+	})
+
+	local := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{
+		"game": {
+			BaseExist: true,
+			File:      db.SwitchFileInfo{ExtendedInfo: baseFile, Metadata: contentMetadata("0100000000010000", 0, "1.0.0")},
+			Updates: map[int]db.SwitchFileInfo{
+				1: {ExtendedInfo: baseFile},
+				2: {ExtendedInfo: baseFile},
+				3: {ExtendedInfo: standaloneUpdate},
+			},
+			Dlc: map[string]db.SwitchFileInfo{
+				"dlc-one":   {ExtendedInfo: baseFile},
+				"dlc-two":   {ExtendedInfo: baseFile},
+				"dlc-three": {ExtendedInfo: standaloneDLC},
+			},
+		},
+	}}
+	remote := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{
+		"game": {Attributes: db.TitleAttributes{Id: "0100000000010000", Name: "Example Game"}},
+	}}
+
+	OrganizeByFolders(baseFolder, local, remote, nil)
+
+	assertMoved(t,
+		filepath.Join(source, baseName),
+		filepath.Join(source, "Example Game_BASE (1G+2U+2D).xci"),
+		"bundled package with placeholder",
+	)
+	assertMoved(t,
+		filepath.Join(source, standaloneUpdateName),
+		filepath.Join(source, "Example Game_UPD.nsp"),
+		"standalone update without package marker",
+	)
+	assertMoved(t,
+		filepath.Join(source, standaloneDLCName),
+		filepath.Join(source, "Example Game_DLC.nsp"),
+		"standalone DLC without package marker",
+	)
 }
 
 func TestIsOptionsValid(t *testing.T) {

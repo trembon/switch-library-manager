@@ -96,6 +96,7 @@ func organizationPreviewForGame(baseFolder string, options settings.OrganizeOpti
 	result := make([]OrganizationPreviewEntry, 0, 3)
 	if game.BaseExist {
 		templateData[settings.TEMPLATE_TYPE] = "BASE"
+		templateData[settings.TEMPLATE_PACKAGE_CONTENTS] = packageContents(game)
 		setBaseFileVersionTemplateData(templateData, game)
 		setFileSizeTemplateData(templateData, game.File.ExtendedInfo.Size)
 		result = append(result, OrganizationPreviewEntry{
@@ -111,6 +112,7 @@ func organizationPreviewForGame(baseFolder string, options settings.OrganizeOpti
 			)),
 		})
 	}
+	templateData[settings.TEMPLATE_PACKAGE_CONTENTS] = ""
 
 	updateVersions := make([]int, 0, len(game.Updates))
 	for version := range game.Updates {

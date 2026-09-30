@@ -115,6 +115,53 @@ func TestBuildOrganizationPreviewUsesBundledVersionForBaseFile(t *testing.T) {
 	}
 }
 
+func TestBuildOrganizationPreviewExpandsPackageContentsForBundledBase(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "incoming")
+	baseFile := db.ExtendedFileInfo{BaseFolder: source, FileName: "package (1G+1U+1D).xci"}
+	standaloneUpdate := db.ExtendedFileInfo{BaseFolder: source, FileName: "standalone-update.nsp"}
+	baseID := "0100000000010000"
+	updateID := "0100000000010800"
+	dlcID := "0100000000011001"
+	options := settings.OrganizeOptions{
+		RenameFiles:         true,
+		FileNameTemplate:    "{TITLE_NAME} ({PACKAGE_CONTENTS})[{TYPE}][v{VERSION}]",
+		SwitchSafeFileNames: false,
+	}
+	local := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{
+		"game": {
+			BaseExist: true,
+			File: db.SwitchFileInfo{
+				ExtendedInfo: baseFile,
+				Metadata:     previewTestMetadata(baseID, 0, "1.0.0"),
+			},
+			Updates: map[int]db.SwitchFileInfo{
+				1: {ExtendedInfo: baseFile, Metadata: previewTestMetadata(updateID, 1, "1.0.1")},
+				2: {ExtendedInfo: baseFile, Metadata: previewTestMetadata(updateID, 2, "1.0.2")},
+				3: {ExtendedInfo: standaloneUpdate, Metadata: previewTestMetadata(updateID, 3, "1.0.3")},
+			},
+			Dlc: map[string]db.SwitchFileInfo{
+				dlcID: {ExtendedInfo: baseFile, Metadata: previewTestMetadata(dlcID, 1, "1.0.0")},
+			},
+		},
+	}}
+	remote := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{
+		"game": {Attributes: db.TitleAttributes{Id: baseID, Name: "Preview Game"}},
+	}}
+
+	got := BuildOrganizationPreview(root, options, local, remote)
+	paths := map[string]string{}
+	for _, entry := range got {
+		paths[entry.Kind] = entry.Path
+	}
+	if want := filepath.Join("incoming", "Preview Game (1G+2U+1D)[BASE][v2].xci"); paths["game"] != want {
+		t.Fatalf("base preview path = %q, want %q", paths["game"], want)
+	}
+	if want := filepath.Join("incoming", "Preview Game [UPD][v3].nsp"); paths["update"] != want {
+		t.Fatalf("standalone update preview path = %q, want %q", paths["update"], want)
+	}
+}
+
 func TestBuildOrganizationPreviewFallbackShowsDeterministicSize(t *testing.T) {
 	root := t.TempDir()
 	options := settings.OrganizeOptions{

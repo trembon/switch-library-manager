@@ -21,6 +21,8 @@ var (
 	cjk                     = regexp.MustCompile("[\u2f70-\u2FA1\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f\\p{Katakana}\\p{Hiragana}\\p{Hangul}]")
 )
 
+var packageContentsRegex = regexp.MustCompile(`(?i)\(([1-9][0-9]{0,8})g(?:\+([1-9][0-9]{0,8})u)?(?:\+([1-9][0-9]{0,8})d)?\)`)
+
 func DeleteOldUpdates(baseFolder string, localDB *db.LocalSwitchFilesDB, updateProgress db.ProgressUpdater) {
 	i := 0
 	for k, v := range localDB.Skipped {
@@ -164,6 +166,7 @@ func OrganizeByFolders(baseFolder string,
 		//process base title
 		if v.BaseExist {
 			templateData[settings.TEMPLATE_TYPE] = "BASE"
+			templateData[settings.TEMPLATE_PACKAGE_CONTENTS] = packageContents(v)
 			setFileSizeTemplateData(templateData, v.File.ExtendedInfo.Size)
 			from = filepath.Join(v.File.ExtendedInfo.BaseFolder, v.File.ExtendedInfo.FileName)
 			to = organizationTargetPath(destinationPath, v.File.ExtendedInfo.BaseFolder, v.File.ExtendedInfo.FileName, options, "base", templateData, 0)
@@ -173,6 +176,7 @@ func OrganizeByFolders(baseFolder string,
 				continue
 			}
 		}
+		templateData[settings.TEMPLATE_PACKAGE_CONTENTS] = ""
 
 		//process updates
 		for update, updateInfo := range v.Updates {
@@ -386,6 +390,59 @@ func setBaseFileVersionTemplateData(templateData map[string]string, game *db.Swi
 	}
 }
 
+func packageContents(game *db.SwitchGameFiles) string {
+	if game == nil || !game.BaseExist {
+		return ""
+	}
+
+	// Count logical records in the base file itself; MultiContent also covers
+	// records spread across separate files and is not sufficient for naming.
+	updateCount := 0
+	for _, update := range game.Updates {
+		if samePhysicalFilePath(game.File.ExtendedInfo, update.ExtendedInfo) {
+			updateCount++
+		}
+	}
+
+	dlcCount := 0
+	for _, dlc := range game.Dlc {
+		if samePhysicalFilePath(game.File.ExtendedInfo, dlc.ExtendedInfo) {
+			dlcCount++
+		}
+	}
+
+	if updateCount != 0 || dlcCount != 0 {
+		parts := []string{"1G"}
+		if updateCount != 0 {
+			parts = append(parts, strconv.Itoa(updateCount)+"U")
+		}
+		if dlcCount != 0 {
+			parts = append(parts, strconv.Itoa(dlcCount)+"D")
+		}
+		return strings.Join(parts, "+")
+	}
+
+	// Filename-only scans cannot discover package members, so preserve a valid
+	// source marker when one is present.
+	return packageContentsFromFileName(game.File.ExtendedInfo.FileName)
+}
+
+func packageContentsFromFileName(fileName string) string {
+	match := packageContentsRegex.FindStringSubmatch(fileName)
+	if len(match) != 4 || (match[2] == "" && match[3] == "") {
+		return ""
+	}
+
+	parts := []string{match[1] + "G"}
+	if match[2] != "" {
+		parts = append(parts, match[2]+"U")
+	}
+	if match[3] != "" {
+		parts = append(parts, match[3]+"D")
+	}
+	return strings.Join(parts, "+")
+}
+
 func highestBundledUpdate(game *db.SwitchGameFiles) (int, db.SwitchFileInfo, bool) {
 	if game == nil || !game.BaseExist {
 		return 0, db.SwitchFileInfo{}, false
@@ -462,6 +519,7 @@ func applyTemplate(templateData map[string]string, useSafeNames bool, template s
 	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_REGION+"}", templateData[settings.TEMPLATE_REGION])
 	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_SIZE_GB+"}", templateData[settings.TEMPLATE_SIZE_GB])
 	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_SIZE_MB+"}", templateData[settings.TEMPLATE_SIZE_MB])
+	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_PACKAGE_CONTENTS+"}", templateData[settings.TEMPLATE_PACKAGE_CONTENTS])
 
 	//remove title name from dlc name
 	dlcName := strings.Replace(templateData[settings.TEMPLATE_DLC_NAME], templateData[settings.TEMPLATE_TITLE_NAME], "", 1)
