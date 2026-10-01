@@ -1,9 +1,22 @@
 name: "Build App"
 description: Builds the app
+inputs:
+  platform:
+    description: Wails target platform
+    required: true
 runs:
   using: composite
   steps:
-    - name: Run bundler
+    - name: Generate Wails bindings
       working-directory: ./src
       shell: bash
-      run: ./astilectron-bundler
+      run: wails generate module
+
+    - name: Prepare application icon
+      shell: bash
+      run: bash scripts/prepare-wails-build-assets.sh
+
+    - name: Build with Wails
+      working-directory: ./src
+      shell: bash
+      run: wails build -platform "${{ inputs.platform }}" -webview2 embed

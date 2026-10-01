@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"fmt"
 	"net/url"
 	"os"
@@ -8,10 +9,15 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/trembon/switch-library-manager/console"
-	"github.com/trembon/switch-library-manager/settings"
+	"github.com/trembon/switch-library-manager/backend/app"
+	"github.com/trembon/switch-library-manager/backend/console"
+	"github.com/trembon/switch-library-manager/backend/consoleapp"
+	"github.com/trembon/switch-library-manager/backend/settings"
 	"go.uber.org/zap"
 )
+
+//go:embed all:frontend
+var frontendAssets embed.FS
 
 func main() {
 	exePath, err := os.Executable()
@@ -30,9 +36,17 @@ func main() {
 		}
 	}
 
-	appSettings := settings.ReadSettings(workingFolder)
+	console.InitializeFlags()
+	consoleFlags := console.GetFlagsValues()
 
-	logger := createLogger(workingFolder, appSettings.Debug)
+	preparedSettings, err := settings.PrepareSettings(workingFolder)
+	if err != nil {
+		fmt.Printf("failed to load settings: %v\n", err)
+		return
+	}
+	appSettings := preparedSettings.Settings
+
+	logger := createLogger(workingFolder, appSettings.Logging.Debug)
 
 	defer logger.Sync() // flushes buffer, if any
 	sugar := logger.Sugar()
@@ -41,31 +55,39 @@ func main() {
 	sugar.Infof("[Executable: %v]", exePath)
 	sugar.Infof("[Working directory: %v]", workingFolder)
 
-	files, err := AssetDir(workingFolder)
-	if files == nil && err == nil {
-		appSettings.GUI = false
-	}
-
-	console.InitializeFlags()
 	console.LogFlags(sugar)
 
-	consoleFlags := console.GetFlagsValues()
-	useGUI := appSettings.GUI
-	if consoleFlags.Mode.IsSet() {
-		mode := consoleFlags.Mode.String()
-		if mode == "console" {
-			useGUI = false
-		} else if mode == "gui" {
-			useGUI = true
-		}
+	useGUI := resolveGUIMode(appSettings.GUI.Enabled, consoleFlags.Mode.IsSet(), consoleFlags.Mode.String())
+	if shouldAbortConsoleMigration(useGUI, preparedSettings.Migration) {
+		fmt.Printf("settings migration required: the older settings file was preserved as %s; update the new settings.json using docs/settings.md before using console mode\n", preparedSettings.Migration.BackupPath)
+		return
 	}
 
 	if useGUI {
-		CreateGUI(workingFolder, sugar).Start()
+		if err := app.StartWithMigration(workingFolder, sugar, frontendAssets, preparedSettings.Migration); err != nil {
+			sugar.Error("GUI startup failed", err)
+		}
 	} else {
 		console.FixConsoleOutput()
-		CreateConsole(workingFolder, sugar, consoleFlags).Start()
+		consoleapp.CreateConsole(workingFolder, sugar, consoleFlags).Start()
 	}
+}
+
+func resolveGUIMode(settingsGUIEnabled, modeSet bool, mode string) bool {
+	if !modeSet {
+		return settingsGUIEnabled
+	}
+	if mode == "console" {
+		return false
+	}
+	if mode == "gui" {
+		return true
+	}
+	return settingsGUIEnabled
+}
+
+func shouldAbortConsoleMigration(useGUI bool, migration *settings.MigrationInfo) bool {
+	return !useGUI && migration != nil
 }
 
 func createLogger(workingFolder string, debug bool) *zap.Logger {
