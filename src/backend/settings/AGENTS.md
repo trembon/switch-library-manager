@@ -2,7 +2,7 @@
 
 ## Runtime State
 
-- `settings.json`, `titles.json`, and `versions.json` live beside the executable, using the `baseFolder` selected by `main.go`.
+- `settings.json`, `titles.json`, and `versions.json` live in the `baseFolder` selected by `main.go`. On macOS this is `~/Library/Application Support/Switch Library Manager/`; on Windows and Linux it remains beside the executable.
 - Defaults are created on first launch. Settings also retain remote ETags, scan folders, ignore lists, GUI behavior, and organization templates.
 - `ReadSettings` and `SaveSettings` currently update process-global `settingsInstance`; a later base-folder argument is ignored after the first read.
 - `SwitchKeys` and `InitSwitchKeys` likewise use process-global key state. Do not write tests that assume a clean singleton or that changing settings automatically reloads keys.

@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	"github.com/trembon/switch-library-manager/backend/app"
 	"github.com/trembon/switch-library-manager/backend/console"
@@ -26,34 +25,30 @@ func main() {
 		return
 	}
 
-	workingFolder := filepath.Dir(exePath)
-
-	if runtime.GOOS == "darwin" {
-		if strings.Contains(workingFolder, ".app") {
-			appIndex := strings.Index(workingFolder, ".app")
-			sepIndex := strings.LastIndex(workingFolder[:appIndex], string(os.PathSeparator))
-			workingFolder = workingFolder[:sepIndex]
-		}
+	dataFolder, err := resolveRuntimeDataFolder(runtime.GOOS, exePath, os.UserConfigDir)
+	if err != nil {
+		fmt.Printf("failed to prepare application data directory: %v\n", err)
+		return
 	}
 
 	console.InitializeFlags()
 	consoleFlags := console.GetFlagsValues()
 
-	preparedSettings, err := settings.PrepareSettings(workingFolder)
+	preparedSettings, err := settings.PrepareSettings(dataFolder)
 	if err != nil {
 		fmt.Printf("failed to load settings: %v\n", err)
 		return
 	}
 	appSettings := preparedSettings.Settings
 
-	logger := createLogger(workingFolder, appSettings.Logging.Debug)
+	logger := createLogger(dataFolder, appSettings.Logging.Debug)
 
 	defer logger.Sync() // flushes buffer, if any
 	sugar := logger.Sugar()
 
 	sugar.Info("[SLM starts]")
 	sugar.Infof("[Executable: %v]", exePath)
-	sugar.Infof("[Working directory: %v]", workingFolder)
+	sugar.Infof("[Data directory: %v]", dataFolder)
 
 	console.LogFlags(sugar)
 
@@ -64,12 +59,12 @@ func main() {
 	}
 
 	if useGUI {
-		if err := app.StartWithMigration(workingFolder, sugar, frontendAssets, preparedSettings.Migration); err != nil {
+		if err := app.StartWithMigration(dataFolder, sugar, frontendAssets, preparedSettings.Migration); err != nil {
 			sugar.Error("GUI startup failed", err)
 		}
 	} else {
 		console.FixConsoleOutput()
-		consoleapp.CreateConsole(workingFolder, sugar, consoleFlags).Start()
+		consoleapp.CreateConsole(dataFolder, sugar, consoleFlags).Start()
 	}
 }
 

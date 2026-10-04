@@ -489,6 +489,31 @@ func TestKeyDiscoveryHomeFallback(t *testing.T) {
 	}
 }
 
+func TestKeyDiscoveryBaseFolderBeforeHome(t *testing.T) {
+	isolateSettings(t)
+	dataFolder := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOME", home)
+	if err := os.Mkdir(filepath.Join(home, ".switch"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".switch", "prod.keys"), []byte("header_key = home\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dataFolder, "prod.keys"), []byte("header_key = data-folder\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveSettingsWithError(&AppSettings{}, dataFolder); err != nil {
+		t.Fatal(err)
+	}
+
+	keys, err := InitSwitchKeys(dataFolder)
+	if err != nil || keys.GetKey("header_key") != "data-folder" {
+		t.Fatalf("data-folder key discovery: keys=%v err=%v", keys, err)
+	}
+}
+
 func TestKeyFilePathCaseAndReadSettingsSingleton(t *testing.T) {
 	isolateSettings(t)
 	base := t.TempDir()

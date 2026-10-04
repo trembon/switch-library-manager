@@ -2,7 +2,7 @@
 
 ## Entry Points and Flow
 
-- `main.go` resolves the executable directory and uses it as the application base folder. It is not the current working directory. macOS app bundles have special path handling.
+- `main.go` resolves the application data folder and does not use the current working directory. macOS stores runtime files under the user config directory; Windows and Linux use the executable directory.
 - Startup loads settings, creates `slm.log`, initializes CLI flags, and selects GUI or console mode. `-m console` and `-m gui` override `settings.json`.
 - The console flow downloads/loads remote titles and versions, scans the library, reports issues, optionally deletes old updates, organizes files, and checks missing updates/DLC.
 - The GUI flow starts Wails, loads the embedded `frontend/index.html`, and exposes typed methods from `backend/app.App` to `app.js`. It maintains mutable local and remote DB state in `App.state`.

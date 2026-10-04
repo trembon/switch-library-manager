@@ -4,6 +4,10 @@ Switch Library Manager uses a categorized `settings.json` format. The file is va
 
 When using the graphical interface, the Settings tab provides a structured editor for these options. The schema version and internal cache values are not shown. Saving settings writes the JSON file and displays a restart notice; the existing folder picker remains an immediate path-and-rescan workflow.
 
+## Runtime data directory
+
+On macOS, runtime files are stored in `~/Library/Application Support/Switch Library Manager/`. Windows and Linux continue to store them beside the executable. Existing files in the former macOS location are left untouched and are not copied into the new profile. On macOS, `prod.keys` lookup checks this application data directory before the home `.switch` directory; it does not check beside the app.
+
 ## Example
 
 ```json
@@ -69,7 +73,7 @@ When using the graphical interface, the Settings tab provides a structured edito
 | `gui.theme`                                   | string       | `"inherit"`                                           | GUI color mode: `inherit` follows the operating system, while `light` and `dark` force a mode. Invalid or missing values use `inherit`.                |
 | `paths.library_folder`                        | string       | `""`                                                  | Main folder scanned by the GUI and console workflow. The `-f` flag overrides it for a console run.                                                     |
 | `paths.scan_folders`                          | string array | `[]`                                                  | Additional folders scanned alongside the main library folder.                                                                                          |
-| `paths.prod_keys`                             | string       | `""`                                                  | Optional file or directory containing `prod.keys`. If it does not resolve, the application checks the executable folder and the home `.switch` folder. |
+| `paths.prod_keys`                             | string       | `""`                                                  | Optional file or directory containing `prod.keys`. If it does not resolve, the application checks its data directory and the home `.switch` folder. |
 | `scan.recursive`                              | boolean      | `true`                                                | Scans subdirectories. The `-r` flag overrides it for a console run.                                                                                    |
 | `scan.ignore_file_types`                      | string array | `[]`                                                  | File extensions ignored when reporting unsupported file types. Extensions may include or omit the leading dot.                                         |
 | `scan.ignore_unsupported_file_types`           | boolean      | `false`                                               | Suppresses diagnostics for files with unsupported extensions. When false, unsupported files are reported; errors for supported extensions are still reported. |

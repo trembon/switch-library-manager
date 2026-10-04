@@ -61,7 +61,7 @@ func InitSwitchKeys(baseFolder string) (*switchKeys, error) {
 		p, err = properties.LoadFile(path, properties.UTF8)
 	}
 
-	// third, if not found in current, look in home directory
+	// third, if not found in the application folders, look in home directory
 	if err != nil {
 		home, homeErr := os.UserHomeDir()
 		if homeErr != nil {
