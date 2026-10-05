@@ -111,6 +111,14 @@ body {
     font-size: 0.75rem;
 }
 
+.restart-action {
+    margin-top: 1rem;
+}
+
+.restart-action[hidden] {
+    display: none;
+}
+
 .progress-bar {
     min-width: 3rem;
 }

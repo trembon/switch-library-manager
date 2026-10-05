@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -245,6 +246,56 @@ func TestSaveSettingsUpdatesRememberWindowStateFlag(t *testing.T) {
 	}
 	if application.rememberWindowState {
 		t.Fatal("remember-window-state flag was not disabled after settings save")
+	}
+}
+
+func TestRestartFailureCanBeRetriedAndRepeatedRequestsAreRejected(t *testing.T) {
+	launches := 0
+	quits := 0
+	application := &App{}
+	application.ctx = context.Background()
+	application.restart = func() error {
+		launches++
+		if launches == 1 {
+			return errors.New("start failed")
+		}
+		return nil
+	}
+	application.quit = func(context.Context) {
+		if !applicationMutexAvailable(application) {
+			t.Error("application state mutex is held while quitting")
+		}
+		quits++
+	}
+
+	if err := application.Restart(); err == nil || !strings.Contains(err.Error(), "start failed") {
+		t.Fatalf("first Restart() error = %v, want launch failure", err)
+	}
+	if err := application.Restart(); err != nil {
+		t.Fatalf("retry Restart() error = %v", err)
+	}
+	if err := application.Restart(); err == nil || !strings.Contains(err.Error(), "already in progress") {
+		t.Fatalf("repeated Restart() error = %v, want already-in-progress error", err)
+	}
+	if launches != 2 || quits != 1 {
+		t.Fatalf("restart launches = %d and quits = %d; want 2 and 1", launches, quits)
+	}
+}
+
+func applicationMutexAvailable(application *App) bool {
+	if !application.state.mu.TryLock() {
+		return false
+	}
+	application.state.mu.Unlock()
+	return true
+}
+
+func TestRestartRequiresConfiguredLauncherAndStartedApplication(t *testing.T) {
+	if err := (&App{}).Restart(); err == nil || !strings.Contains(err.Error(), "unavailable") {
+		t.Fatalf("Restart() without launcher error = %v, want unavailable", err)
+	}
+	if err := (&App{restart: func() error { return nil }}).Restart(); err == nil || !strings.Contains(err.Error(), "not ready") {
+		t.Fatalf("Restart() before startup error = %v, want not-ready", err)
 	}
 }
 

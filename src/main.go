@@ -19,6 +19,19 @@ import (
 var frontendAssets embed.FS
 
 func main() {
+	args, restartParentPID, err := stripRestartParentArgument(os.Args[1:])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to restart Switch Library Manager: %v\n", err)
+		return
+	}
+	if restartParentPID != 0 {
+		if err := waitForRestartParent(restartParentPID, restartParentTimeout); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to restart Switch Library Manager: %v\n", err)
+			return
+		}
+	}
+	os.Args = append([]string{os.Args[0]}, args...)
+
 	exePath, err := os.Executable()
 	if err != nil {
 		fmt.Println("failed to get executable directory, please ensure app has sufficient permissions. aborting")
@@ -59,7 +72,10 @@ func main() {
 	}
 
 	if useGUI {
-		if err := app.StartWithMigration(dataFolder, sugar, frontendAssets, preparedSettings.Migration); err != nil {
+		if err := app.StartWithOptions(dataFolder, sugar, frontendAssets, app.StartupOptions{
+			MigrationInfo: preparedSettings.Migration,
+			Restart:       func() error { return launchReplacementApplication(exePath, os.Getpid()) },
+		}); err != nil {
 			sugar.Error("GUI startup failed", err)
 		}
 	} else {

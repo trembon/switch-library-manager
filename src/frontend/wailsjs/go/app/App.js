@@ -46,6 +46,10 @@ export function RescanLibrary(arg1) {
   return window['go']['app']['App']['RescanLibrary'](arg1);
 }
 
+export function Restart() {
+  return window['go']['app']['App']['Restart']();
+}
+
 export function SaveSettings(arg1) {
   return window['go']['app']['App']['SaveSettings'](arg1);
 }

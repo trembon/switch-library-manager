@@ -11,6 +11,7 @@ require (
 	github.com/wailsapp/wails/v2 v2.15.0
 	go.etcd.io/bbolt v1.5.0
 	go.uber.org/zap v1.27.1
+	golang.org/x/sys v0.47.0
 	robpike.io/nihongo v0.0.0-20230705220025-ab7f6184a918
 )
 
@@ -46,7 +47,6 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/term v0.45.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
 )

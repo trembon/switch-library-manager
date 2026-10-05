@@ -9,6 +9,7 @@ import {
     IsKeysFileAvailable,
     LoadSettings,
     OrganizeLibrary,
+    Restart,
     RescanLibrary,
     SaveSettings,
     SelectFolder,
@@ -268,9 +269,12 @@ $(function () {
         restartRequired = true;
         wrapper.classList.add('restart-required');
         $('.progress-type').text('Restart required');
-        $('.progress-msg').text('Settings were saved. Close and restart the application to continue.');
+        $('.progress-msg').text('Settings were saved. Restart the application to apply your changes.');
         $('.progress-container').attr('aria-label', 'Application restart required');
+        const restartButton = document.getElementById('restart-button');
+        restartButton.hidden = false;
         setLoading(true);
+        restartButton.focus();
     }
 
     //handle tabs action
@@ -778,6 +782,24 @@ $(function () {
             renderSettingsTab();
         });
 
+        $("body").on("click", "#restart-button", e => {
+            if (!restartRequired || e.currentTarget.disabled) {
+                return;
+            }
+            const button = e.currentTarget;
+            button.disabled = true;
+            button.textContent = "Restarting…";
+            $('.progress-msg').text('Starting the application…');
+            Restart()
+                .catch(error => {
+                    const detail = error && error.message ? error.message : String(error);
+                    $('.progress-msg').text('Restart failed. You can try again or close and restart the application manually. ' + detail);
+                    button.disabled = false;
+                    button.textContent = "Restart now";
+                    button.focus();
+                });
+        });
+
         $("body").on("submit", "#settings-form", e => {
             e.preventDefault();
             const value = collectSettings(e.currentTarget);
@@ -788,14 +810,8 @@ $(function () {
                     state.settings = saved;
                     state.settingsDraft = cloneSettings(saved);
                     state.settingsFeedback = undefined;
-                    return ShowMessage(
-                        "info",
-                        "Restart required",
-                        "Settings were saved successfully.",
-                        "Close and restart the application for all changes to take effect."
-                    ).catch(() => undefined);
+                    lockForRestart();
                 })
-                .then(() => lockForRestart())
                 .catch(error => showSettingsFeedback("danger", settingsErrorMessage(error)));
         });
 
