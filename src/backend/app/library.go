@@ -37,7 +37,7 @@ func (a *App) RescanLibrary(hard bool) (LocalLibraryData, error) {
 			return LocalLibraryData{}, err
 		}
 	}
-	return a.updateLocalLibraryLocked(hard)
+	return a.updateLocalLibraryLocked(true)
 }
 
 func (a *App) updateLocalLibraryLocked(ignoreCache bool) (LocalLibraryData, error) {
@@ -116,6 +116,8 @@ func (a *App) buildLocalDB(ignoreCache bool) (*db.LocalSwitchFilesDB, error) {
 		settingsObj.Scan.Recursive,
 		ignoreCache,
 	)
-	a.state.localDB = localDB
+	if err == nil {
+		a.state.localDB = localDB
+	}
 	return localDB, err
 }

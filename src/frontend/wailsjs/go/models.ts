@@ -448,6 +448,7 @@ export namespace settings {
 	}
 	export class ScanSettings {
 	    recursive: boolean;
+	    rescan_on_startup: boolean;
 	    ignore_file_types: string[];
 	    ignore_unsupported_file_types: boolean;
 	
@@ -458,6 +459,7 @@ export namespace settings {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.recursive = source["recursive"];
+	        this.rescan_on_startup = source["rescan_on_startup"];
 	        this.ignore_file_types = source["ignore_file_types"];
 	        this.ignore_unsupported_file_types = source["ignore_unsupported_file_types"];
 	    }

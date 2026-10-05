@@ -140,6 +140,11 @@
             <label class="form-check-label" for="settings-scan-recursive">Scan subfolders recursively</label>
           </div>
           <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" name="scan_rescan_on_startup" id="settings-scan-rescan-on-startup" {{if scan.rescan_on_startup}}checked{{/if}}>
+            <label class="form-check-label" for="settings-scan-rescan-on-startup">Rescan library at startup</label>
+            <div class="form-text">Checks configured folders for added or removed files while reusing cached metadata.</div>
+          </div>
+          <div class="form-check form-switch mb-3">
             <input class="form-check-input" type="checkbox" name="scan_ignore_unsupported_file_types" id="settings-scan-ignore-unsupported-file-types" {{if scan.ignore_unsupported_file_types}}checked{{/if}}>
             <label class="form-check-label" for="settings-scan-ignore-unsupported-file-types">Ignore unsupported file types</label>
           </div>

@@ -102,27 +102,24 @@ func (ldb *LocalSwitchDBManager) CreateLocalSwitchFilesDB(folders []string,
 		}
 	}
 
-	if len(titles) == 0 {
-
+	if ignoreCache || len(titles) == 0 {
 		for i, folder := range folders {
 			err := scanFolder(folder, recursive, &files, progress)
 			if progress != nil {
 				progress.UpdateProgress(i+1, len(folders)+1, "scanning files in "+folder)
 			}
 			if err != nil {
-				continue
+				return nil, fmt.Errorf("scan folder %q: %w", folder, err)
 			}
 		}
 
 		ldb.processLocalFiles(files, progress, titles, skipped)
 
-		if err := ldb.db.AddEntry(DB_TABLE_LOCAL_LIBRARY, "files", files); err != nil {
-			return nil, err
-		}
-		if err := ldb.db.AddEntry(DB_TABLE_LOCAL_LIBRARY, "skipped", skipped); err != nil {
-			return nil, err
-		}
-		if err := ldb.db.AddEntry(DB_TABLE_LOCAL_LIBRARY, "titles", titles); err != nil {
+		if err := ldb.db.addEntries(DB_TABLE_LOCAL_LIBRARY, map[string]interface{}{
+			"files":   files,
+			"skipped": skipped,
+			"titles":  titles,
+		}); err != nil {
 			return nil, err
 		}
 	}
@@ -136,15 +133,17 @@ func (ldb *LocalSwitchDBManager) CreateLocalSwitchFilesDB(folders []string,
 
 func scanFolder(folder string, recursive bool, files *[]ExtendedFileInfo, progress ProgressUpdater) error {
 	return filepath.Walk(folder, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			zap.S().Error("Error while scanning folders", err)
+			return err
+		}
 		if path == folder {
 			return nil
 		}
-		if err != nil {
-			zap.S().Error("Error while scanning folders", err)
-			return nil
+		if info == nil {
+			return fmt.Errorf("file information is unavailable for %q", path)
 		}
-
-		if info == nil || info.IsDir() {
+		if info.IsDir() {
 			return nil
 		}
 

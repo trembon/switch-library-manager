@@ -341,19 +341,28 @@ func TestBuildSwitchDBClosesDownloadedFiles(t *testing.T) {
 	}
 }
 
-func TestRescanLibraryHardModeRebuildsLocalScan(t *testing.T) {
+func TestRescanLibraryRefreshesSnapshotAndPreservesMetadataCache(t *testing.T) {
 	baseFolder := t.TempDir()
 	libraryFolder := filepath.Join(baseFolder, "library")
-	if err := os.Mkdir(libraryFolder, 0755); err != nil {
+	additionalFolder := filepath.Join(baseFolder, "additional")
+	nestedFolder := filepath.Join(additionalFolder, "nested")
+	if err := os.MkdirAll(libraryFolder, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(nestedFolder, 0755); err != nil {
 		t.Fatal(err)
 	}
 	first := filepath.Join(libraryFolder, "First Game [0100000000001000][v0].nsp")
+	additional := filepath.Join(nestedFolder, "Additional Game [0100000000003000][v0].nsp")
 	if err := os.WriteFile(first, []byte("first"), 0644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(additional, []byte("additional"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	if err := settings.SaveSettingsWithError(&settings.AppSettings{
-		Paths: settings.PathSettings{LibraryFolder: libraryFolder, ScanFolders: []string{}},
-		Scan:  settings.ScanSettings{IgnoreFileTypes: []string{}},
+		Paths: settings.PathSettings{LibraryFolder: libraryFolder, ScanFolders: []string{additionalFolder}},
+		Scan:  settings.ScanSettings{Recursive: true, IgnoreFileTypes: []string{}},
 	}, baseFolder); err != nil {
 		t.Fatal(err)
 	}
@@ -374,20 +383,70 @@ func TestRescanLibraryHardModeRebuildsLocalScan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if firstScan.NumFiles != 1 {
-		t.Fatalf("first scan files = %d, want 1", firstScan.NumFiles)
+	if firstScan.NumFiles != 2 {
+		t.Fatalf("first scan files = %d, want 2 across recursive scan folders", firstScan.NumFiles)
 	}
 
+	// A disabled startup rescan continues to use the saved library snapshot.
 	second := filepath.Join(libraryFolder, "Second Game [0100000000002000][v0].nsp")
 	if err := os.WriteFile(second, []byte("second"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	unsupported := filepath.Join(libraryFolder, "notes.txt")
+	if err := os.WriteFile(unsupported, []byte("notes"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cachedStartup, err := application.UpdateLocalLibrary(false)
+	if err != nil || cachedStartup.NumFiles != 2 {
+		t.Fatalf("cached startup: files=%d err=%v, want 2 files", cachedStartup.NumFiles, err)
+	}
+
+	// An enabled startup rescan sees new files while leaving deep metadata intact.
+	refreshedStartup, err := application.UpdateLocalLibrary(true)
+	if err != nil || refreshedStartup.NumFiles != 4 || len(refreshedStartup.Issues) != 1 {
+		t.Fatalf("refreshed startup: files=%d issues=%d err=%v, want 4 files and 1 issue", refreshedStartup.NumFiles, len(refreshedStartup.Issues), err)
+	}
+
+	if err := os.Remove(first); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(unsupported); err != nil {
 		t.Fatal(err)
 	}
 	normalScan, err := application.RescanLibrary(false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if normalScan.NumFiles != 1 {
-		t.Fatalf("normal rescan files = %d, want cached 1", normalScan.NumFiles)
+	if normalScan.NumFiles != 2 {
+		t.Fatalf("normal rescan files = %d, want 2 after deletion", normalScan.NumFiles)
+	}
+	if len(normalScan.Issues) != 0 {
+		t.Fatalf("normal rescan retained stale skipped-file diagnostics: %#v", normalScan.Issues)
+	}
+
+	lastGoodSnapshot := application.state.localDB
+	if err := settings.SaveSettingsWithError(&settings.AppSettings{
+		Paths: settings.PathSettings{LibraryFolder: libraryFolder, ScanFolders: []string{filepath.Join(baseFolder, "missing-folder")}},
+		Scan:  settings.ScanSettings{Recursive: true, IgnoreFileTypes: []string{}},
+	}, baseFolder); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := application.RescanLibrary(false); err == nil || !strings.Contains(err.Error(), "missing-folder") {
+		t.Fatalf("missing scan folder error = %v, want folder context", err)
+	}
+	if application.state.localDB != lastGoodSnapshot {
+		t.Fatal("failed scan replaced the last good in-memory snapshot")
+	}
+	cachedAfterFailure, err := application.UpdateLocalLibrary(false)
+	if err != nil || cachedAfterFailure.NumFiles != 2 {
+		t.Fatalf("cached snapshot after failed scan: files=%d err=%v, want 2 files", cachedAfterFailure.NumFiles, err)
+	}
+
+	if err := settings.SaveSettingsWithError(&settings.AppSettings{
+		Paths: settings.PathSettings{LibraryFolder: libraryFolder, ScanFolders: []string{additionalFolder}},
+		Scan:  settings.ScanSettings{Recursive: true, IgnoreFileTypes: []string{}},
+	}, baseFolder); err != nil {
+		t.Fatal(err)
 	}
 
 	hardScan, err := application.RescanLibrary(true)

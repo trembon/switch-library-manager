@@ -69,6 +69,7 @@ type PathSettings struct {
 
 type ScanSettings struct {
 	Recursive                  bool     `json:"recursive"`
+	RescanOnStartup            bool     `json:"rescan_on_startup"`
 	IgnoreFileTypes            []string `json:"ignore_file_types"`
 	IgnoreUnsupportedFileTypes bool     `json:"ignore_unsupported_file_types"`
 }

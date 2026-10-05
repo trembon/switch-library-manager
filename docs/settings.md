@@ -28,6 +28,7 @@ On macOS, runtime files are stored in `~/Library/Application Support/Switch Libr
   },
   "scan": {
     "recursive": true,
+    "rescan_on_startup": false,
     "ignore_file_types": [],
     "ignore_unsupported_file_types": false
   },
@@ -75,6 +76,7 @@ On macOS, runtime files are stored in `~/Library/Application Support/Switch Libr
 | `paths.scan_folders`                          | string array | `[]`                                                  | Additional folders scanned alongside the main library folder.                                                                                          |
 | `paths.prod_keys`                             | string       | `""`                                                  | Optional file or directory containing `prod.keys`. If it does not resolve, the application checks its data directory and the home `.switch` folder. |
 | `scan.recursive`                              | boolean      | `true`                                                | Scans subdirectories. The `-r` flag overrides it for a console run.                                                                                    |
+| `scan.rescan_on_startup`                      | boolean      | `false`                                               | Checks configured folders at GUI startup for added or removed files while reusing cached metadata.                                                     |
 | `scan.ignore_file_types`                      | string array | `[]`                                                  | File extensions ignored when reporting unsupported file types. Extensions may include or omit the leading dot.                                         |
 | `scan.ignore_unsupported_file_types`           | boolean      | `false`                                               | Suppresses diagnostics for files with unsupported extensions. When false, unsupported files are reported; errors for supported extensions are still reported. |
 | `organization.create_folder_per_game`         | boolean      | `false`                                               | Creates a folder for each game during organization.                                                                                                    |

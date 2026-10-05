@@ -340,6 +340,139 @@ func TestPersistenceRoundTripAndCacheClearing(t *testing.T) {
 	}
 }
 
+func TestAddEntriesEncodesSnapshotBeforeWriting(t *testing.T) {
+	base := t.TempDir()
+	database, err := NewPersistentDB(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	if err := database.addEntries("atomic", map[string]interface{}{"current": "saved"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.addEntries("atomic", map[string]interface{}{
+		"current": "replacement",
+		"invalid": func() {},
+	}); err == nil {
+		t.Fatal("expected unsupported gob value to fail encoding")
+	}
+
+	var current string
+	if err := database.GetEntry("atomic", "current", &current); err != nil {
+		t.Fatal(err)
+	}
+	if current != "saved" {
+		t.Fatalf("failed snapshot write changed existing value to %q", current)
+	}
+}
+
+func TestFreshLibraryScanPersistsSnapshotAtomicallyAndKeepsDeepCache(t *testing.T) {
+	base := t.TempDir()
+	primary := filepath.Join(base, "primary")
+	additional := filepath.Join(base, "additional")
+	nested := filepath.Join(additional, "nested")
+	for _, folder := range []string{primary, nested} {
+		if err := os.MkdirAll(folder, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resetDBSettings(t, base, func(settingsObj *settings.AppSettings) {
+		settingsObj.Paths.LibraryFolder = primary
+		settingsObj.Paths.ScanFolders = []string{additional}
+		settingsObj.Scan.Recursive = true
+	})
+
+	first := filepath.Join(primary, "First [0100000000001000][v0].nsp")
+	second := filepath.Join(nested, "Second [0100000000002000][v0].nsp")
+	for _, filename := range []string{first, second} {
+		if err := os.WriteFile(filename, []byte("synthetic"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	manager, err := NewLocalSwitchDBManager(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	for filename, titleID := range map[string]string{
+		first:  "0100000000001000",
+		second: "0100000000002000",
+	} {
+		info, err := os.Stat(filename)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fileName := filepath.Base(filename)
+		fileKey := filename + "|" + fileName + "|" + strconv.Itoa(int(info.Size()))
+		metadata := map[string]*switchfs.ContentMetaAttributes{
+			titleID: {TitleId: titleID, Version: 0},
+		}
+		if err := manager.db.AddEntry(DB_TABLE_FILE_SCAN_METADATA, fileKey, metadata); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	initial, err := manager.CreateLocalSwitchFilesDB([]string{primary, additional}, nil, true, true)
+	if err != nil || initial.NumFiles != 2 {
+		t.Fatalf("initial fresh scan: result=%#v err=%v", initial, err)
+	}
+
+	deepMetadata := map[string]int{"version": 9}
+	if err := manager.db.AddEntry(DB_TABLE_FILE_SCAN_METADATA, "synthetic-cache-entry", deepMetadata); err != nil {
+		t.Fatal(err)
+	}
+	third := filepath.Join(primary, "Third [0100000000003000][v0].nsp")
+	if err := os.WriteFile(third, []byte("synthetic"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	refreshed, err := manager.CreateLocalSwitchFilesDB([]string{primary, additional}, nil, true, true)
+	if err != nil || refreshed.NumFiles != 3 {
+		t.Fatalf("refreshed scan: result=%#v err=%v", refreshed, err)
+	}
+	var retained map[string]int
+	if err := manager.db.GetEntry(DB_TABLE_FILE_SCAN_METADATA, "synthetic-cache-entry", &retained); err != nil || retained["version"] != 9 {
+		t.Fatalf("ordinary refresh lost deep metadata cache: value=%#v err=%v", retained, err)
+	}
+
+	if err := os.Remove(first); err != nil {
+		t.Fatal(err)
+	}
+	deleted, err := manager.CreateLocalSwitchFilesDB([]string{primary, additional}, nil, true, true)
+	if err != nil || deleted.NumFiles != 2 {
+		t.Fatalf("scan after deletion: result=%#v err=%v", deleted, err)
+	}
+	fromCache, err := manager.CreateLocalSwitchFilesDB([]string{filepath.Join(base, "unused")}, nil, true, false)
+	if err != nil || fromCache.NumFiles != 2 {
+		t.Fatalf("persisted snapshot after deletion: result=%#v err=%v", fromCache, err)
+	}
+
+	if _, err := manager.CreateLocalSwitchFilesDB([]string{filepath.Join(base, "missing-folder")}, nil, true, true); err == nil {
+		t.Fatal("fresh scan accepted a missing folder")
+	}
+	fromCache, err = manager.CreateLocalSwitchFilesDB(nil, nil, true, false)
+	if err != nil || fromCache.NumFiles != 2 {
+		t.Fatalf("failed scan replaced persisted snapshot: result=%#v err=%v", fromCache, err)
+	}
+
+	if err := manager.ClearScanData(); err != nil {
+		t.Fatal(err)
+	}
+	var cleared map[string]int
+	if err := manager.db.GetEntry(DB_TABLE_FILE_SCAN_METADATA, "synthetic-cache-entry", &cleared); err != nil || cleared != nil {
+		t.Fatalf("hard rescan cache clear: value=%#v err=%v", cleared, err)
+	}
+
+	emptyFolder := filepath.Join(base, "empty")
+	if err := os.Mkdir(emptyFolder, 0755); err != nil {
+		t.Fatal(err)
+	}
+	empty, err := manager.CreateLocalSwitchFilesDB([]string{emptyFolder}, nil, true, true)
+	if err != nil || empty.NumFiles != 0 || len(empty.TitlesMap) != 0 {
+		t.Fatalf("empty folder scan: result=%#v err=%v", empty, err)
+	}
+}
+
 func TestLoadAndUpdateFileETagFallbackAndValidation(t *testing.T) {
 	base := t.TempDir()
 	path := filepath.Join(base, "titles.json")

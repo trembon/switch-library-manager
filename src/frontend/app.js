@@ -15,6 +15,7 @@ import {
     ShowInFolder,
     ShowMessage,
     UpdateDB,
+    UpdateLocalLibrary,
 } from './wailsjs/go/app/App.js'
 import { EventsOn } from './wailsjs/runtime/runtime.js'
 
@@ -315,6 +316,9 @@ $(function () {
             if(state.settings.gui.hide_missing_games){
                 document.getElementById("tab_btns").classList.add("hide_missing_games");
             }
+            return UpdateDB();
+        }).then(function () {
+            return scanLocalFolder(Boolean(state.settings.scan.rescan_on_startup), true);
         }).catch(error => showError(error.message));
 
         IsKeysFileAvailable().then(function (message) {
@@ -330,17 +334,13 @@ $(function () {
 
         showProgress("Downloading latest Switch titles/versions ...");
 
-        UpdateDB().then(function () {
-            return scanLocalFolder(false);
-        }).catch(error => showError(error.message));
-
         let openFolderPicker = function (mode) {
             SelectFolder()
                 .then(path => updateFolder(mode, path))
                 .catch(error => showError(error.message));
         };
 
-        let scanLocalFolder = function(mode){
+        let scanLocalFolder = function(mode, startup){
             if (!state.settings.paths.library_folder){
                 loadTab("#library");
                 hideProgress();
@@ -348,7 +348,14 @@ $(function () {
             }
             showProgress("Scanning local library...");
 
-            return RescanLibrary(Boolean(mode)).then(result => {
+            state.library = undefined;
+            state.updates = undefined;
+            state.dlc = undefined;
+            state.missingGames = undefined;
+            state.organizationPreview = undefined;
+
+            const scan = startup ? UpdateLocalLibrary(Boolean(mode)) : RescanLibrary(Boolean(mode));
+            return scan.then(result => {
                 state.library = result;
                 state.organizationPreview = undefined;
                 loadTab("#library");
@@ -438,6 +445,7 @@ $(function () {
                 },
                 scan: {
                     recursive: form.elements.scan_recursive.checked,
+                    rescan_on_startup: form.elements.scan_rescan_on_startup.checked,
                     ignore_file_types: listValues(form, "ignore_file_types"),
                     ignore_unsupported_file_types: form.elements.scan_ignore_unsupported_file_types.checked
                 },

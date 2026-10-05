@@ -28,7 +28,7 @@ func TestDefaultSettingsAndJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.SchemaVersion != SETTINGS_SCHEMA_VERSION || !s.GUI.Enabled || s.GUI.RememberWindowState || !s.Scan.Recursive || s.Scan.IgnoreUnsupportedFileTypes || !s.MissingContent.CheckForUpdates || !s.MissingContent.CheckForDLC || s.GUI.PageSize != 100 || s.GUI.Theme != ThemeInherit {
+	if s.SchemaVersion != SETTINGS_SCHEMA_VERSION || !s.GUI.Enabled || s.GUI.RememberWindowState || !s.Scan.Recursive || s.Scan.RescanOnStartup || s.Scan.IgnoreUnsupportedFileTypes || !s.MissingContent.CheckForUpdates || !s.MissingContent.CheckForDLC || s.GUI.PageSize != 100 || s.GUI.Theme != ThemeInherit {
 		t.Fatalf("unexpected defaults: %#v", s)
 	}
 	if s.DataSources.TitlesURL != DEFAULT_TITLES_JSON_URL || s.DataSources.VersionsURL != DEFAULT_VERSIONS_JSON_URL || !s.Organization.SwitchSafeFileNames {
@@ -64,7 +64,7 @@ func TestRememberWindowStateDefaultsOffForExistingSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.GUI.RememberWindowState || loaded.Scan.IgnoreUnsupportedFileTypes {
+	if loaded.GUI.RememberWindowState || loaded.Scan.IgnoreUnsupportedFileTypes || loaded.Scan.RescanOnStartup {
 		t.Fatal("existing settings without opt-in settings should default to false")
 	}
 }
@@ -142,7 +142,7 @@ func TestSettingsSaveRoundTrip(t *testing.T) {
 		SchemaVersion: SETTINGS_SCHEMA_VERSION,
 		DataSources:   DataSourceSettings{TitlesURL: "https://titles.example", VersionsURL: "https://versions.example"},
 		Paths:         PathSettings{LibraryFolder: "library", ScanFolders: []string{"one", "two"}},
-		Scan:          ScanSettings{IgnoreFileTypes: []string{"txt"}, IgnoreUnsupportedFileTypes: true},
+		Scan:          ScanSettings{IgnoreFileTypes: []string{"txt"}, IgnoreUnsupportedFileTypes: true, RescanOnStartup: true},
 		GUI:           GUISettings{PageSize: 25, RememberWindowState: true},
 		Organization:  OrganizationSettings{FileNameTemplate: "{TITLE_ID}"},
 	}
@@ -169,6 +169,9 @@ func TestSettingsSaveRoundTrip(t *testing.T) {
 	}
 	if !loaded.Scan.IgnoreUnsupportedFileTypes {
 		t.Fatal("ignore_unsupported_file_types was not retained")
+	}
+	if !loaded.Scan.RescanOnStartup {
+		t.Fatal("rescan_on_startup was not retained")
 	}
 }
 

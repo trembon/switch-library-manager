@@ -86,6 +86,30 @@ func (pd *PersistentDB) AddEntry(tableName string, key string, value interface{}
 	return err
 }
 
+func (pd *PersistentDB) addEntries(tableName string, entries map[string]interface{}) error {
+	encoded := make(map[string][]byte, len(entries))
+	for key, value := range entries {
+		var buffer bytes.Buffer
+		if err := gob.NewEncoder(&buffer).Encode(value); err != nil {
+			return fmt.Errorf("encode %s entry %q: %w", tableName, key, err)
+		}
+		encoded[key] = buffer.Bytes()
+	}
+
+	return pd.db.Update(func(tx *bolt.Tx) error {
+		bucket, err := tx.CreateBucketIfNotExists([]byte(tableName))
+		if err != nil {
+			return fmt.Errorf("create bucket %q: %w", tableName, err)
+		}
+		for key, value := range encoded {
+			if err := bucket.Put([]byte(key), value); err != nil {
+				return fmt.Errorf("write %s entry %q: %w", tableName, key, err)
+			}
+		}
+		return nil
+	})
+}
+
 func (pd *PersistentDB) GetEntry(tableName string, key string, value interface{}) error {
 	err := pd.db.View(func(tx *bolt.Tx) error {
 
