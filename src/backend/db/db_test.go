@@ -213,6 +213,9 @@ func TestScanFolderAndClassifyFilenameFallback(t *testing.T) {
 	assertSkippedReason(t, local.Skipped, "DLC Old", REASON_OLD_UPDATE)
 	assertSkippedReason(t, local.Skipped, "unsupported.txt", REASON_UNSUPPORTED_TYPE)
 	assertSkippedReason(t, local.Skipped, "unknown.nsp", REASON_UNRECOGNISED)
+	if len(local.CleanupCandidates) != 4 {
+		t.Fatalf("verified cleanup candidates = %#v, want the four standalone duplicate/old files", local.CleanupCandidates)
+	}
 	if _, ok := findSkipped(local.Skipped, "ignored.ignored"); ok {
 		t.Fatal("ignored extension was recorded")
 	}
@@ -232,6 +235,192 @@ func TestScanFolderAndClassifyFilenameFallback(t *testing.T) {
 	cached, err := manager.CreateLocalSwitchFilesDB([]string{filepath.Join(base, "does-not-exist")}, nil, false, false)
 	if err != nil || cached.NumFiles != len(files)+1 {
 		t.Fatalf("cached scan: result=%#v err=%v", cached, err)
+	}
+	if len(cached.CleanupCandidates) != 0 {
+		t.Fatalf("cached scan reused destructive cleanup candidates: %#v", cached.CleanupCandidates)
+	}
+}
+
+func TestScannerDeduplicatesPhysicalFilesAcrossOverlappingRoots(t *testing.T) {
+	base := t.TempDir()
+	library := filepath.Join(base, "library")
+	nested := filepath.Join(library, "nested")
+	if err := os.MkdirAll(nested, 0755); err != nil {
+		t.Fatal(err)
+	}
+	fileName := "Game [0100000000010000][v1].nsp"
+	if err := os.WriteFile(filepath.Join(nested, fileName), []byte("synthetic game file"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	resetDBSettings(t, base, func(*settings.AppSettings) {})
+	manager, err := NewLocalSwitchDBManager(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	local, err := manager.CreateLocalSwitchFilesDB([]string{library, nested}, nil, true, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if local.NumFiles != 1 {
+		t.Fatalf("physical files scanned = %d, want 1", local.NumFiles)
+	}
+	game := local.TitlesMap["0100000000010"]
+	if game == nil || !game.BaseExist {
+		t.Fatalf("overlapping roots lost the base record: %#v", local.TitlesMap)
+	}
+	if len(local.Skipped) != 0 {
+		t.Fatalf("overlapping roots created false duplicate issues: %#v", local.Skipped)
+	}
+}
+
+func TestClearLocalLibrarySnapshotForcesNextCachedReadToRescan(t *testing.T) {
+	base := t.TempDir()
+	library := filepath.Join(base, "library")
+	if err := os.MkdirAll(library, 0755); err != nil {
+		t.Fatal(err)
+	}
+	resetDBSettings(t, base, func(*settings.AppSettings) {})
+	firstPath := filepath.Join(library, "First [0100000000010000][v0].nsp")
+	if err := os.WriteFile(firstPath, []byte("first"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := NewLocalSwitchDBManager(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	if err := manager.ClearLocalLibrarySnapshot(); err != nil {
+		t.Fatalf("ClearLocalLibrarySnapshot() before first scan = %v", err)
+	}
+	if _, err := manager.CreateLocalSwitchFilesDB([]string{library}, nil, false, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.ClearLocalLibrarySnapshot(); err != nil {
+		t.Fatalf("ClearLocalLibrarySnapshot() = %v", err)
+	}
+	if err := os.Remove(firstPath); err != nil {
+		t.Fatal(err)
+	}
+	secondPath := filepath.Join(library, "Second [0100000000020000][v0].nsp")
+	if err := os.WriteFile(secondPath, []byte("second"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	local, err := manager.CreateLocalSwitchFilesDB([]string{library}, nil, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if local.NumFiles != 1 || local.TitlesMap["0100000000020"] == nil || local.TitlesMap["0100000000010"] != nil {
+		t.Fatalf("cached read reused the cleared snapshot: %#v", local)
+	}
+}
+
+func TestScannerPropagatesCorruptSkippedAndTitleSnapshots(t *testing.T) {
+	for _, corruptKey := range []string{"skipped", "titles"} {
+		t.Run(corruptKey, func(t *testing.T) {
+			base := t.TempDir()
+			resetDBSettings(t, base, func(*settings.AppSettings) {})
+			manager, err := NewLocalSwitchDBManager(base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer manager.Close()
+			entries := map[string]interface{}{
+				"files":   []ExtendedFileInfo{},
+				"skipped": map[ExtendedFileInfo]SkippedFile{},
+				"titles":  map[string]*SwitchGameFiles{},
+			}
+			entries[corruptKey] = "not a scan map"
+			if err := manager.db.addEntries(DB_TABLE_LOCAL_LIBRARY, entries); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := manager.CreateLocalSwitchFilesDB(nil, nil, false, false); err == nil {
+				t.Fatalf("CreateLocalSwitchFilesDB() accepted corrupt %s snapshot", corruptKey)
+			}
+		})
+	}
+}
+
+func TestClearScanDataToleratesMissingMetadataBucket(t *testing.T) {
+	manager, err := NewLocalSwitchDBManager(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	if err := manager.ClearScanData(); err != nil {
+		t.Fatalf("ClearScanData() without an existing cache = %v", err)
+	}
+}
+
+func TestBuildCleanupCandidatesRejectsUncertainAndSplitFiles(t *testing.T) {
+	base := t.TempDir()
+	keeperPath := filepath.Join(base, "keeper.nsp")
+	for _, name := range []string{"split.nsp.00", "multi.nsp", "unknown.nsp", "invalid-id.nsp", "unmapped-id.nsp", "directory.nsp", "unsupported.nsp"} {
+		if err := os.WriteFile(filepath.Join(base, name), []byte(name), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	keeper := ExtendedFileInfo{BaseFolder: base, FileName: filepath.Base(keeperPath)}
+	files := []ExtendedFileInfo{
+		{BaseFolder: base, FileName: "split.nsp.00"},
+		{BaseFolder: base, FileName: "multi.nsp"},
+		{BaseFolder: base, FileName: "unknown.nsp"},
+		{BaseFolder: base, FileName: "invalid-id.nsp"},
+		{BaseFolder: base, FileName: "unmapped-id.nsp"},
+		{BaseFolder: base, FileName: "directory.nsp", IsDir: true},
+		{BaseFolder: base, FileName: "unsupported.nsp"},
+	}
+	id := "0100000000010000"
+	otherID := "010000000002A001"
+	contents := map[ExtendedFileInfo]map[string]*switchfs.ContentMetaAttributes{
+		files[0]: {id: {TitleId: id}},
+		files[1]: {
+			id:                 {TitleId: id},
+			"0100000000011001": {TitleId: "0100000000011001"},
+		},
+		files[2]: {id: nil},
+		files[3]: {"bad": {TitleId: "bad"}},
+		files[4]: {otherID: {TitleId: otherID}},
+		files[5]: {id: {TitleId: id}},
+		files[6]: {id: {TitleId: id}},
+	}
+	titles := map[string]*SwitchGameFiles{"0100000000010": {
+		BaseExist: true,
+		File:      SwitchFileInfo{ExtendedInfo: keeper, Metadata: &switchfs.ContentMetaAttributes{TitleId: id}},
+	}}
+	skipped := map[ExtendedFileInfo]SkippedFile{
+		files[0]: {ReasonCode: REASON_DUPLICATE},
+		files[1]: {ReasonCode: REASON_DUPLICATE},
+		files[2]: {ReasonCode: REASON_DUPLICATE},
+		files[3]: {ReasonCode: REASON_DUPLICATE},
+		files[4]: {ReasonCode: REASON_DUPLICATE},
+		files[5]: {ReasonCode: REASON_DUPLICATE},
+		files[6]: {ReasonCode: REASON_UNSUPPORTED_TYPE},
+	}
+	if candidates := buildCleanupCandidates(files, contents, titles, skipped); len(candidates) != 0 {
+		t.Fatalf("uncertain and split files became cleanup candidates: %#v", candidates)
+	}
+	if _, ok := cleanupReplacement(&SwitchGameFiles{}, &switchfs.ContentMetaAttributes{TitleId: "0100000000011001"}, ExtendedFileInfo{}); ok {
+		t.Fatal("cleanupReplacement() accepted a DLC with no scanned keeper")
+	}
+}
+
+func TestSplitPartNameDetectionAndEmptyPhysicalPaths(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		want bool
+	}{
+		{name: "", want: false},
+		{name: "game.00", want: true},
+		{name: "game.01", want: false},
+	} {
+		if got := isSplitFilePart(test.name); got != test.want {
+			t.Errorf("isSplitFilePart(%q) = %t, want %t", test.name, got, test.want)
+		}
+	}
+	if sameExtendedFilePath(ExtendedFileInfo{}, ExtendedFileInfo{BaseFolder: t.TempDir(), FileName: "file.nsp"}) {
+		t.Fatal("sameExtendedFilePath() accepted an empty filename")
 	}
 }
 

@@ -11,6 +11,12 @@ type LocalLibraryData struct {
 	NumFiles    int                   `json:"num_files"`
 }
 
+type OrganizationResult struct {
+	Status        string           `json:"status"`
+	ConflictCount int              `json:"conflict_count"`
+	Library       LocalLibraryData `json:"library"`
+}
+
 type SwitchTitle struct {
 	Name        string `json:"name"`
 	TitleId     string `json:"titleId"`

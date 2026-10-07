@@ -4,7 +4,6 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -177,21 +176,53 @@ func (c *Console) Start() {
 	if csvOutput != "" {
 		issuesCsvFile = filepath.Join(csvOutput, csvExportFilename(csvIssuesKind, exportDate))
 	}
-	c.processIssues(localDB, issuesCsvFile)
-
-	if settingsObj.Organization.DeleteOldUpdateFiles {
-		progressBar = progressbar.New(2000)
-		fmt.Printf("\nDeleting old updates\n")
-		process.DeleteOldUpdates(c.baseFolder, localDB, c)
-		progressBar.Finish()
+	organizationEnabled := settingsObj.Organization.RenameFiles || settingsObj.Organization.CreateFolderPerGame
+	destructiveEnabled := settingsObj.Organization.DeleteOldUpdateFiles || organizationEnabled
+	canMutate := true
+	var organizationConflicts []process.OrganizationConflict
+	var organizationPlan process.OrganizationPlan
+	if organizationEnabled {
+		organizationPlan, err = process.BuildOrganizationPlan(folderToScan, localDB, titlesDB, settingsObj.Organization)
+		if err != nil {
+			fmt.Printf("\nFailed to preflight library organization: %v\n", err)
+			canMutate = false
+		} else if len(organizationPlan.Conflicts) != 0 {
+			organizationConflicts = organizationPlan.Conflicts
+			fmt.Printf("\nOrganization canceled: %d destination conflict(s); see Issues\n", len(organizationConflicts))
+			canMutate = false
+		}
 	}
 
-	if settingsObj.Organization.RenameFiles || settingsObj.Organization.CreateFolderPerGame {
-		progressBar = progressbar.New(2000)
-		fmt.Printf("\nStarting library organization\n")
-		process.OrganizeByFolders(folderToScan, localDB, titlesDB, c)
-		progressBar.Finish()
+	if canMutate && destructiveEnabled {
+		if err := localDbManager.ClearLocalLibrarySnapshot(); err != nil {
+			fmt.Printf("\nFailed to invalidate cached library before organization: %v\n", err)
+			canMutate = false
+		}
 	}
+	if canMutate && destructiveEnabled {
+		operationErr := error(nil)
+		if settingsObj.Organization.DeleteOldUpdateFiles {
+			progressBar = progressbar.New(2000)
+			fmt.Printf("\nDeleting verified duplicate and old files\n")
+			operationErr = process.DeleteOldUpdatesAt(c.baseFolder, folderToScan, localDB, c)
+			progressBar.Finish()
+		}
+		if operationErr == nil && organizationEnabled {
+			progressBar = progressbar.New(2000)
+			fmt.Printf("\nStarting library organization\n")
+			operationErr = process.ExecuteOrganizationPlan(organizationPlan, localDB, folderToScan, settingsObj.Organization, c)
+			progressBar.Finish()
+		}
+		if operationErr != nil {
+			fmt.Printf("\nLibrary organization did not complete: %v\n", operationErr)
+		}
+		localDB, err = localDbManager.CreateLocalSwitchFilesDB(scanFolders, c, recursiveMode, true)
+		if err != nil {
+			fmt.Printf("\nFailed to refresh the local scan after organization: %v\n", err)
+			return
+		}
+	}
+	c.processIssues(localDB, issuesCsvFile, organizationConflicts)
 
 	if settingsObj.MissingContent.CheckForUpdates {
 		fmt.Printf("\nChecking for missing updates\n")
@@ -218,12 +249,35 @@ func (c *Console) Start() {
 	fmt.Printf("Completed")
 }
 
-func (c *Console) processIssues(localDB *db.LocalSwitchFilesDB, csvOutput string) {
-	if len(localDB.Skipped) != 0 {
-		fmt.Print("\nSkipped files:\n\n")
-	} else {
+func (c *Console) processIssues(localDB *db.LocalSwitchFilesDB, csvOutput string, conflicts []process.OrganizationConflict) {
+	type issueRow struct {
+		file, reason, code string
+	}
+	rows := make([]issueRow, 0, len(localDB.Skipped)+len(conflicts))
+	for file, skipped := range localDB.Skipped {
+		rows = append(rows, issueRow{
+			file:   filepath.Join(file.BaseFolder, file.FileName),
+			reason: skipped.ReasonText,
+			code:   strconv.Itoa(skipped.ReasonCode),
+		})
+	}
+	for _, conflict := range conflicts {
+		detail := fmt.Sprintf("organization conflict: %s; destination: %s", conflict.Reason, conflict.Destination)
+		if conflict.OtherSource != "" && conflict.OtherSource != conflict.Source {
+			detail += "; also used by: " + conflict.OtherSource
+		}
+		rows = append(rows, issueRow{file: conflict.Source, reason: detail, code: "organization-conflict"})
+	}
+	if len(rows) == 0 {
 		return
 	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].file != rows[j].file {
+			return rows[i].file < rows[j].file
+		}
+		return rows[i].code < rows[j].code
+	})
+	fmt.Print("\nSkipped files and organization conflicts:\n\n")
 
 	csv := CreateCsvFile(csvOutput, []string{"Skipped file", "Reason", "Reason_Code"})
 
@@ -232,13 +286,12 @@ func (c *Console) processIssues(localDB *db.LocalSwitchFilesDB, csvOutput string
 	t.SetStyle(table.StyleColoredBright)
 	t.AppendHeader(table.Row{"#", "Skipped file", "Reason"})
 	i := 0
-	for k, v := range localDB.Skipped {
-		csv.Write([]string{path.Join(k.BaseFolder, k.FileName), v.ReasonText, strconv.Itoa(v.ReasonCode)})
-
-		t.AppendRow([]interface{}{i, path.Join(k.BaseFolder, k.FileName), v})
+	for _, row := range rows {
+		csv.Write([]string{row.file, row.reason, row.code})
+		t.AppendRow([]interface{}{i, row.file, row.reason})
 		i++
 	}
-	t.AppendFooter(table.Row{"", "", "", "", "Total", len(localDB.Skipped)})
+	t.AppendFooter(table.Row{"", "", "", "", "Total", len(rows)})
 	t.Render()
 
 	csv.Close()

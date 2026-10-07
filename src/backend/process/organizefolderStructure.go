@@ -1,11 +1,13 @@
 package process
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -23,265 +25,73 @@ var (
 
 var packageContentsRegex = regexp.MustCompile(`(?i)\(([1-9][0-9]{0,8})g(?:\+([1-9][0-9]{0,8})u)?(?:\+([1-9][0-9]{0,8})d)?\)`)
 
-func DeleteOldUpdates(baseFolder string, localDB *db.LocalSwitchFilesDB, updateProgress db.ProgressUpdater) {
-	i := 0
-	for k, v := range localDB.Skipped {
-		switch v.ReasonCode {
-		case db.REASON_DUPLICATE:
-			fileToRemove := filepath.Join(k.BaseFolder, k.FileName)
-			if updateProgress != nil {
-				updateProgress.UpdateProgress(0, 0, "deleting "+fileToRemove)
-			}
-			zap.S().Infof("Deleting file: %v \n", fileToRemove)
-			err := os.Remove(fileToRemove)
-			if err != nil {
-				zap.S().Errorf("Failed to delete file  %v  [%v]\n", fileToRemove, err)
-				continue
-			}
-			i++
-		case db.REASON_OLD_UPDATE:
-			fileToRemove := filepath.Join(k.BaseFolder, k.FileName)
-			if updateProgress != nil {
-				updateProgress.UpdateProgress(0, 0, "deleting "+fileToRemove)
-			}
-			zap.S().Infof("Deleting file: %v \n", fileToRemove)
-			err := os.Remove(fileToRemove)
-			if err != nil {
-				zap.S().Errorf("Failed to delete file  %v  [%v]\n", fileToRemove, err)
-				continue
-			}
-			i++
-		}
-
-	}
-
-	settingsObj, err := settings.ReadSettings(baseFolder)
-	if err != nil {
-		zap.S().Errorf("Failed to read settings before deleting old updates: %v", err)
-		return
-	}
-	if i != 0 && settingsObj.Organization.DeleteEmptyFolders {
-		if updateProgress != nil {
-			updateProgress.UpdateProgress(i, i+1, "deleting empty folders... (can take 1-2min)")
-		}
-		err := deleteEmptyFolders(baseFolder)
-		if err != nil {
-			zap.S().Errorf("Failed to delete empty folders [%v]\n", err)
-		}
-		if updateProgress != nil {
-			updateProgress.UpdateProgress(i+1, i+1, "deleting empty folders... (can take 1-2min)")
-		}
-	}
+func DeleteOldUpdates(baseFolder string, localDB *db.LocalSwitchFilesDB, updateProgress db.ProgressUpdater) error {
+	return DeleteOldUpdatesAt(baseFolder, "", localDB, updateProgress)
 }
 
-func OrganizeByFolders(baseFolder string,
-	localDB *db.LocalSwitchFilesDB,
-	titlesDB *db.SwitchTitlesDB,
-	updateProgress db.ProgressUpdater) {
-
-	//validate template rules
-	logger := zap.S()
+// DeleteOldUpdatesAt removes only scan-verified redundant files and limits
+// empty-folder cleanup to the supplied library root.
+func DeleteOldUpdatesAt(baseFolder, cleanupRoot string, localDB *db.LocalSwitchFilesDB, updateProgress db.ProgressUpdater) error {
+	if localDB == nil {
+		return fmt.Errorf("local library has not been scanned")
+	}
 	settingsObj, err := settings.ReadSettings(baseFolder)
 	if err != nil {
-		logger.Errorf("Failed to read settings before organizing files: %v", err)
-		return
+		return fmt.Errorf("read settings before deleting old updates: %w", err)
 	}
-	options := settingsObj.Organization
-	if !IsOptionsValid(options) {
-		logger.Error("the organize options in settings.json are not valid, please check that the template contains file/folder name")
-		return
+	if cleanupRoot == "" {
+		cleanupRoot = settingsObj.Paths.LibraryFolder
 	}
-	i := 0
-	tasksSize := len(localDB.TitlesMap) + 2
-	for k, v := range localDB.TitlesMap {
-		i++
-		if !v.BaseExist && !options.ProcessWhenMissingBaseGame {
-			continue
-		}
-
-		if updateProgress != nil {
-			updateProgress.UpdateProgress(i, tasksSize, k)
-		}
-
-		title, titleExist := titlesDB.TitlesMap[k]
-		titleName := getTitleName(title, v)
-
-		templateData := map[string]string{}
-
-		if titleExist {
-			templateData[settings.TEMPLATE_TITLE_ID] = title.Attributes.Id
-		} else if v.File.Metadata != nil {
-			templateData[settings.TEMPLATE_TITLE_ID] = v.File.Metadata.TitleId
-		}
-
-		templateData[settings.TEMPLATE_TITLE_NAME] = titleName
-		templateData[settings.TEMPLATE_VERSION_TXT] = ""
-
-		if titleExist {
-			templateData[settings.TEMPLATE_REGION] = title.Attributes.Region
-		}
-
-		setBaseFileVersionTemplateData(templateData, v)
-
-		var destinationPath = v.File.ExtendedInfo.BaseFolder
-
-		//create folder if needed
-		if options.CreateFolderPerGame {
-			folderToCreate := getFolderName(options, templateData)
-			destinationPath = filepath.Join(baseFolder, folderToCreate)
-			if err := createFolder(destinationPath, logger); err != nil {
-				continue
-			}
-		}
-
-		if v.IsSplit {
-			//in case of a split file, we only rename the folder and then move all the split
-			//files with the new folder
-			files, err := ioutil.ReadDir(v.File.ExtendedInfo.BaseFolder)
-			if err != nil {
-				continue
-			}
-
-			for _, file := range files {
-				if _, err := strconv.Atoi(file.Name()[len(file.Name())-1:]); err == nil {
-					from := filepath.Join(v.File.ExtendedInfo.BaseFolder, file.Name())
-					to := filepath.Join(destinationPath, file.Name())
-					err := moveFile(from, to)
-					if err != nil {
-						logger.Errorf("Failed to move file [%v]\n", err)
-						continue
-					}
-				}
-			}
-			continue
-
-		}
-
-		var (
-			from string
-			to   string
-			err  error
-		)
-
-		//process base title
-		if v.BaseExist {
-			templateData[settings.TEMPLATE_TYPE] = "BASE"
-			templateData[settings.TEMPLATE_PACKAGE_CONTENTS] = packageContents(v)
-			setFileSizeTemplateData(templateData, v.File.ExtendedInfo.Size)
-			from = filepath.Join(v.File.ExtendedInfo.BaseFolder, v.File.ExtendedInfo.FileName)
-			to = organizationTargetPath(destinationPath, v.File.ExtendedInfo.BaseFolder, v.File.ExtendedInfo.FileName, options, "base", templateData, 0)
-			err = moveFile(from, to)
-			if err != nil {
-				logger.Errorf("Failed to move file [%v]\n", err)
-				continue
-			}
-		}
-		templateData[settings.TEMPLATE_PACKAGE_CONTENTS] = ""
-
-		//process updates
-		for update, updateInfo := range v.Updates {
-			// An update in the base file is part of the package, not a separate move.
-			if v.BaseExist && samePhysicalFilePath(v.File.ExtendedInfo, updateInfo.ExtendedInfo) {
-				logger.Infof("Skipping organizing %v update %v, reason: Update is multi-part with main file", titleName, update)
-				continue
-			}
-
-			if updateInfo.Metadata != nil {
-				templateData[settings.TEMPLATE_TITLE_ID] = updateInfo.Metadata.TitleId
-			}
-			templateData[settings.TEMPLATE_VERSION] = strconv.Itoa(update)
-			templateData[settings.TEMPLATE_TYPE] = "UPD"
-			setFileSizeTemplateData(templateData, updateInfo.ExtendedInfo.Size)
-			if updateInfo.Metadata != nil && updateInfo.Metadata.Ncap != nil {
-				templateData[settings.TEMPLATE_VERSION_TXT] = updateInfo.Metadata.Ncap.DisplayVersion
-			} else {
-				templateData[settings.TEMPLATE_VERSION_TXT] = ""
-			}
-
-			from = filepath.Join(updateInfo.ExtendedInfo.BaseFolder, updateInfo.ExtendedInfo.FileName)
-			to = organizationTargetPath(destinationPath, updateInfo.ExtendedInfo.BaseFolder, updateInfo.ExtendedInfo.FileName, options, "update", templateData, 0)
-			if options.CreateFolderPerGame && options.UpdatesFolder != "" {
-				if err := createFolder(filepath.Dir(to), logger); err != nil {
-					continue
-				}
-			}
-			err := moveFile(from, to)
-			if err != nil {
-				logger.Errorf("Failed to move file [%v]\n", err)
-				continue
-			}
-		}
-
-		//process DLC
-		existingDlcs := map[string]string{}
-		for id, dlc := range v.Dlc {
-			// DLC content in the base file is part of the package, not a separate move.
-			if v.BaseExist && samePhysicalFilePath(v.File.ExtendedInfo, dlc.ExtendedInfo) {
-				logger.Infof("Skipping organizing %v dlc %v, reason: DLC is multi-part with main file", titleName, dlc)
-				continue
-			}
-
-			templateData[settings.TEMPLATE_VERSION] = "0"
-			templateData[settings.TEMPLATE_VERSION_TXT] = ""
-			if dlc.Metadata != nil {
-				templateData[settings.TEMPLATE_VERSION] = strconv.Itoa(dlc.Metadata.Version)
-			}
-			templateData[settings.TEMPLATE_TYPE] = "DLC"
-			templateData[settings.TEMPLATE_TITLE_ID] = id
-			templateData[settings.TEMPLATE_DLC_NAME] = getDlcName(title, dlc)
-			setFileSizeTemplateData(templateData, dlc.ExtendedInfo.Size)
-			from = filepath.Join(dlc.ExtendedInfo.BaseFolder, dlc.ExtendedInfo.FileName)
-
-			dlcNameTry := 0
-			for {
-				to = organizationTargetPath(destinationPath, dlc.ExtendedInfo.BaseFolder, dlc.ExtendedInfo.FileName, options, "dlc", templateData, dlcNameTry)
-				if options.CreateFolderPerGame && options.DlcFolder != "" {
-					if err := createFolder(filepath.Dir(to), logger); err != nil {
-						break
-					}
-				}
-
-				// check if dlc will generate a duplicate name as a previous dlc, but not have the same id
-				// this is to prevent deletion of dlc with the same name
-				value, exists := existingDlcs[to]
-				if !exists && value != id {
-					break
-				}
-
-				// if it exists and has same id, break and the remove duplicate file should handle this one
-				if exists && value == id {
-					break
-				}
-
-				dlcNameTry++
-			}
-			existingDlcs[to] = id
-
-			err = moveFile(from, to)
-			if err != nil {
-				logger.Errorf("Failed to move file [%v]\n", err)
-				continue
-			}
-		}
-	}
-
-	if options.DeleteEmptyFolders {
-		if updateProgress != nil {
-			i += 1
-			updateProgress.UpdateProgress(i, tasksSize, "deleting empty folders... (can take 1-2min)")
-		}
-		err := deleteEmptyFolders(baseFolder)
+	candidates := append([]db.CleanupCandidate(nil), localDB.CleanupCandidates...)
+	sort.Slice(candidates, func(i, j int) bool {
+		left := filepath.Join(candidates[i].File.BaseFolder, candidates[i].File.FileName)
+		right := filepath.Join(candidates[j].File.BaseFolder, candidates[j].File.FileName)
+		return left < right
+	})
+	removed := 0
+	for _, candidate := range candidates {
+		source := filepath.Join(candidate.File.BaseFolder, candidate.File.FileName)
+		replacement := filepath.Join(candidate.Replacement.BaseFolder, candidate.Replacement.FileName)
+		sourceInfo, err := os.Lstat(source)
 		if err != nil {
-			zap.S().Errorf("Failed to delete empty folders [%v]\n", err)
+			return fmt.Errorf("verify cleanup candidate %q: %w", source, err)
+		}
+		if !sourceInfo.Mode().IsRegular() || sourceInfo.Size() != candidate.File.Size || !sourceInfo.ModTime().Equal(candidate.File.ModTime) {
+			return fmt.Errorf("cleanup candidate %q changed after scanning", source)
+		}
+		replacementInfo, err := os.Lstat(replacement)
+		if err != nil {
+			return fmt.Errorf("verify replacement %q for %q: %w", replacement, source, err)
+		}
+		if !replacementInfo.Mode().IsRegular() || replacementInfo.Size() != candidate.Replacement.Size || !replacementInfo.ModTime().Equal(candidate.Replacement.ModTime) {
+			return fmt.Errorf("replacement %q for cleanup candidate %q changed after scanning", replacement, source)
+		}
+		if os.SameFile(sourceInfo, replacementInfo) {
+			continue
 		}
 		if updateProgress != nil {
-			i += 1
-			updateProgress.UpdateProgress(i, tasksSize, "done")
+			updateProgress.UpdateProgress(removed+1, len(candidates), "deleting "+source)
 		}
-	} else {
-		if updateProgress != nil {
-			i += 2
-			updateProgress.UpdateProgress(i, tasksSize, "done")
+		if err := os.Remove(source); err != nil {
+			return fmt.Errorf("delete verified duplicate %q: %w", source, err)
+		}
+		deleteSkippedPath(localDB, candidate.File)
+		removed++
+		zap.S().Infof("Deleted verified duplicate file: %s", source)
+	}
+	localDB.CleanupCandidates = nil
+	if removed > 0 && settingsObj.Organization.DeleteEmptyFolders && cleanupRoot != "" {
+		if err := deleteEmptyFolders(cleanupRoot); err != nil {
+			return fmt.Errorf("delete empty folders: %w", err)
+		}
+	}
+	return nil
+}
+
+func deleteSkippedPath(localDB *db.LocalSwitchFilesDB, file db.ExtendedFileInfo) {
+	for key := range localDB.Skipped {
+		if filepath.Clean(filepath.Join(key.BaseFolder, key.FileName)) == filepath.Clean(filepath.Join(file.BaseFolder, file.FileName)) {
+			delete(localDB.Skipped, key)
 		}
 	}
 }
@@ -503,11 +313,10 @@ func organizationTargetPath(destinationPath, sourceFolder, originalName string, 
 }
 
 func moveFile(from string, to string) error {
-	if from == to {
+	if sameOrganizationPath(from, to) {
 		return nil
 	}
-	err := os.Rename(from, to)
-	return err
+	return renameNoReplace(from, to)
 }
 
 func applyTemplate(templateData map[string]string, useSafeNames bool, template string, nameTry int) string {
@@ -587,21 +396,38 @@ func createFolder(path string, logger *zap.SugaredLogger) error {
 }
 
 func deleteEmptyFolders(path string) error {
-	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+	root, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("resolve cleanup root %q: %w", path, err)
+	}
+	directories := make([]string, 0)
+	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			zap.S().Error("Error while deleting empty folders", err)
 			return err
 		}
 		if info != nil && info.IsDir() {
-			err = deleteEmptyFolder(path)
-			if err != nil {
-				zap.S().Error("Error while deleting empty folders", err)
-			}
+			directories = append(directories, path)
 		}
-
 		return nil
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	sort.Slice(directories, func(i, j int) bool {
+		if len(directories[i]) != len(directories[j]) {
+			return len(directories[i]) > len(directories[j])
+		}
+		return directories[i] > directories[j]
+	})
+	for _, directory := range directories {
+		if filepath.Clean(directory) == filepath.Clean(root) {
+			continue
+		}
+		if err := deleteEmptyFolder(directory); err != nil {
+			return fmt.Errorf("delete empty folder %q: %w", directory, err)
+		}
+	}
+	return nil
 }
 
 func deleteEmptyFolder(path string) error {

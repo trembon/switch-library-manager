@@ -22,7 +22,7 @@ export function IsKeysFileAvailable():Promise<boolean>;
 
 export function LoadSettings():Promise<settings.AppSettings>;
 
-export function OrganizeLibrary():Promise<void>;
+export function OrganizeLibrary():Promise<app.OrganizationResult>;
 
 export function RescanLibrary(arg1:boolean):Promise<app.LocalLibraryData>;
 

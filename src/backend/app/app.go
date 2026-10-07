@@ -18,8 +18,9 @@ import (
 type State struct {
 	mu sync.Mutex
 
-	switchDB *db.SwitchTitlesDB
-	localDB  *db.LocalSwitchFilesDB
+	switchDB           *db.SwitchTitlesDB
+	localDB            *db.LocalSwitchFilesDB
+	organizationIssues []Pair
 }
 
 type App struct {

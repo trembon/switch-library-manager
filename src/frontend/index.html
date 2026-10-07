@@ -290,6 +290,14 @@
 
     <script id="libraryTemplate" type="text/x-jsrender">
       {{if folder}}
+          {{if libraryRefreshError}}
+              <div class="alert center alert-danger" role="alert">
+                  {{:libraryRefreshError}}
+              </div>
+              <div class="center">
+                  <button type="button" class="btn btn-outline-primary rescan-action" data-hard="false">Rescan library</button>
+              </div>
+          {{else}}
           {{if library && library.length}}
               {{if keys === "false"}}
               <div id="missingkeys" class="alert center alert-danger" role="alert" >
@@ -297,17 +305,17 @@
                   <button type="button" class="btn-close alert-dismiss" aria-label="Close"></button>
               </div>
               {{/if}}
-              {{if num_skipped != 0}}
+              {{if num_issues != 0}}
                    <div id="scan_issues" class="alert center alert-warning" role="alert">
-                  {{:num_skipped}} out of {{:num_files}} files were skipped during scan, click on the issues tab to learn more
+                  {{if num_issues === 1}}There is 1 library issue.{{else}}There are {{:num_issues}} library issues.{{/if}} Click the Issues tab to review the details.
                   <button type="button" class="btn-close alert-dismiss" aria-label="Close"></button>
                     </div>
               {{/if}}
               <section id="library-table" class="content"></section>
           {{else}}
               <div class="alert center alert-warning" role="alert">
-              {{if num_skipped != 0}}
-                   {{:num_skipped}} out of {{:num_files}} files were skipped during scan, click on the issues tab to learn more
+              {{if num_issues != 0}}
+                   {{if num_issues === 1}}There is 1 library issue.{{else}}There are {{:num_issues}} library issues.{{/if}} Click the Issues tab to review the details.
               {{else}}
                   The selected folder ({{:folder}}) is empty. please set a different folder
               {{/if}}
@@ -320,6 +328,7 @@
               <div class="center">
                     <button type="button" class="btn btn-outline-primary folder-set">Set Folder</button>
               </div>
+          {{/if}}
           {{/if}}
       {{else}}
           <div class="alert center alert-warning" role="alert">
@@ -388,7 +397,7 @@
       {{if folder}}
            {{if library && library.length}}
                <div class="alert center alert-warning" role="alert">
-                   {{:library.length}} files were skipped during scan, additional details below:
+                   {{if library.length === 1}}There is 1 library issue.{{else}}There are {{:library.length}} library issues.{{/if}} Additional details are below:
                </div>
                <section id="status-table" class="content"></section>
            {{else}}

@@ -32,6 +32,7 @@ func (a *App) UpdateLocalLibrary(ignoreCache bool) (LocalLibraryData, error) {
 func (a *App) RescanLibrary(hard bool) (LocalLibraryData, error) {
 	a.state.mu.Lock()
 	defer a.state.mu.Unlock()
+	a.state.organizationIssues = nil
 	if hard {
 		if err := a.localDbManager.ClearScanData(); err != nil {
 			return LocalLibraryData{}, err
@@ -49,7 +50,13 @@ func (a *App) updateLocalLibraryLocked(ignoreCache bool) (LocalLibraryData, erro
 	if err != nil {
 		return LocalLibraryData{}, err
 	}
-	return buildLocalLibraryData(localDB, a.state.switchDB), nil
+	return a.libraryDataLocked(localDB), nil
+}
+
+func (a *App) libraryDataLocked(localDB *db.LocalSwitchFilesDB) LocalLibraryData {
+	data := buildLocalLibraryData(localDB, a.state.switchDB)
+	data.Issues = append(data.Issues, a.state.organizationIssues...)
+	return data
 }
 
 func (a *App) buildSwitchDB() (switchTitleDB *db.SwitchTitlesDB, returnErr error) {

@@ -12,8 +12,8 @@
 
 ## Ordering and Callers
 
-- The console currently deletes old updates before organization.
-- The GUI currently organizes first and then calls `DeleteOldUpdates` using the old scan paths. Preserve or fix this difference deliberately, and test both entrypoints before changing ordering.
+- Both GUI and console must preflight every organization destination before deleting or moving any file. Any conflict cancels the whole operation, including duplicate cleanup.
+- After a successful preflight, cleanup may run before planned moves, but it must only use fresh scan-verified standalone cleanup candidates. Refresh the local scan after any destructive attempt.
 - `ProcessWhenMissingBaseGame` is a special path. Do not assume `v.File` is a valid base record when a title has only updates or DLC.
 - Multi-content files can appear in base, update, and DLC records while referring to the same physical path. Avoid moving the same file more than once.
 

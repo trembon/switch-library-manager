@@ -445,15 +445,24 @@ func TestDeleteOldUpdatesPreservesPackageAndDeletesStandaloneUpdate(t *testing.T
 	oldUpdatePath := filepath.Join(source, "Cuisineer [010087E01FCD6800][v32768].nsp")
 	writeFixture(t, packagePath, "synthetic super XCI")
 	writeFixture(t, oldUpdatePath, "synthetic old patch NSP")
-	setProcessSettings(t, baseFolder, settings.OrganizeOptions{})
+	if err := settings.SaveSettingsWithError(&settings.AppSettings{
+		Paths:        settings.PathSettings{LibraryFolder: source},
+		Organization: settings.OrganizeOptions{DeleteEmptyFolders: true},
+	}, baseFolder); err != nil {
+		t.Fatal(err)
+	}
+	packageInfo := extendedInfoForPath(t, packagePath)
+	oldUpdateInfo := extendedInfoForPath(t, oldUpdatePath)
 
 	local := &db.LocalSwitchFilesDB{Skipped: map[db.ExtendedFileInfo]db.SkippedFile{
-		{BaseFolder: source, FileName: "Cuisineer [010087E01FCD6800][v32768].nsp"}: {
+		oldUpdateInfo: {
 			ReasonCode: db.REASON_OLD_UPDATE,
 			ReasonText: "older standalone update",
 		},
-	}}
-	DeleteOldUpdates(baseFolder, local, nil)
+	}, CleanupCandidates: []db.CleanupCandidate{{File: oldUpdateInfo, Replacement: packageInfo, ReasonCode: db.REASON_OLD_UPDATE}}}
+	if err := DeleteOldUpdates(baseFolder, local, nil); err != nil {
+		t.Fatalf("DeleteOldUpdates() = %v", err)
+	}
 
 	assertExists(t, packagePath)
 	assertNotExists(t, oldUpdatePath)
@@ -617,28 +626,84 @@ func TestDeleteOldUpdates(t *testing.T) {
 	writeFixture(t, oldPath, "old")
 	writeFixture(t, newPath, "new")
 	setProcessSettings(t, baseFolder, settings.OrganizeOptions{DeleteEmptyFolders: true})
+	oldInfo := extendedInfoForPath(t, oldPath)
+	newInfo := extendedInfoForPath(t, newPath)
 	var progress progressRecorder
 	local := &db.LocalSwitchFilesDB{Skipped: map[db.ExtendedFileInfo]db.SkippedFile{
-		{BaseFolder: oldFolder, FileName: "old.nsp"}:             {ReasonCode: db.REASON_OLD_UPDATE},
+		oldInfo: {ReasonCode: db.REASON_OLD_UPDATE},
 		{BaseFolder: oldFolder, FileName: "already-missing.nsp"}: {ReasonCode: db.REASON_OLD_UPDATE},
 		{BaseFolder: oldFolder, FileName: "new.nsp"}:             {ReasonCode: db.REASON_DUPLICATE},
-	}}
-	DeleteOldUpdates(baseFolder, local, &progress)
+	}, CleanupCandidates: []db.CleanupCandidate{{File: oldInfo, Replacement: newInfo, ReasonCode: db.REASON_OLD_UPDATE}}}
+	if err := DeleteOldUpdatesAt(baseFolder, oldFolder, local, &progress); err != nil {
+		t.Fatalf("DeleteOldUpdatesAt() = %v", err)
+	}
 	assertNotExists(t, oldPath)
-	assertNotExists(t, newPath)
-	assertNotExists(t, oldFolder)
-	if len(progress.events) != 5 {
-		t.Fatalf("progress events = %d, want 5: %#v", len(progress.events), progress.events)
+	assertExists(t, newPath)
+	assertExists(t, oldFolder)
+	if len(progress.events) != 1 {
+		t.Fatalf("progress events = %d, want 1: %#v", len(progress.events), progress.events)
 	}
 
-	DeleteOldUpdates(baseFolder, &db.LocalSwitchFilesDB{Skipped: map[db.ExtendedFileInfo]db.SkippedFile{}}, nil)
 	cleanupFolder := filepath.Join(baseFolder, "cleanup")
 	mustMkdir(t, cleanupFolder)
-	writeFixture(t, filepath.Join(cleanupFolder, "old.nsp"), "old")
-	DeleteOldUpdates(baseFolder, &db.LocalSwitchFilesDB{Skipped: map[db.ExtendedFileInfo]db.SkippedFile{
+	unverifiedPath := filepath.Join(cleanupFolder, "old.nsp")
+	writeFixture(t, unverifiedPath, "old")
+	if err := DeleteOldUpdatesAt(baseFolder, cleanupFolder, &db.LocalSwitchFilesDB{Skipped: map[db.ExtendedFileInfo]db.SkippedFile{
 		{BaseFolder: cleanupFolder, FileName: "old.nsp"}: {ReasonCode: db.REASON_OLD_UPDATE},
-	}}, nil)
-	assertNotExists(t, cleanupFolder)
+	}}, nil); err != nil {
+		t.Fatalf("DeleteOldUpdatesAt() without candidate = %v", err)
+	}
+	assertExists(t, unverifiedPath)
+	assertExists(t, cleanupFolder)
+}
+
+func TestDeleteOldUpdatesRejectsCandidateChangedAfterScan(t *testing.T) {
+	baseFolder := t.TempDir()
+	cleanupRoot := filepath.Join(baseFolder, "library")
+	mustMkdir(t, cleanupRoot)
+	sourcePath := filepath.Join(cleanupRoot, "old.nsp")
+	replacementPath := filepath.Join(cleanupRoot, "new.nsp")
+	writeFixture(t, sourcePath, "old")
+	writeFixture(t, replacementPath, "replacement")
+	sourceInfo := extendedInfoForPath(t, sourcePath)
+	replacementInfo := extendedInfoForPath(t, replacementPath)
+	local := &db.LocalSwitchFilesDB{CleanupCandidates: []db.CleanupCandidate{{File: sourceInfo, Replacement: replacementInfo}}}
+	writeFixture(t, sourcePath, "source changed after scan")
+	setProcessSettings(t, baseFolder, settings.OrganizeOptions{})
+
+	if err := DeleteOldUpdatesAt(baseFolder, cleanupRoot, local, nil); err == nil {
+		t.Fatal("DeleteOldUpdatesAt() accepted a candidate changed after scan")
+	}
+	assertExists(t, sourcePath)
+	assertExists(t, replacementPath)
+}
+
+func TestDeleteOldUpdatesAtRejectsMissingScanPaths(t *testing.T) {
+	baseFolder := t.TempDir()
+	cleanupRoot := filepath.Join(baseFolder, "library")
+	mustMkdir(t, cleanupRoot)
+	replacementPath := filepath.Join(cleanupRoot, "replacement.nsp")
+	writeFixture(t, replacementPath, "replacement")
+	replacementInfo := extendedInfoForPath(t, replacementPath)
+	setProcessSettings(t, baseFolder, settings.OrganizeOptions{})
+	if err := DeleteOldUpdatesAt(baseFolder, cleanupRoot, nil, nil); err == nil {
+		t.Fatal("DeleteOldUpdatesAt(nil) returned nil")
+	}
+	local := &db.LocalSwitchFilesDB{CleanupCandidates: []db.CleanupCandidate{{
+		File:        db.ExtendedFileInfo{BaseFolder: cleanupRoot, FileName: "missing.nsp"},
+		Replacement: replacementInfo,
+	}}}
+	if err := DeleteOldUpdatesAt(baseFolder, cleanupRoot, local, nil); err == nil {
+		t.Fatal("DeleteOldUpdatesAt() accepted a missing cleanup source")
+	}
+	local.CleanupCandidates[0].File = db.ExtendedFileInfo{BaseFolder: cleanupRoot, FileName: "existing.nsp"}
+	writeFixture(t, filepath.Join(cleanupRoot, "existing.nsp"), "duplicate")
+	local.CleanupCandidates[0].File = extendedInfoForPath(t, filepath.Join(cleanupRoot, "existing.nsp"))
+	local.CleanupCandidates[0].Replacement = db.ExtendedFileInfo{BaseFolder: cleanupRoot, FileName: "missing-replacement.nsp"}
+	if err := DeleteOldUpdatesAt(baseFolder, cleanupRoot, local, nil); err == nil {
+		t.Fatal("DeleteOldUpdatesAt() accepted a missing replacement")
+	}
+	assertExists(t, filepath.Join(cleanupRoot, "existing.nsp"))
 }
 
 func TestFilesystemHelpers(t *testing.T) {
@@ -678,9 +743,33 @@ func TestFilesystemHelpers(t *testing.T) {
 	if err := moveFile(from, filepath.Join(baseFolder, "missing", "to")); err == nil {
 		t.Fatal("moveFile(missing destination) returned nil")
 	}
+	invalidSource := filepath.Join(baseFolder, "invalid-source")
+	writeFixture(t, invalidSource, "remain")
+	if err := moveFile(invalidSource, "invalid\x00destination"); err == nil {
+		t.Fatal("moveFile(invalid destination) returned nil")
+	}
+	assertExists(t, invalidSource)
+	conflictingSource := filepath.Join(baseFolder, "conflicting-source")
+	writeFixture(t, conflictingSource, "new source")
+	if err := moveFile(conflictingSource, to); err == nil {
+		t.Fatal("moveFile(existing destination) returned nil")
+	}
+	if content, err := os.ReadFile(to); err != nil || string(content) != "move" {
+		t.Fatalf("existing destination was changed: content=%q err=%v", content, err)
+	}
+	assertExists(t, conflictingSource)
 	if err := deleteEmptyFolders(filepath.Join(baseFolder, "not-there")); err == nil {
 		t.Fatal("deleteEmptyFolders(missing) returned nil")
 	}
+}
+
+func extendedInfoForPath(t *testing.T, filePath string) db.ExtendedFileInfo {
+	t.Helper()
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("stat fixture %q: %v", filePath, err)
+	}
+	return db.ExtendedFileInfo{BaseFolder: filepath.Dir(filePath), FileName: filepath.Base(filePath), Size: info.Size(), ModTime: info.ModTime()}
 }
 
 func setProcessSettings(t *testing.T, baseFolder string, options settings.OrganizeOptions) {

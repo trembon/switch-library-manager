@@ -1,6 +1,10 @@
 package consoleapp
 
 import (
+	"encoding/csv"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,6 +28,31 @@ func TestCsvExportFilename(t *testing.T) {
 				t.Fatalf("csvExportFilename(%q) = %q, want %q", kind, got, want)
 			}
 		})
+	}
+}
+
+func TestProcessIssuesExportsOrganizationConflicts(t *testing.T) {
+	output := filepath.Join(t.TempDir(), "issues.csv")
+	conflicts := []process.OrganizationConflict{{
+		Source:      `C:\library\source.nsp`,
+		Destination: `C:\library\Game.nsp`,
+		OtherSource: `C:\library\Game.nsp`,
+		Reason:      "destination already exists",
+	}}
+	c := CreateConsole("", nil, nil)
+	c.processIssues(&db.LocalSwitchFilesDB{Skipped: map[db.ExtendedFileInfo]db.SkippedFile{}}, output, conflicts)
+
+	file, err := os.Open(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	records, err := csv.NewReader(file).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) != 2 || records[1][2] != "organization-conflict" || !strings.Contains(records[1][1], `C:\library\Game.nsp`) {
+		t.Fatalf("issue export = %#v, want organization conflict with destination", records)
 	}
 }
 

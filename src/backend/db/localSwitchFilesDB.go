@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/trembon/switch-library-manager/backend/fileio"
 	"github.com/trembon/switch-library-manager/backend/settings"
@@ -53,6 +54,7 @@ type ExtendedFileInfo struct {
 	FileName   string
 	BaseFolder string
 	Size       int64
+	ModTime    time.Time
 	IsDir      bool
 }
 
@@ -78,9 +80,19 @@ type SkippedFile struct {
 }
 
 type LocalSwitchFilesDB struct {
-	TitlesMap map[string]*SwitchGameFiles
-	Skipped   map[ExtendedFileInfo]SkippedFile
-	NumFiles  int
+	TitlesMap         map[string]*SwitchGameFiles
+	Skipped           map[ExtendedFileInfo]SkippedFile
+	CleanupCandidates []CleanupCandidate
+	NumFiles          int
+}
+
+// CleanupCandidate is a scanned standalone file that is redundant with a
+// distinct record still present in TitlesMap. Candidates are transient; a
+// persisted scan snapshot cannot authorize a later deletion.
+type CleanupCandidate struct {
+	File        ExtendedFileInfo
+	Replacement ExtendedFileInfo
+	ReasonCode  int
 }
 
 func (ldb *LocalSwitchDBManager) CreateLocalSwitchFilesDB(folders []string,
@@ -89,6 +101,7 @@ func (ldb *LocalSwitchDBManager) CreateLocalSwitchFilesDB(folders []string,
 	titles := map[string]*SwitchGameFiles{}
 	skipped := map[ExtendedFileInfo]SkippedFile{}
 	files := []ExtendedFileInfo{}
+	cleanupCandidates := []CleanupCandidate{}
 
 	if !ignoreCache {
 		if err := ldb.db.GetEntry(DB_TABLE_LOCAL_LIBRARY, "files", &files); err != nil {
@@ -103,8 +116,9 @@ func (ldb *LocalSwitchDBManager) CreateLocalSwitchFilesDB(folders []string,
 	}
 
 	if ignoreCache || len(titles) == 0 {
+		seenFiles := map[string][]os.FileInfo{}
 		for i, folder := range folders {
-			err := scanFolder(folder, recursive, &files, progress)
+			err := scanFolder(folder, recursive, &files, progress, seenFiles)
 			if progress != nil {
 				progress.UpdateProgress(i+1, len(folders)+1, "scanning files in "+folder)
 			}
@@ -113,7 +127,8 @@ func (ldb *LocalSwitchDBManager) CreateLocalSwitchFilesDB(folders []string,
 			}
 		}
 
-		ldb.processLocalFiles(files, progress, titles, skipped)
+		fileContents := ldb.processLocalFiles(files, progress, titles, skipped)
+		cleanupCandidates = buildCleanupCandidates(files, fileContents, titles, skipped)
 
 		if err := ldb.db.addEntries(DB_TABLE_LOCAL_LIBRARY, map[string]interface{}{
 			"files":   files,
@@ -128,10 +143,10 @@ func (ldb *LocalSwitchDBManager) CreateLocalSwitchFilesDB(folders []string,
 		progress.UpdateProgress(len(files), len(files), "Complete")
 	}
 
-	return &LocalSwitchFilesDB{TitlesMap: titles, Skipped: skipped, NumFiles: len(files)}, nil
+	return &LocalSwitchFilesDB{TitlesMap: titles, Skipped: skipped, CleanupCandidates: cleanupCandidates, NumFiles: len(files)}, nil
 }
 
-func scanFolder(folder string, recursive bool, files *[]ExtendedFileInfo, progress ProgressUpdater) error {
+func scanFolder(folder string, recursive bool, files *[]ExtendedFileInfo, progress ProgressUpdater, seenFiles map[string][]os.FileInfo) error {
 	return filepath.Walk(folder, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			zap.S().Error("Error while scanning folders", err)
@@ -156,13 +171,27 @@ func scanFolder(folder string, recursive bool, files *[]ExtendedFileInfo, progre
 			!recursive {
 			return nil
 		}
+		if physicalFileSeen(info, seenFiles) {
+			return nil
+		}
 		if progress != nil {
 			progress.UpdateProgress(-1, -1, "scanning "+info.Name())
 		}
-		*files = append(*files, ExtendedFileInfo{FileName: info.Name(), BaseFolder: base, Size: info.Size(), IsDir: info.IsDir()})
+		*files = append(*files, ExtendedFileInfo{FileName: info.Name(), BaseFolder: base, Size: info.Size(), ModTime: info.ModTime(), IsDir: info.IsDir()})
 
 		return nil
 	})
+}
+
+func physicalFileSeen(info os.FileInfo, seenFiles map[string][]os.FileInfo) bool {
+	key := fmt.Sprintf("%d|%d|%d", info.Size(), info.ModTime().UnixNano(), info.Mode())
+	for _, seen := range seenFiles[key] {
+		if os.SameFile(info, seen) {
+			return true
+		}
+	}
+	seenFiles[key] = append(seenFiles[key], info)
+	return false
 }
 
 func sameExtendedFilePath(left, right ExtendedFileInfo) bool {
@@ -182,15 +211,25 @@ func (ldb *LocalSwitchDBManager) ClearScanData() error {
 	return err
 }
 
+// ClearLocalLibrarySnapshot removes cached file paths before a destructive
+// operation so a failed refresh cannot resurrect stale library state.
+func (ldb *LocalSwitchDBManager) ClearLocalLibrarySnapshot() error {
+	err := ldb.db.ClearTable(DB_TABLE_LOCAL_LIBRARY)
+	if errors.Is(err, bolt.ErrBucketNotFound) {
+		return nil
+	}
+	return err
+}
+
 func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,
 	progress ProgressUpdater,
 	titles map[string]*SwitchGameFiles,
-	skipped map[ExtendedFileInfo]SkippedFile) {
+	skipped map[ExtendedFileInfo]SkippedFile) map[ExtendedFileInfo]map[string]*switchfs.ContentMetaAttributes {
 
 	settingsObj, err := settings.ReadSettings("") // use empty path, as it will use existing settings instance
 	if err != nil {
 		zap.S().Errorf("Failed to read settings while processing local files: %v", err)
-		return
+		return nil
 	}
 	ignoreFileTypes := map[string]struct{}{}
 	for _, ext := range settingsObj.Scan.IgnoreFileTypes {
@@ -206,6 +245,7 @@ func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,
 
 	ind := 0
 	total := len(files)
+	fileContents := make(map[ExtendedFileInfo]map[string]*switchfs.ContentMetaAttributes, len(files))
 	for _, file := range files {
 		ind += 1
 		if progress != nil {
@@ -253,6 +293,9 @@ func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,
 				skipped[file] = SkippedFile{ReasonText: "unable to determine title-Id / version - " + err.Error(), ReasonCode: REASON_UNRECOGNISED}
 			}
 			continue
+		}
+		if diagnostic, exists := skipped[file]; !exists || diagnostic.ReasonCode != REASON_MALFORMED_FILE {
+			fileContents[file] = contentMap
 		}
 
 		// A file containing a base title and one of its updates is a package,
@@ -371,7 +414,80 @@ func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,
 			switchTitle.Dlc[metadata.TitleId] = SwitchFileInfo{ExtendedInfo: file, Metadata: metadata}
 		}
 	}
+	return fileContents
+}
 
+func buildCleanupCandidates(
+	files []ExtendedFileInfo,
+	fileContents map[ExtendedFileInfo]map[string]*switchfs.ContentMetaAttributes,
+	titles map[string]*SwitchGameFiles,
+	skipped map[ExtendedFileInfo]SkippedFile,
+) []CleanupCandidate {
+	candidates := make([]CleanupCandidate, 0)
+	for _, file := range files {
+		reason, ok := skipped[file]
+		if !ok || (reason.ReasonCode != REASON_DUPLICATE && reason.ReasonCode != REASON_OLD_UPDATE) || file.IsDir {
+			continue
+		}
+		// A split container is made up of multiple physical parts. Removing
+		// only its first part would leave the container unusable.
+		if isSplitFilePart(file.FileName) {
+			continue
+		}
+		contentMap := fileContents[file]
+		if len(contentMap) != 1 {
+			continue
+		}
+		var metadata *switchfs.ContentMetaAttributes
+		for _, record := range contentMap {
+			metadata = record
+		}
+		if metadata == nil {
+			continue
+		}
+		prefix, err := titleIDPrefix(metadata.TitleId)
+		if err != nil || titles[prefix] == nil {
+			continue
+		}
+		if replacement, ok := cleanupReplacement(titles[prefix], metadata, file); ok {
+			candidates = append(candidates, CleanupCandidate{File: file, Replacement: replacement, ReasonCode: reason.ReasonCode})
+		}
+	}
+	return candidates
+}
+
+func isSplitFilePart(fileName string) bool {
+	if len(fileName) < 2 {
+		return false
+	}
+	part, err := strconv.Atoi(fileName[len(fileName)-2:])
+	return err == nil && part == 0
+}
+
+func cleanupReplacement(game *SwitchGameFiles, metadata *switchfs.ContentMetaAttributes, candidate ExtendedFileInfo) (ExtendedFileInfo, bool) {
+	id := strings.ToLower(metadata.TitleId)
+	if strings.HasSuffix(id, "000") {
+		keeper := game.File
+		return keeper.ExtendedInfo, game.BaseExist && keeper.Metadata != nil && strings.EqualFold(keeper.Metadata.TitleId, id) && !sameExtendedFilePath(keeper.ExtendedInfo, candidate)
+	}
+	if strings.HasSuffix(id, "800") {
+		var keeper SwitchFileInfo
+		found := false
+		for _, update := range game.Updates {
+			if update.Metadata == nil || !strings.EqualFold(update.Metadata.TitleId, id) || update.Metadata.Version < metadata.Version || sameExtendedFilePath(update.ExtendedInfo, candidate) {
+				continue
+			}
+			if !found || update.Metadata.Version > keeper.Metadata.Version {
+				keeper, found = update, true
+			}
+		}
+		return keeper.ExtendedInfo, found
+	}
+	keeper, found := game.Dlc[id]
+	if !found || keeper.Metadata == nil || !strings.EqualFold(keeper.Metadata.TitleId, id) || keeper.Metadata.Version < metadata.Version || sameExtendedFilePath(keeper.ExtendedInfo, candidate) {
+		return ExtendedFileInfo{}, false
+	}
+	return keeper.ExtendedInfo, true
 }
 
 func (ldb *LocalSwitchDBManager) getGameMetadata(file ExtendedFileInfo,

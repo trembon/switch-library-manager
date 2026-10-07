@@ -31,6 +31,7 @@ $(function () {
         settingsDraft: undefined,
         settingsFeedback: undefined,
         organizationPreview: undefined,
+        libraryRefreshError: undefined,
         keys:false
     };
 
@@ -281,17 +282,14 @@ $(function () {
     $('.tabgroup > div').hide();
     // loadTab($('.tabgroup > div:first-of-type'));
 
-    let showError = function (detail) {
+    let showError = function (detail, target = "#library") {
         if (restartRequired) {
             return;
         }
         ShowMessage("error", "Error", "An unexpected error occurred", detail || "")
             .catch(error => console.error(error));
-        if (state.settings.paths) {
-            state.settings.paths.library_folder = undefined;
-        }
         hideProgress();
-        loadTab("#library");
+        loadTab(target);
     };
 
         EventsOn("updateProgress", function (message) {
@@ -361,6 +359,7 @@ $(function () {
             const scan = startup ? UpdateLocalLibrary(Boolean(mode)) : RescanLibrary(Boolean(mode));
             return scan.then(result => {
                 state.library = result;
+                state.libraryRefreshError = undefined;
                 state.organizationPreview = undefined;
                 loadTab("#library");
                 hideProgress();
@@ -392,6 +391,7 @@ $(function () {
             state.dlc = undefined;
             state.missingGames = undefined;
             state.organizationPreview = undefined;
+            state.libraryRefreshError = undefined;
             SaveSettings(state.settings)
                 .then(() => {
                     state.settingsDraft = undefined;
@@ -645,21 +645,29 @@ $(function () {
                             },
                             {
                                 title: "Issue", field: "value", width: 350, formatter: function (cell) {
-                                    return cell.getValue().replaceAll("\n", "<br/>");
+                                    const value = String(cell.getValue() ?? "");
+                                    return value.replace(/[&<>"']/g, character => ({
+                                        "&": "&amp;",
+                                        "<": "&lt;",
+                                        ">": "&gt;",
+                                        '"': "&quot;",
+                                        "'": "&#39;"
+                                    })[character]).replaceAll("\n", "<br/>");
                                 }
                             }
                         ],
                     }), "issues");
                 }
             } else if (target === "#library") {
-                if (state.settings.paths.library_folder && !state.library){
+                if (state.settings.paths.library_folder && !state.library && !state.libraryRefreshError){
                     return
                 }
                 let html = $(target + "Template").render(
                     {
                         folder: state.settings.paths.library_folder,
+                        libraryRefreshError: state.libraryRefreshError,
                         library: state.library ? state.library.library_data : [] ,
-                        num_skipped:state.library ? (state.library.issues ? state.library.issues.length : 0) : 0,
+                        num_issues:state.library ? (state.library.issues ? state.library.issues.length : 0) : 0,
                         num_files:state.library ? state.library.num_files : 0,
                         keys:state.keys
                     })
@@ -829,16 +837,74 @@ $(function () {
                     $('.tabgroup > div').hide();
                     showProgress("Organizing local library...");
 
-                    OrganizeLibrary().then(() => {
-                        state.library = undefined;
+                    const clearOrganizationCaches = () => {
                         state.updates = undefined;
                         state.dlc = undefined;
+                        state.missingGames = undefined;
+                        state.organizationPreview = undefined;
+                    };
+
+                    const refreshOrganizationLibrary = () => UpdateLocalLibrary(false).then(result => {
+                        state.library = result;
+                        state.libraryRefreshError = undefined;
+                        clearOrganizationCaches();
+                        return result;
+                    });
+
+                    OrganizeLibrary().then(result => {
+                        state.library = result.library;
+                        state.libraryRefreshError = undefined;
+                        clearOrganizationCaches();
+                        hideProgress();
+                        if (result.status === "blocked") {
+                            loadTab("#status");
+                            const conflictCount = Number(result.conflict_count) || 0;
+                            const conflictLabel = conflictCount === 1
+                                ? "1 file conflict"
+                                : conflictCount + " file conflicts";
+                            const conflictSummary = conflictCount === 1
+                                ? conflictLabel + " was found"
+                                : conflictLabel + " were found";
+                            ShowMessage(
+                                "warning",
+                                "Organization canceled",
+                                "Organization was canceled because " + conflictSummary + ". No files were moved, renamed, or deleted. Review the Issues tab, resolve the conflicts, and try again.",
+                                ""
+                            ).catch(error => showError(error.message, "#status"));
+                            return;
+                        }
                         loadTab("#library");
-                        return scanLocalFolder(true);
-                    }).then(() => {
                         ShowMessage("info", "Success", "Operation completed successfully", "")
-                            .catch(error => showError(error.message));
-                    }).catch(error => showError(error.message));
+                            .catch(error => console.error("Could not display organization success message:", error));
+                    }).catch(organizationError => {
+                        refreshOrganizationLibrary().then(() => {
+                            hideProgress();
+                            loadTab("#library");
+                            const detail = organizationError && organizationError.message
+                                ? organizationError.message
+                                : String(organizationError);
+                            ShowMessage("error", "Organization failed", "Organization could not be completed. The library was refreshed; rescan if needed.", detail)
+                                .catch(dialogError => console.error("Could not display organization error:", dialogError));
+                        }).catch(refreshError => {
+                            state.library = undefined;
+                            clearOrganizationCaches();
+                            state.libraryRefreshError = "Library refresh failed after organization. Use Rescan library to try again.";
+                            hideProgress();
+                            loadTab("#library");
+                            const operationDetail = organizationError && organizationError.message
+                                ? organizationError.message
+                                : String(organizationError);
+                            const refreshDetail = refreshError && refreshError.message
+                                ? refreshError.message
+                                : String(refreshError);
+                            ShowMessage(
+                                "error",
+                                "Organization and refresh failed",
+                                state.libraryRefreshError,
+                                operationDetail + "\n\nLibrary refresh failed: " + refreshDetail
+                            ).catch(dialogError => console.error("Could not display organization refresh error:", dialogError));
+                        });
+                    });
                 }
             }).catch(error => showError(error.message));
 
