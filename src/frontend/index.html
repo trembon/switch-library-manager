@@ -80,8 +80,9 @@
         <div class="settings-section">
           <h4>Interface</h4>
           <div class="form-check form-switch mb-3">
-            <input class="form-check-input" type="checkbox" name="gui_enabled" id="settings-gui-enabled" {{if gui.enabled}}checked{{/if}}>
+            <input class="form-check-input" type="checkbox" name="gui_enabled" id="settings-gui-enabled" aria-describedby="settings-gui-enabled-help" {{if gui.enabled}}checked{{/if}}>
             <label class="form-check-label" for="settings-gui-enabled">Start with the graphical interface</label>
+            <div class="form-text" id="settings-gui-enabled-help">Turn this off to start SLM in console mode. Launch it from a terminal (Command Prompt or PowerShell on Windows); double-clicking the executable on Windows will not open a window. To open the graphical interface again, launch SLM with <code>-m gui</code>.</div>
           </div>
           <div class="row g-3">
             <div class="col-md-4">
