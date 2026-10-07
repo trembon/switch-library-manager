@@ -54,7 +54,7 @@ The application creates a current `settings.json` on first launch. You can custo
   - Open `cmd`
   - Run `switch-library-manager.exe`
 
-### macOS or Linux
+### macOS
 
 - Extract the zip file
 - Double click the App file
@@ -62,7 +62,16 @@ The application creates a current `settings.json` on first launch. You can custo
   - Open your Terminal
   - `cd` to the folder containing `switch-library-manager`
   - `chmod +x switch-library-manager` to make it executable
-  - Run `./switch-library-manager'
+  - Run `./switch-library-manager`
+
+### Linux
+
+- Choose the `linux-amd64-webkit41` download when your distribution provides WebKitGTK 4.1, including CachyOS and Ubuntu 24.04. The WebKitGTK 4.0 download is a compatibility option for systems that provide 4.0 but not 4.1.
+- Install the matching WebKitGTK runtime library and GTK 3. Ubuntu 22.04 examples: `sudo apt install libwebkit2gtk-4.0-37` or `sudo apt install libwebkit2gtk-4.1-0`. These packages bring in their runtime dependencies, including GTK 3.
+- Extract the archive, open a terminal in its folder, and run `chmod +x switch-library-manager` followed by `./switch-library-manager`.
+- The executable also runs console mode (`./switch-library-manager -m console`) and has the same WebKitGTK runtime requirement.
+
+The release archives are named `switch-library-manager-v<VERSION>.linux-amd64-webkit40.tar.gz` and `switch-library-manager-v<VERSION>.linux-amd64-webkit41.tar.gz`; the suffix identifies the required WebKitGTK API version.
 
 ### Console parameters
 
@@ -96,6 +105,10 @@ NOTE: parameters are only usable in command line mode, except the parameter -m (
 - Generate the Wails bindings: `wails generate module`
 - Build the application: `wails build`
 - Binaries will be available under `src/build/bin`
+
+#### Linux WebKitGTK variants
+
+From the `src` directory, install the build dependencies matching the selected version. For WebKitGTK 4.0, use `libgtk-3-dev` and `libwebkit2gtk-4.0-dev`, then run `wails generate module` and `wails build -platform linux/amd64 -webview2 embed`. For WebKitGTK 4.1, use `libgtk-3-dev` and `libwebkit2gtk-4.1-dev`, then run `wails generate module -tags webkit2_41` and `wails build -platform linux/amd64 -webview2 embed -tags webkit2_41`.
 
 ### Visual Studio Code debugging
 

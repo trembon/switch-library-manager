@@ -15,7 +15,12 @@ jobs:
             artifact: switch-library-manager.windows-amd64
           - os: ubuntu-22.04
             platform: linux/amd64
-            artifact: switch-library-manager.linux-amd64
+            webkit_version: "4.0"
+            artifact: switch-library-manager.linux-amd64-webkit40
+          - os: ubuntu-22.04
+            platform: linux/amd64
+            webkit_version: "4.1"
+            artifact: switch-library-manager.linux-amd64-webkit41
           - os: macos-15-intel
             platform: darwin/amd64
             artifact: switch-library-manager.darwin-amd64
@@ -29,11 +34,14 @@ jobs:
 
       - name: Setup environment
         uses: ./.github/actions/setup-environment
+        with:
+          webkit-version: ${{ matrix.webkit_version || '4.0' }}
 
       - name: Build app
         uses: ./.github/actions/build-app
         with:
           platform: ${{ matrix.platform }}
+          webkit-version: ${{ matrix.webkit_version || '4.0' }}
 
       - name: Publish artifact
         uses: ./.github/actions/publish-artifacts
@@ -57,11 +65,17 @@ jobs:
           name: switch-library-manager.windows-amd64
           path: release_inputs/windows-amd64
 
-      - name: Download Linux artifact
+      - name: Download Linux WebKitGTK 4.0 artifact
         uses: actions/download-artifact@v7
         with:
-          name: switch-library-manager.linux-amd64
-          path: release_inputs/linux-amd64
+          name: switch-library-manager.linux-amd64-webkit40
+          path: release_inputs/linux-amd64-webkit40
+
+      - name: Download Linux WebKitGTK 4.1 artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: switch-library-manager.linux-amd64-webkit41
+          path: release_inputs/linux-amd64-webkit41
 
       - name: Download macOS artifact
         uses: actions/download-artifact@v7
@@ -94,7 +108,7 @@ jobs:
           package_dir="$GITHUB_WORKSPACE/release_packages"
           mkdir -p "$package_dir"
 
-          for platform in windows-amd64 linux-amd64 darwin-amd64 darwin-arm64; do
+          for platform in windows-amd64 linux-amd64-webkit40 linux-amd64-webkit41 darwin-amd64 darwin-arm64; do
             artifact_dir="release_inputs/${platform}"
             if [[ ! -d "$artifact_dir" ]] || [[ -z "$(find "$artifact_dir" -mindepth 1 -print -quit)" ]]; then
               echo "Downloaded artifact is missing or empty: $artifact_dir" >&2
@@ -107,8 +121,22 @@ jobs:
             zip -r "$package_dir/switch-library-manager-${release_version}.windows-amd64.zip" .
           )
 
-          tar -czf "$package_dir/switch-library-manager-${release_version}.linux-amd64.tar.gz" \
-            -C release_inputs/linux-amd64 .
+          for webkit_version in 40 41; do
+            artifact_dir="release_inputs/linux-amd64-webkit${webkit_version}"
+            binary="$artifact_dir/switch-library-manager"
+            if [[ ! -f "$binary" ]]; then
+              echo "Linux executable is missing: $binary" >&2
+              exit 1
+            fi
+            chmod +x "$binary"
+            archive="$package_dir/switch-library-manager-${release_version}.linux-amd64-webkit${webkit_version}.tar.gz"
+            tar -czf "$archive" -C "$artifact_dir" .
+            permissions="$(tar -tvzf "$archive" | awk '$NF == "./switch-library-manager" { print $1 }')"
+            if [[ ! "$permissions" =~ ^-rwx ]]; then
+              echo "Linux release archive does not contain an executable switch-library-manager: $archive" >&2
+              exit 1
+            fi
+          done
 
           (
             cd release_inputs/darwin-amd64
@@ -125,6 +153,7 @@ jobs:
         with:
           files: |
             release_packages/switch-library-manager-${{ steps.package.outputs.release_version }}.windows-amd64.zip
-            release_packages/switch-library-manager-${{ steps.package.outputs.release_version }}.linux-amd64.tar.gz
+            release_packages/switch-library-manager-${{ steps.package.outputs.release_version }}.linux-amd64-webkit40.tar.gz
+            release_packages/switch-library-manager-${{ steps.package.outputs.release_version }}.linux-amd64-webkit41.tar.gz
             release_packages/switch-library-manager-${{ steps.package.outputs.release_version }}.darwin-amd64.zip
             release_packages/switch-library-manager-${{ steps.package.outputs.release_version }}.darwin-arm64.zip

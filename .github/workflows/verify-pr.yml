@@ -7,17 +7,30 @@ on:
 
 jobs:
   build:
+    strategy:
+      fail-fast: false
+      matrix:
+        webkit_version: ["4.0", "4.1"]
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v7
 
       - name: Setup environment
         uses: ./.github/actions/setup-environment
+        with:
+          webkit-version: ${{ matrix.webkit_version }}
 
       - name: Run Go tests
         working-directory: ./src
         shell: bash
-        run: go test ./...
+        run: |
+          set -euo pipefail
+          go_args=()
+          if [[ "${{ matrix.webkit_version }}" == "4.1" ]]; then
+            go_args=(-tags webkit2_41)
+          fi
+          go test "${go_args[@]}" ./...
+          go vet "${go_args[@]}" ./...
 
       - name: Analyze core coverage
         working-directory: ./src
@@ -25,6 +38,10 @@ jobs:
         run: |
           set -euo pipefail
 
+          go_args=()
+          if [[ "${{ matrix.webkit_version }}" == "4.1" ]]; then
+            go_args=(-tags webkit2_41)
+          fi
           packages=(./backend/db ./backend/fileio ./backend/process ./backend/settings ./backend/switchfs ./backend/switchfs/_crypto)
           coverage_file="$(mktemp)"
           trap 'rm -f "$coverage_file"' EXIT
@@ -32,7 +49,7 @@ jobs:
 
           for package in "${packages[@]}"; do
             package_profile="$(mktemp)"
-            go test -count=1 -covermode=atomic -coverprofile="$package_profile" "$package"
+            go test "${go_args[@]}" -count=1 -covermode=atomic -coverprofile="$package_profile" "$package"
             if [[ "$first_profile" == true ]]; then
               cat "$package_profile" > "$coverage_file"
               first_profile=false
@@ -51,3 +68,4 @@ jobs:
         uses: ./.github/actions/build-app
         with:
           platform: linux/amd64
+          webkit-version: ${{ matrix.webkit_version }}

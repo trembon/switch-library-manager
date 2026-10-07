@@ -1,5 +1,10 @@
 name: "Setup Environment"
 description: Setup the environment for compiling the solution
+inputs:
+  webkit-version:
+    description: WebKitGTK API version for Linux builds (4.0 or 4.1)
+    required: false
+    default: "4.0"
 runs:
   using: composite
   steps:
@@ -12,8 +17,13 @@ runs:
       if: runner.os == 'Linux'
       shell: bash
       run: |
+        case "${{ inputs['webkit-version'] }}" in
+          4.0) webkit_dev_package=libwebkit2gtk-4.0-dev ;;
+          4.1) webkit_dev_package=libwebkit2gtk-4.1-dev ;;
+          *) echo "Unsupported WebKitGTK version: ${{ inputs['webkit-version'] }}" >&2; exit 1 ;;
+        esac
         sudo apt-get update
-        sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+        sudo apt-get install -y libgtk-3-dev xvfb xauth "$webkit_dev_package"
 
     - name: Install Wails CLI
       working-directory: ./src

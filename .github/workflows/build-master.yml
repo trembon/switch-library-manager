@@ -16,7 +16,12 @@ jobs:
             artifact: switch-library-manager.windows-amd64
           - os: ubuntu-22.04
             platform: linux/amd64
-            artifact: switch-library-manager.linux-amd64
+            webkit_version: "4.0"
+            artifact: switch-library-manager.linux-amd64-webkit40
+          - os: ubuntu-22.04
+            platform: linux/amd64
+            webkit_version: "4.1"
+            artifact: switch-library-manager.linux-amd64-webkit41
           - os: macos-15-intel
             platform: darwin/amd64
             artifact: switch-library-manager.darwin-amd64
@@ -30,11 +35,14 @@ jobs:
 
       - name: Setup environment
         uses: ./.github/actions/setup-environment
+        with:
+          webkit-version: ${{ matrix.webkit_version || '4.0' }}
 
       - name: Build app
         uses: ./.github/actions/build-app
         with:
           platform: ${{ matrix.platform }}
+          webkit-version: ${{ matrix.webkit_version || '4.0' }}
 
       - name: Publish artifacts
         uses: ./.github/actions/publish-artifacts
