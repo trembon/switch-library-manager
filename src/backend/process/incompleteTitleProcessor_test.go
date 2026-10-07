@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/trembon/switch-library-manager/backend/db"
+	"github.com/trembon/switch-library-manager/backend/switchfs"
 )
 
 func TestScanForMissingUpdates(t *testing.T) {
@@ -19,7 +20,7 @@ func TestScanForMissingUpdates(t *testing.T) {
 				2: {Metadata: metadataForID(updateID, 2)},
 			},
 			Dlc: map[string]db.SwitchFileInfo{
-				dlcID: {Metadata: metadataForID(dlcID, 1)},
+				dlcID: {Metadata: metadataWithDisplayVersion(dlcID, 1, "2.1.0")},
 			},
 		},
 		"missing-base": {
@@ -50,7 +51,7 @@ func TestScanForMissingUpdates(t *testing.T) {
 		t.Fatalf("update result = %#v", game)
 	}
 	dlc, ok := result[dlcID]
-	if !ok || dlc.LocalUpdate != 1 || dlc.LatestUpdate != 3 || dlc.LatestUpdateDate != "2024-01-02" {
+	if !ok || dlc.LocalUpdate != 1 || dlc.LatestUpdate != 3 || dlc.LatestUpdateDate != "2024-01-02" || dlc.LocalDisplayVersion != "2.1.0" {
 		t.Fatalf("DLC result = %#v, present = %v", dlc, ok)
 	}
 
@@ -111,6 +112,94 @@ func TestScanForMissingUpdatesDLCBranches(t *testing.T) {
 	local["0100abcd00001"].Dlc[dlcGoodID] = db.SwitchFileInfo{}
 	if _, ok := ScanForMissingUpdates(local, remote, nil, false)[dlcGoodID]; ok {
 		t.Fatal("metadata-free local DLC was reported")
+	}
+}
+
+func TestScanForMissingUpdatesLocalDisplayVersion(t *testing.T) {
+	baseID := "0100abcd00001000"
+	updateID := "0100abcd00001800"
+	tests := []struct {
+		name               string
+		baseMetadata       *switchfs.ContentMetaAttributes
+		updates            map[int]db.SwitchFileInfo
+		wantUpdate         int
+		wantDisplayVersion string
+	}{
+		{
+			name:         "highest local update",
+			baseMetadata: metadataWithDisplayVersion(baseID, 0, "1.0.0"),
+			updates: map[int]db.SwitchFileInfo{
+				2: {Metadata: metadataWithDisplayVersion(updateID, 2, "1.2.0")},
+				4: {Metadata: metadataWithDisplayVersion(updateID, 4, "1.4.0")},
+			},
+			wantUpdate:         4,
+			wantDisplayVersion: "1.4.0",
+		},
+		{
+			name:               "base game when there is no local update",
+			baseMetadata:       metadataWithDisplayVersion(baseID, 0, "1.0.0"),
+			wantDisplayVersion: "1.0.0",
+		},
+		{
+			name:         "metadata-free filename fallback update",
+			baseMetadata: metadataWithDisplayVersion(baseID, 0, "1.0.0"),
+			updates: map[int]db.SwitchFileInfo{
+				2: {Metadata: metadataForID(updateID, 2)},
+			},
+			wantUpdate: 2,
+		},
+		{
+			name: "missing metadata",
+			updates: map[int]db.SwitchFileInfo{
+				2: {},
+			},
+			wantUpdate: 2,
+		},
+		{
+			name: "missing NACP",
+			updates: map[int]db.SwitchFileInfo{
+				2: {Metadata: metadataForID(updateID, 2)},
+			},
+			wantUpdate: 2,
+		},
+		{
+			name: "empty display version",
+			updates: map[int]db.SwitchFileInfo{
+				2: {Metadata: metadataWithDisplayVersion(updateID, 2, "")},
+			},
+			wantUpdate: 2,
+		},
+	}
+
+	remote := map[string]*db.SwitchTitle{
+		"0100abcd00001": {
+			Attributes: db.TitleAttributes{Id: baseID},
+			Updates:    map[int]string{9: "latest"},
+			Dlc:        map[string]db.TitleAttributes{},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			local := map[string]*db.SwitchGameFiles{
+				"0100abcd00001": {
+					BaseExist: true,
+					File:      db.SwitchFileInfo{Metadata: test.baseMetadata},
+					Updates:   test.updates,
+				},
+			}
+			got := ScanForMissingUpdates(local, remote, nil, true)[baseID]
+			if got.LocalUpdate != test.wantUpdate || got.LocalDisplayVersion != test.wantDisplayVersion {
+				t.Fatalf("local update/display version = %d/%q, want %d/%q", got.LocalUpdate, got.LocalDisplayVersion, test.wantUpdate, test.wantDisplayVersion)
+			}
+		})
+	}
+}
+
+func metadataWithDisplayVersion(id string, version int, displayVersion string) *switchfs.ContentMetaAttributes {
+	return &switchfs.ContentMetaAttributes{
+		TitleId: id,
+		Version: version,
+		Ncap:    &switchfs.Nacp{DisplayVersion: displayVersion},
 	}
 }
 

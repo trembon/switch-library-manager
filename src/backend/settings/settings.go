@@ -57,6 +57,7 @@ type GUISettings struct {
 	PageSize            int    `json:"page_size"`
 	HideMissingGames    bool   `json:"hide_missing_games"`
 	HideDemoGames       bool   `json:"hide_demo_games"`
+	HideVersionString   bool   `json:"hide_version_string"`
 	RememberWindowState bool   `json:"remember_window_state"`
 	Theme               string `json:"theme"`
 }

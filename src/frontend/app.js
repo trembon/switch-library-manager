@@ -439,6 +439,7 @@ $(function () {
                     page_size: Number(form.elements.gui_page_size.value),
                     hide_missing_games: form.elements.gui_hide_missing_games.checked,
                     hide_demo_games: form.elements.gui_hide_demo_games.checked,
+                    hide_version_string: form.elements.gui_hide_version_string.checked,
                     remember_window_state: form.elements.gui_remember_window_state.checked,
                     theme: form.elements.gui_theme.value
                 },
@@ -580,8 +581,14 @@ $(function () {
                             {title: "Title", field: "Attributes.name", headerFilter:"input",formatter:"textarea",width:350},
                             {title: "Type", field: "Meta.type", headerFilter:"input"},
                             {title: "Title id", headerSort:false, field: "Attributes.id", headerFilter:"input", hozAlign: "right", sorter: "number"},
-                            {title: "Local version", headerSort:false, field: "local_update", hozAlign: "right", sorter: "number"},
-                            {title: "Available version", headerSort:false, field: "latest_update", hozAlign: "right"},
+                            {title: "Local update", headerSort:false, field: "local_update", hozAlign: "right", sorter: "number", formatter: function (cell) {
+                                const displayVersion = state.settings.gui.hide_version_string ? "" : cell.getRow().getData().local_display_version;
+                                const value = String(cell.getValue()) + (displayVersion ? " (" + displayVersion + ")" : "");
+                                const content = document.createElement("span");
+                                content.textContent = value;
+                                return content;
+                            }},
+                            {title: "Available update", headerSort:false, field: "latest_update", hozAlign: "right"},
                             {title: "Update date", headerSort:true, field: "latest_update_date",sorter:"date", sorterParams:{format:"YYYY-MM-DD"}}
                         ],
                     }, "updates"), "missing_updates");
@@ -688,7 +695,7 @@ $(function () {
                             {title: "Region", headerSort:true, headerFilter:"input", field: "region"},
                             {title: "Type", headerSort:true, headerFilter:"input", field: "type"},
                             {title: "Update", headerSort:false, field: "update"},
-                            {title: "Version", headerSort:false, field: "version"},
+                            {title: "Version", headerSort:false, field: "version", visible: !state.settings.gui.hide_version_string, download: true},
                             {title: "File name", headerSort:false, field: "path",formatter:"textarea",widthGrow:3}
                         ],
                     }, "games"), "games");

@@ -28,7 +28,7 @@ func TestDefaultSettingsAndJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.SchemaVersion != SETTINGS_SCHEMA_VERSION || !s.GUI.Enabled || s.GUI.RememberWindowState || !s.Scan.Recursive || s.Scan.RescanOnStartup || s.Scan.IgnoreUnsupportedFileTypes || !s.MissingContent.CheckForUpdates || !s.MissingContent.CheckForDLC || s.GUI.PageSize != 100 || s.GUI.Theme != ThemeInherit {
+	if s.SchemaVersion != SETTINGS_SCHEMA_VERSION || !s.GUI.Enabled || s.GUI.RememberWindowState || s.GUI.HideVersionString || !s.Scan.Recursive || s.Scan.RescanOnStartup || s.Scan.IgnoreUnsupportedFileTypes || !s.MissingContent.CheckForUpdates || !s.MissingContent.CheckForDLC || s.GUI.PageSize != 100 || s.GUI.Theme != ThemeInherit {
 		t.Fatalf("unexpected defaults: %#v", s)
 	}
 	if s.DataSources.TitlesURL != DEFAULT_TITLES_JSON_URL || s.DataSources.VersionsURL != DEFAULT_VERSIONS_JSON_URL || !s.Organization.SwitchSafeFileNames {
@@ -64,7 +64,7 @@ func TestRememberWindowStateDefaultsOffForExistingSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.GUI.RememberWindowState || loaded.Scan.IgnoreUnsupportedFileTypes || loaded.Scan.RescanOnStartup {
+	if loaded.GUI.RememberWindowState || loaded.GUI.HideVersionString || loaded.Scan.IgnoreUnsupportedFileTypes || loaded.Scan.RescanOnStartup {
 		t.Fatal("existing settings without opt-in settings should default to false")
 	}
 }
@@ -143,7 +143,7 @@ func TestSettingsSaveRoundTrip(t *testing.T) {
 		DataSources:   DataSourceSettings{TitlesURL: "https://titles.example", VersionsURL: "https://versions.example"},
 		Paths:         PathSettings{LibraryFolder: "library", ScanFolders: []string{"one", "two"}},
 		Scan:          ScanSettings{IgnoreFileTypes: []string{"txt"}, IgnoreUnsupportedFileTypes: true, RescanOnStartup: true},
-		GUI:           GUISettings{PageSize: 25, RememberWindowState: true},
+		GUI:           GUISettings{PageSize: 25, RememberWindowState: true, HideVersionString: true},
 		Organization:  OrganizationSettings{FileNameTemplate: "{TITLE_ID}"},
 	}
 	if err := SaveSettingsWithError(custom, base); err != nil {
@@ -158,7 +158,7 @@ func TestSettingsSaveRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.Paths.LibraryFolder != "library" || loaded.GUI.PageSize != 25 || !loaded.GUI.RememberWindowState || len(loaded.Paths.ScanFolders) != 2 {
+	if loaded.Paths.LibraryFolder != "library" || loaded.GUI.PageSize != 25 || !loaded.GUI.RememberWindowState || !loaded.GUI.HideVersionString || len(loaded.Paths.ScanFolders) != 2 {
 		t.Fatalf("round-trip mismatch: %#v", loaded)
 	}
 	if loaded.DataSources.TitlesURL != custom.DataSources.TitlesURL || loaded.DataSources.VersionsURL != custom.DataSources.VersionsURL {

@@ -18,6 +18,7 @@ On macOS, runtime files are stored in `~/Library/Application Support/Switch Libr
     "page_size": 100,
     "hide_missing_games": false,
     "hide_demo_games": false,
+    "hide_version_string": false,
     "remember_window_state": false,
     "theme": "inherit"
   },
@@ -70,6 +71,7 @@ On macOS, runtime files are stored in `~/Library/Application Support/Switch Libr
 | `gui.page_size`                               | integer      | `100`                                                 | Number of rows shown per page in GUI tables. Values less than or equal to zero are reset to 100.                                                       |
 | `gui.hide_missing_games`                      | boolean      | `false`                                               | Hides the missing-games tab in the GUI.                                                                                                                |
 | `gui.hide_demo_games`                         | boolean      | `false`                                               | Excludes demo titles from the GUI missing-games list.                                                                                                  |
+| `gui.hide_version_string`                     | boolean      | `false`                                               | Hides the Library Version column and dotted local version strings in Missing Updates.                                                                   |
 | `gui.remember_window_state`                   | boolean      | `false`                                               | Restores and saves the GUI window size and position when enabled. Saved bounds are kept but ignored while disabled.                                     |
 | `gui.theme`                                   | string       | `"inherit"`                                           | GUI color mode: `inherit` follows the operating system, while `light` and `dark` force a mode. Invalid or missing values use `inherit`.                |
 | `paths.library_folder`                        | string       | `""`                                                  | Main folder scanned by the GUI and console workflow. The `-f` flag overrides it for a console run.                                                     |

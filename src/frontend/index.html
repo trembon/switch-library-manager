@@ -106,6 +106,10 @@
             <label class="form-check-label" for="settings-gui-hide-demo">Hide demo games from missing games</label>
           </div>
           <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="gui_hide_version_string" id="settings-gui-hide-version" {{if gui.hide_version_string}}checked{{/if}}>
+            <label class="form-check-label" for="settings-gui-hide-version">Hide version string</label>
+          </div>
+          <div class="form-check">
             <input class="form-check-input" type="checkbox" name="gui_remember_window_state" id="settings-gui-remember-window-state" {{if gui.remember_window_state}}checked{{/if}}>
             <label class="form-check-label" for="settings-gui-remember-window-state">Remember window size and position</label>
           </div>

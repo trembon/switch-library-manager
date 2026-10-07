@@ -363,6 +363,7 @@ export namespace process {
 	    Attributes: db.TitleAttributes;
 	    Meta?: switchfs.ContentMetaAttributes;
 	    local_update: number;
+	    local_display_version: string;
 	    latest_update: number;
 	    latest_update_date: string;
 	    missing_dlc: MissingDLC[];
@@ -376,6 +377,7 @@ export namespace process {
 	        this.Attributes = this.convertValues(source["Attributes"], db.TitleAttributes);
 	        this.Meta = this.convertValues(source["Meta"], switchfs.ContentMetaAttributes);
 	        this.local_update = source["local_update"];
+	        this.local_display_version = source["local_display_version"];
 	        this.latest_update = source["latest_update"];
 	        this.latest_update_date = source["latest_update_date"];
 	        this.missing_dlc = this.convertValues(source["missing_dlc"], MissingDLC);
@@ -519,6 +521,7 @@ export namespace settings {
 	    page_size: number;
 	    hide_missing_games: boolean;
 	    hide_demo_games: boolean;
+	    hide_version_string: boolean;
 	    remember_window_state: boolean;
 	    theme: string;
 	
@@ -532,6 +535,7 @@ export namespace settings {
 	        this.page_size = source["page_size"];
 	        this.hide_missing_games = source["hide_missing_games"];
 	        this.hide_demo_games = source["hide_demo_games"];
+	        this.hide_version_string = source["hide_version_string"];
 	        this.remember_window_state = source["remember_window_state"];
 	        this.theme = source["theme"];
 	    }

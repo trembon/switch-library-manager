@@ -15,12 +15,13 @@ type MissingDLC struct {
 }
 
 type IncompleteTitle struct {
-	Attributes       db.TitleAttributes
-	Meta             *switchfs.ContentMetaAttributes
-	LocalUpdate      int          `json:"local_update"`
-	LatestUpdate     int          `json:"latest_update"`
-	LatestUpdateDate string       `json:"latest_update_date"`
-	MissingDLC       []MissingDLC `json:"missing_dlc"`
+	Attributes          db.TitleAttributes
+	Meta                *switchfs.ContentMetaAttributes
+	LocalUpdate         int          `json:"local_update"`
+	LocalDisplayVersion string       `json:"local_display_version"`
+	LatestUpdate        int          `json:"latest_update"`
+	LatestUpdateDate    string       `json:"latest_update_date"`
+	MissingDLC          []MissingDLC `json:"missing_dlc"`
 }
 
 func ScanForMissingUpdates(localDB map[string]*db.SwitchGameFiles,
@@ -42,7 +43,7 @@ func ScanForMissingUpdates(localDB map[string]*db.SwitchGameFiles,
 			continue
 		}
 
-		if _, ok := ignoreTitleIds[switchFile.File.Metadata.TitleId]; ok {
+		if _, ok := ignoreTitleIds[switchDB[idPrefix].Attributes.Id]; ok {
 			continue
 		}
 
@@ -69,6 +70,10 @@ func ScanForMissingUpdates(localDB map[string]*db.SwitchGameFiles,
 		switchTitle.LatestUpdate = 0
 		if len(localVersions) != 0 {
 			switchTitle.LocalUpdate = localVersions[len(localVersions)-1]
+			localUpdate := switchFile.Updates[switchTitle.LocalUpdate]
+			switchTitle.LocalDisplayVersion = displayVersion(localUpdate.Metadata)
+		} else {
+			switchTitle.LocalDisplayVersion = displayVersion(switchFile.File.Metadata)
 		}
 
 		//process updates
@@ -112,11 +117,12 @@ func ScanForMissingUpdates(localDB map[string]*db.SwitchGameFiles,
 						}
 
 						result[availableDlc.Id] = IncompleteTitle{
-							Attributes:       availableDlc,
-							LatestUpdate:     int(latestDlcVersion),
-							LocalUpdate:      localDlc.Metadata.Version,
-							LatestUpdateDate: updateDate,
-							Meta:             localDlc.Metadata}
+							Attributes:          availableDlc,
+							LatestUpdate:        int(latestDlcVersion),
+							LocalUpdate:         localDlc.Metadata.Version,
+							LocalDisplayVersion: displayVersion(localDlc.Metadata),
+							LatestUpdateDate:    updateDate,
+							Meta:                localDlc.Metadata}
 					}
 				}
 			}
@@ -124,6 +130,13 @@ func ScanForMissingUpdates(localDB map[string]*db.SwitchGameFiles,
 
 	}
 	return result
+}
+
+func displayVersion(metadata *switchfs.ContentMetaAttributes) string {
+	if metadata == nil || metadata.Ncap == nil {
+		return ""
+	}
+	return metadata.Ncap.DisplayVersion
 }
 
 func ScanForMissingDLC(localDB map[string]*db.SwitchGameFiles,
