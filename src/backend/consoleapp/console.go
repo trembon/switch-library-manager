@@ -128,8 +128,12 @@ func (c *Console) Start() {
 
 	//4. create switch title db
 	titlesDB, err := db.CreateSwitchTitleDB(titleFile, versionsFile)
+	if err != nil {
+		fmt.Printf("failed to create switch title database: %v\n", err)
+		return
+	}
 
-	//5. read local files
+	// 5. read local files
 	folderToScan := settingsObj.Paths.LibraryFolder
 	if c.consoleFlags.NspFolder.IsSet() && c.consoleFlags.NspFolder.String() != "" {
 		folderToScan = c.consoleFlags.NspFolder.String()
