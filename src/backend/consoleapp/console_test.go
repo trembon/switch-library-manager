@@ -10,7 +10,17 @@ import (
 
 	"github.com/trembon/switch-library-manager/backend/db"
 	"github.com/trembon/switch-library-manager/backend/process"
+	"github.com/trembon/switch-library-manager/backend/settings"
 )
+
+func TestOrganizationEnabledForMoveOnlyOption(t *testing.T) {
+	if organizationEnabled(settings.OrganizationSettings{MoveScanFilesToLibrary: true}) != true {
+		t.Fatal("move-only organization should be enabled")
+	}
+	if organizationEnabled(settings.OrganizationSettings{}) {
+		t.Fatal("organization should stay disabled when all organization options are off")
+	}
+}
 
 func TestCsvExportFilename(t *testing.T) {
 	date := time.Date(2026, time.September, 21, 23, 45, 0, 0, time.FixedZone("test", 2*60*60))

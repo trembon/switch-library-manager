@@ -180,7 +180,7 @@ func (c *Console) Start() {
 	if csvOutput != "" {
 		issuesCsvFile = filepath.Join(csvOutput, csvExportFilename(csvIssuesKind, exportDate))
 	}
-	organizationEnabled := settingsObj.Organization.RenameFiles || settingsObj.Organization.CreateFolderPerGame
+	organizationEnabled := organizationEnabled(settingsObj.Organization)
 	destructiveEnabled := settingsObj.Organization.DeleteOldUpdateFiles || organizationEnabled
 	canMutate := true
 	var organizationConflicts []process.OrganizationConflict
@@ -251,6 +251,10 @@ func (c *Console) Start() {
 	}
 
 	fmt.Printf("Completed")
+}
+
+func organizationEnabled(options settings.OrganizationSettings) bool {
+	return options.RenameFiles || options.CreateFolderPerGame || options.MoveScanFilesToLibrary
 }
 
 func (c *Console) processIssues(localDB *db.LocalSwitchFilesDB, csvOutput string, conflicts []process.OrganizationConflict) {

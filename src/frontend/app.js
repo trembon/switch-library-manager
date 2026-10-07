@@ -456,6 +456,7 @@ $(function () {
                 },
                 organization: {
                     create_folder_per_game: form.elements.organization_create_folder_per_game.checked,
+                    move_scan_files_to_library: form.elements.organization_move_scan_files_to_library.checked,
                     dlc_folder: form.elements.organization_dlc_folder.value,
                     updates_folder: form.elements.organization_updates_folder.value,
                     rename_files: form.elements.organization_rename_files.checked,
@@ -833,8 +834,9 @@ $(function () {
         $("body").on("click", ".library-organize-action", e => {
             e.preventDefault();
             if (state.settings.organization.create_folder_per_game === false &&
-                state.settings.organization.rename_files === false){
-                ShowMessage("info", "Library organization is turned off", "Please update the settings to enable this feature", "Enable 'Rename files' and/or 'Create a folder for each game' in the Settings tab")
+                state.settings.organization.rename_files === false &&
+                state.settings.organization.move_scan_files_to_library === false){
+                ShowMessage("info", "Library organization is turned off", "Please update the settings to enable this feature", "Enable 'Move files from scan folders into the library', 'Rename files' or 'Create a folder for each game' in the Settings tab")
                     .catch(error => showError(error.message));
                 return
             }

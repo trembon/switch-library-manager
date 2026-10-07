@@ -1,6 +1,7 @@
 package process
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -98,7 +99,11 @@ func BuildOrganizationPlan(
 		}
 
 		if game.IsSplit && game.BaseExist {
-			if err := addSplitMoves(&plan, seenSources, game.File.ExtendedInfo.FileName, game.File.ExtendedInfo.BaseFolder, destinationPath); err != nil {
+			fileDestination, _, err := organizationDestinationFolder(baseFolder, destinationPath, game.File.ExtendedInfo.BaseFolder, options)
+			if err != nil {
+				return OrganizationPlan{}, fmt.Errorf("resolve split destination for %q: %w", key, err)
+			}
+			if err := addSplitMoves(&plan, seenSources, game.File.ExtendedInfo.FileName, game.File.ExtendedInfo.BaseFolder, fileDestination); err != nil {
 				return OrganizationPlan{}, err
 			}
 			continue
@@ -108,7 +113,11 @@ func BuildOrganizationPlan(
 			templateData[settings.TEMPLATE_TYPE] = "BASE"
 			templateData[settings.TEMPLATE_PACKAGE_CONTENTS] = packageContents(game)
 			setFileSizeTemplateData(templateData, game.File.ExtendedInfo.Size)
-			if err := addOrganizationMove(&plan, seenSources, filepath.Join(game.File.ExtendedInfo.BaseFolder, game.File.ExtendedInfo.FileName), organizationTargetPath(destinationPath, game.File.ExtendedInfo.BaseFolder, game.File.ExtendedInfo.FileName, options, "base", templateData, 0)); err != nil {
+			target, err := organizationTargetPath(baseFolder, destinationPath, game.File.ExtendedInfo.BaseFolder, game.File.ExtendedInfo.FileName, options, "base", templateData, 0)
+			if err != nil {
+				return OrganizationPlan{}, fmt.Errorf("resolve base destination for %q: %w", key, err)
+			}
+			if err := addOrganizationMove(&plan, seenSources, filepath.Join(game.File.ExtendedInfo.BaseFolder, game.File.ExtendedInfo.FileName), target); err != nil {
 				return OrganizationPlan{}, fmt.Errorf("plan base file for %q: %w", key, err)
 			}
 		}
@@ -133,7 +142,11 @@ func BuildOrganizationPlan(
 			templateData[settings.TEMPLATE_VERSION] = strconv.Itoa(version)
 			templateData[settings.TEMPLATE_TYPE] = "UPD"
 			setFileSizeTemplateData(templateData, update.ExtendedInfo.Size)
-			if err := addOrganizationMove(&plan, seenSources, filepath.Join(update.ExtendedInfo.BaseFolder, update.ExtendedInfo.FileName), organizationTargetPath(destinationPath, update.ExtendedInfo.BaseFolder, update.ExtendedInfo.FileName, options, "update", templateData, 0)); err != nil {
+			target, err := organizationTargetPath(baseFolder, destinationPath, update.ExtendedInfo.BaseFolder, update.ExtendedInfo.FileName, options, "update", templateData, 0)
+			if err != nil {
+				return OrganizationPlan{}, fmt.Errorf("resolve update destination for %q: %w", key, err)
+			}
+			if err := addOrganizationMove(&plan, seenSources, filepath.Join(update.ExtendedInfo.BaseFolder, update.ExtendedInfo.FileName), target); err != nil {
 				return OrganizationPlan{}, fmt.Errorf("plan update file for %q: %w", key, err)
 			}
 		}
@@ -157,7 +170,11 @@ func BuildOrganizationPlan(
 			templateData[settings.TEMPLATE_TITLE_ID] = id
 			templateData[settings.TEMPLATE_DLC_NAME] = getDlcName(title, dlc)
 			setFileSizeTemplateData(templateData, dlc.ExtendedInfo.Size)
-			if err := addOrganizationMove(&plan, seenSources, filepath.Join(dlc.ExtendedInfo.BaseFolder, dlc.ExtendedInfo.FileName), organizationTargetPath(destinationPath, dlc.ExtendedInfo.BaseFolder, dlc.ExtendedInfo.FileName, options, "dlc", templateData, 0)); err != nil {
+			target, err := organizationTargetPath(baseFolder, destinationPath, dlc.ExtendedInfo.BaseFolder, dlc.ExtendedInfo.FileName, options, "dlc", templateData, 0)
+			if err != nil {
+				return OrganizationPlan{}, fmt.Errorf("resolve DLC destination for %q: %w", key, err)
+			}
+			if err := addOrganizationMove(&plan, seenSources, filepath.Join(dlc.ExtendedInfo.BaseFolder, dlc.ExtendedInfo.FileName), target); err != nil {
 				return OrganizationPlan{}, fmt.Errorf("plan DLC file for %q: %w", key, err)
 			}
 		}
@@ -328,6 +345,113 @@ func sameOrganizationPath(left, right string) bool {
 	return leftStatErr == nil && rightStatErr == nil && os.SameFile(leftInfo, rightInfo)
 }
 
+func organizationPathWithin(root, candidate string) (bool, error) {
+	rootKey, err := organizationPathKey(root)
+	if err != nil {
+		return false, fmt.Errorf("resolve library folder %q: %w", root, err)
+	}
+	candidateKey, err := organizationPathKey(candidate)
+	if err != nil {
+		return false, fmt.Errorf("resolve path %q: %w", candidate, err)
+	}
+	if organizationPathIsWithin(rootKey, candidateKey) {
+		return true, nil
+	}
+	rootHasSymlink, err := organizationPathHasSymlink(rootKey)
+	if err != nil {
+		return false, fmt.Errorf("inspect library folder path: %w", err)
+	}
+	candidateHasSymlink, err := organizationPathHasSymlink(candidateKey)
+	if err != nil {
+		return false, fmt.Errorf("inspect source folder path: %w", err)
+	}
+	if !rootHasSymlink && !candidateHasSymlink {
+		return false, nil
+	}
+	resolvedRoot, err := resolveOrganizationPath(rootKey)
+	if err != nil {
+		return false, fmt.Errorf("resolve library folder %q: %w", root, err)
+	}
+	resolvedCandidate, err := resolveOrganizationPath(candidateKey)
+	if err != nil {
+		return false, fmt.Errorf("resolve path %q: %w", candidate, err)
+	}
+	resolvedRoot, err = organizationPathKey(resolvedRoot)
+	if err != nil {
+		return false, err
+	}
+	resolvedCandidate, err = organizationPathKey(resolvedCandidate)
+	if err != nil {
+		return false, err
+	}
+	return organizationPathIsWithin(resolvedRoot, resolvedCandidate), nil
+}
+
+func organizationPathIsWithin(root, candidate string) bool {
+	relative, err := filepath.Rel(root, candidate)
+	if err != nil {
+		// A different drive or volume is necessarily outside the library root.
+		return false
+	}
+	return relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)))
+}
+
+func organizationPathHasSymlink(path string) (bool, error) {
+	volume := filepath.VolumeName(path)
+	current := volume + string(filepath.Separator)
+	remainder := strings.TrimPrefix(path, current)
+	for _, part := range strings.Split(remainder, string(filepath.Separator)) {
+		if part == "" || part == "." {
+			continue
+		}
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func resolveOrganizationPath(path string) (string, error) {
+	absolute, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return "", fmt.Errorf("make path absolute: %w", err)
+	}
+	absolute = filepath.Clean(absolute)
+	hasSymlink, err := organizationPathHasSymlink(absolute)
+	if err != nil {
+		return "", fmt.Errorf("inspect path for symbolic links: %w", err)
+	}
+	if !hasSymlink {
+		return absolute, nil
+	}
+	missing := []string{}
+	for current := absolute; ; current = filepath.Dir(current) {
+		resolved, resolveErr := filepath.EvalSymlinks(current)
+		if resolveErr == nil {
+			for i := len(missing) - 1; i >= 0; i-- {
+				resolved = filepath.Join(resolved, missing[i])
+			}
+			return filepath.Clean(resolved), nil
+		}
+		if !errors.Is(resolveErr, os.ErrNotExist) {
+			return "", resolveErr
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", resolveErr
+		}
+		missing = append(missing, filepath.Base(current))
+	}
+}
+
 // ExecuteOrganizationPlan applies a previously validated plan and refuses to
 // replace destinations that appear after preflight.
 func ExecuteOrganizationPlan(plan OrganizationPlan, localDB *db.LocalSwitchFilesDB, baseFolder string, options settings.OrganizeOptions, progress db.ProgressUpdater) error {
@@ -342,7 +466,7 @@ func ExecuteOrganizationPlan(plan OrganizationPlan, localDB *db.LocalSwitchFiles
 		if err != nil {
 			return fmt.Errorf("inspect source %q before move: %w", move.Source, err)
 		}
-		if current.Size() != move.SourceSize || !current.ModTime().Equal(move.SourceStamp.ModTime()) {
+		if move.SourceStamp != nil && (!os.SameFile(current, move.SourceStamp) || current.Size() != move.SourceSize || !current.ModTime().Equal(move.SourceStamp.ModTime())) {
 			return fmt.Errorf("source %q changed after organization preflight", move.Source)
 		}
 		if err := os.MkdirAll(filepath.Dir(move.Destination), os.ModePerm); err != nil {
@@ -351,7 +475,7 @@ func ExecuteOrganizationPlan(plan OrganizationPlan, localDB *db.LocalSwitchFiles
 		if progress != nil {
 			progress.UpdateProgress(i+1, len(plan.Moves)+1, move.Source)
 		}
-		if err := moveFile(move.Source, move.Destination); err != nil {
+		if err := moveOrganizationFile(move); err != nil {
 			return fmt.Errorf("move %q to %q: %w", move.Source, move.Destination, err)
 		}
 		if err := updateLocalFilePaths(localDB, move.Source, move.Destination); err != nil {

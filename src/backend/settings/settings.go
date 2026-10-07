@@ -94,6 +94,7 @@ type LoggingSettings struct {
 
 type OrganizationSettings struct {
 	CreateFolderPerGame        bool   `json:"create_folder_per_game"`
+	MoveScanFilesToLibrary     bool   `json:"move_scan_files_to_library"`
 	DlcFolder                  string `json:"dlc_folder"`
 	UpdatesFolder              string `json:"updates_folder"`
 	RenameFiles                bool   `json:"rename_files"`

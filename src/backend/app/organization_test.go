@@ -141,6 +141,60 @@ func TestOrganizeLibraryCompletedReturnsCurrentLibrary(t *testing.T) {
 	}
 }
 
+func TestOrganizeLibraryImportsScanFolderWithNoOtherOrganizationOptions(t *testing.T) {
+	base := t.TempDir()
+	library := filepath.Join(base, "library")
+	incoming := filepath.Join(base, "drop")
+	for _, directory := range []string{library, incoming} {
+		if err := os.MkdirAll(directory, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	baseID := "0100000000010000"
+	source := filepath.Join(incoming, "Original Name ["+baseID+"][v0].nsp")
+	if err := os.WriteFile(source, []byte("synthetic Switch file"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := settings.SaveSettingsWithError(&settings.AppSettings{
+		Paths:        settings.PathSettings{LibraryFolder: library, ScanFolders: []string{incoming}},
+		Scan:         settings.ScanSettings{Recursive: true, IgnoreFileTypes: []string{}},
+		Organization: settings.OrganizeOptions{MoveScanFilesToLibrary: true},
+	}, base); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := db.NewLocalSwitchDBManager(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	application := &App{
+		baseFolder:     base,
+		localDbManager: manager,
+		sugarLogger:    zap.NewNop().Sugar(),
+		state: State{
+			switchDB: &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{
+				"0100000000010": {Attributes: db.TitleAttributes{Id: baseID, Name: "Original Name"}},
+			}},
+			localDB: &db.LocalSwitchFilesDB{},
+		},
+	}
+
+	result, err := application.OrganizeLibrary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != "completed" {
+		t.Fatalf("OrganizeLibrary() status = %q, want completed", result.Status)
+	}
+	destination := filepath.Join(library, filepath.Base(source))
+	if _, err := os.Stat(source); !os.IsNotExist(err) {
+		t.Fatalf("source file still exists after importing: %v", err)
+	}
+	if got, err := os.ReadFile(destination); err != nil || string(got) != "synthetic Switch file" {
+		t.Fatalf("imported file content = %q, err = %v", got, err)
+	}
+}
+
 func TestOrganizeLibraryInvalidOptionsRemainErrors(t *testing.T) {
 	base := t.TempDir()
 	settingsObj := &settings.AppSettings{

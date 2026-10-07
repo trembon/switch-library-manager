@@ -31,7 +31,7 @@ func TestDefaultSettingsAndJSON(t *testing.T) {
 	if s.SchemaVersion != SETTINGS_SCHEMA_VERSION || !s.GUI.Enabled || s.GUI.RememberWindowState || s.GUI.HideVersionString || !s.Scan.Recursive || s.Scan.RescanOnStartup || s.Scan.IgnoreUnsupportedFileTypes || !s.MissingContent.CheckForUpdates || !s.MissingContent.CheckForDLC || s.GUI.PageSize != 100 || s.GUI.Theme != ThemeInherit {
 		t.Fatalf("unexpected defaults: %#v", s)
 	}
-	if s.DataSources.TitlesURL != DEFAULT_TITLES_JSON_URL || s.DataSources.VersionsURL != DEFAULT_VERSIONS_JSON_URL || !s.Organization.SwitchSafeFileNames {
+	if s.DataSources.TitlesURL != DEFAULT_TITLES_JSON_URL || s.DataSources.VersionsURL != DEFAULT_VERSIONS_JSON_URL || !s.Organization.SwitchSafeFileNames || s.Organization.MoveScanFilesToLibrary {
 		t.Fatalf("unexpected default URLs/options: %#v", s)
 	}
 	if s.Organization.FileNameTemplate != "{TITLE_NAME} ({DLC_NAME})[{TITLE_ID}][v{VERSION}]" {
@@ -50,6 +50,29 @@ func TestDefaultSettingsAndJSON(t *testing.T) {
 	}
 	if decoded.SchemaVersion != SETTINGS_SCHEMA_VERSION || decoded.Organization.FileNameTemplate == "" {
 		t.Fatalf("invalid default JSON: %#v", decoded)
+	}
+}
+
+func TestMoveScanFilesToLibrarySettingRoundTripsAndDefaultsOff(t *testing.T) {
+	isolateSettings(t)
+	base := t.TempDir()
+	options, err := ReadSettings(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.Organization.MoveScanFilesToLibrary {
+		t.Fatal("move_scan_files_to_library should default to false")
+	}
+	options.Organization.MoveScanFilesToLibrary = true
+	if err := SaveSettingsWithError(options, base); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := ReadSettings(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !loaded.Organization.MoveScanFilesToLibrary {
+		t.Fatal("move_scan_files_to_library did not survive settings persistence")
 	}
 }
 

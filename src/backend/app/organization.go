@@ -20,12 +20,15 @@ func (a *App) GetOrganizationPreview() (OrganizationPreview, error) {
 		return OrganizationPreview{}, errors.New("the organize options in settings.json are not valid, please check that the template contains file/folder name")
 	}
 
-	entries := process.BuildOrganizationPreview(
+	entries, err := process.BuildOrganizationPreview(
 		settingsObj.Paths.LibraryFolder,
 		settingsObj.Organization,
 		a.state.localDB,
 		a.state.switchDB,
 	)
+	if err != nil {
+		return OrganizationPreview{}, err
+	}
 	previewEntries := make([]OrganizationPreviewEntry, 0, len(entries))
 	for _, entry := range entries {
 		previewEntries = append(previewEntries, OrganizationPreviewEntry{Kind: entry.Kind, Path: entry.Path})
@@ -54,7 +57,7 @@ func (a *App) OrganizeLibrary() (OrganizationResult, error) {
 		return OrganizationResult{}, err
 	}
 	var plan process.OrganizationPlan
-	organizationEnabled := settingsObj.Organization.RenameFiles || settingsObj.Organization.CreateFolderPerGame
+	organizationEnabled := settingsObj.Organization.RenameFiles || settingsObj.Organization.CreateFolderPerGame || settingsObj.Organization.MoveScanFilesToLibrary
 	if organizationEnabled {
 		plan, err = process.BuildOrganizationPlan(settingsObj.Paths.LibraryFolder, localDB, a.state.switchDB, settingsObj.Organization)
 		if err != nil {

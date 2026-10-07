@@ -454,6 +454,7 @@ export namespace settings {
 	}
 	export class OrganizationSettings {
 	    create_folder_per_game: boolean;
+	    move_scan_files_to_library: boolean;
 	    dlc_folder: string;
 	    updates_folder: string;
 	    rename_files: boolean;
@@ -471,6 +472,7 @@ export namespace settings {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.create_folder_per_game = source["create_folder_per_game"];
+	        this.move_scan_files_to_library = source["move_scan_files_to_library"];
 	        this.dlc_folder = source["dlc_folder"];
 	        this.updates_folder = source["updates_folder"];
 	        this.rename_files = source["rename_files"];

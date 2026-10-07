@@ -35,6 +35,7 @@ On macOS, runtime files are stored in `~/Library/Application Support/Switch Libr
   },
   "organization": {
     "create_folder_per_game": false,
+    "move_scan_files_to_library": false,
     "dlc_folder": "",
     "updates_folder": "",
     "rename_files": false,
@@ -82,6 +83,7 @@ On macOS, runtime files are stored in `~/Library/Application Support/Switch Libr
 | `scan.ignore_file_types`                      | string array | `[]`                                                  | File extensions ignored when reporting unsupported file types. Extensions may include or omit the leading dot.                                         |
 | `scan.ignore_unsupported_file_types`           | boolean      | `false`                                               | Suppresses diagnostics for files with unsupported extensions. When false, unsupported files are reported; errors for supported extensions are still reported. |
 | `organization.create_folder_per_game`         | boolean      | `false`                                               | Creates a folder for each game during organization.                                                                                                    |
+| `organization.move_scan_files_to_library`     | boolean      | `false`                                               | Moves recognized Switch files found outside the library folder into the library during organization.                                                   |
 | `organization.dlc_folder`                     | string       | `""`                                                  | Optional subfolder for DLC files.                                                                                                                      |
 | `organization.updates_folder`                 | string       | `""`                                                  | Optional subfolder for update files.                                                                                                                   |
 | `organization.rename_files`                   | boolean      | `false`                                               | Renames files using `file_name_template`.                                                                                                              |
@@ -103,6 +105,8 @@ On macOS, runtime files are stored in `~/Library/Application Support/Switch Libr
 ## Organization templates
 
 Folder and file templates use brace-delimited tokens. The [naming template guide](naming.md) lists all tokens, describes which template accepts each one, and gives examples. When `rename_files` is enabled, `file_name_template` must contain `{TITLE_NAME}` or `{TITLE_ID}`. When `create_folder_per_game` is enabled, `folder_name_template` must contain `{TITLE_NAME}` or `{TITLE_ID}`.
+
+When `move_scan_files_to_library` is enabled, Organize imports recognized Switch files scanned from folders outside `paths.library_folder`. Existing files inside the library keep their current placement unless another organization option changes it. Relative Updates and DLC folders for imported files are resolved inside the library (or their per-game folder); absolute folder paths remain explicit destinations. The setting is off by default.
 
 ## Internal cache
 

@@ -176,6 +176,11 @@
             <label class="form-check-label" for="settings-org-rename">Rename files</label>
           </div>
           <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="organization_move_scan_files_to_library" id="settings-org-move-scan-files" {{if organization.move_scan_files_to_library}}checked{{/if}}>
+            <label class="form-check-label" for="settings-org-move-scan-files">Move files from scan folders into the library</label>
+            <div class="form-text">Imports recognized Switch files from folders outside the library when you organize.</div>
+          </div>
+          <div class="form-check">
             <input class="form-check-input" type="checkbox" name="organization_switch_safe_file_names" id="settings-org-safe-names" {{if organization.switch_safe_file_names}}checked{{/if}}>
             <label class="form-check-label" for="settings-org-safe-names">Use Switch-safe file names</label>
           </div>
@@ -437,6 +442,7 @@
             <div class="organization-option-state">
               <p><strong>Create a folder for each game:</strong> {{if organization.create_folder_per_game}}On{{else}}Off{{/if}}</p>
               <p><strong>Rename files:</strong> {{if organization.rename_files}}On{{else}}Off{{/if}}</p>
+                    <p><strong>Import files from scan folders:</strong> {{if organization.move_scan_files_to_library}}On{{else}}Off{{/if}}</p>
             </div>
             {{if organization.create_folder_per_game && organization.rename_files}}
               <p class="text-secondary mb-0">Files will be placed in per-game folders and renamed. The examples below include your configured folder, file-name, and Updates/DLC subfolder settings.</p>
@@ -444,12 +450,14 @@
               <p class="text-secondary mb-0">Files will be placed in per-game folders. Original filenames will be kept; Update and DLC entries may use their configured subfolders as shown below.</p>
             {{else organization.rename_files}}
               <p class="text-secondary mb-0">No per-game folders will be created. Files will be renamed; configured Updates/DLC subfolders may still change update and DLC destinations as shown below.</p>
+            {{else organization.move_scan_files_to_library}}
+              <p class="text-secondary mb-0">Recognized files outside the library will be moved into it. Original filenames will be kept; configured Updates/DLC subfolders may change destinations as shown below.</p>
             {{else}}
-              <div class="alert alert-info mb-0" role="status">Organization is disabled with both options off. No files will be moved or renamed. Enable at least one option in Settings and restart the application to apply it.</div>
+              <div class="alert alert-info mb-0" role="status">Organization is disabled. Enable importing scan-folder files, renaming files, or per-game folders in Settings and restart the application to apply the change.</div>
             {{/if}}
           </section>
 
-          {{if organization.create_folder_per_game || organization.rename_files}}
+          {{if organization.create_folder_per_game || organization.rename_files || organization.move_scan_files_to_library}}
             <section class="organization-section" aria-labelledby="organization-preview-heading">
               <h4 id="organization-preview-heading">Example resulting paths</h4>
               {{if previewLoading}}

@@ -49,7 +49,10 @@ func TestBuildOrganizationPreviewUsesActualBaseUpdateAndDLC(t *testing.T) {
 		},
 	}}
 
-	got := BuildOrganizationPreview(root, options, local, remote)
+	got, err := BuildOrganizationPreview(root, options, local, remote)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(got) != 3 {
 		t.Fatalf("preview entries = %#v, want three entries", got)
 	}
@@ -100,7 +103,10 @@ func TestBuildOrganizationPreviewUsesBundledVersionForBaseFile(t *testing.T) {
 		"010087e01fcd6": {Attributes: db.TitleAttributes{Id: baseID, Name: "Cuisineer"}},
 	}}
 
-	got := BuildOrganizationPreview(root, options, local, remote)
+	got, err := BuildOrganizationPreview(root, options, local, remote)
+	if err != nil {
+		t.Fatal(err)
+	}
 	paths := map[string]string{}
 	for _, entry := range got {
 		paths[entry.Kind] = entry.Path
@@ -149,7 +155,10 @@ func TestBuildOrganizationPreviewExpandsPackageContentsForBundledBase(t *testing
 		"game": {Attributes: db.TitleAttributes{Id: baseID, Name: "Preview Game"}},
 	}}
 
-	got := BuildOrganizationPreview(root, options, local, remote)
+	got, err := BuildOrganizationPreview(root, options, local, remote)
+	if err != nil {
+		t.Fatal(err)
+	}
 	paths := map[string]string{}
 	for _, entry := range got {
 		paths[entry.Kind] = entry.Path
@@ -171,7 +180,10 @@ func TestBuildOrganizationPreviewFallbackShowsDeterministicSize(t *testing.T) {
 		DlcFolder:        "dlc",
 	}
 
-	got := BuildOrganizationPreview(root, options, nil, nil)
+	got, err := BuildOrganizationPreview(root, options, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	want := map[string]string{
 		"game":   "Example Adventure_0.6GB_600MB.nsp",
 		"update": filepath.Join("updates", "Example Adventure_0.6GB_600MB.nsp"),
@@ -188,7 +200,10 @@ func TestBuildOrganizationPreviewFallsBackAndKeepsOriginalNamesWhenDisabled(t *t
 	root := t.TempDir()
 	options := settings.OrganizeOptions{UpdatesFolder: "updates", DlcFolder: "dlc"}
 
-	got := BuildOrganizationPreview(root, options, nil, nil)
+	got, err := BuildOrganizationPreview(root, options, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(got) != 3 {
 		t.Fatalf("fallback preview entries = %#v, want three entries", got)
 	}
@@ -229,7 +244,10 @@ func TestBuildOrganizationPreviewAppliesSafeNames(t *testing.T) {
 		Attributes: db.TitleAttributes{Id: "0100E95004039000", Name: "Pokémon: Demo"},
 	}}}
 
-	got := BuildOrganizationPreview(root, options, local, remote)
+	got, err := BuildOrganizationPreview(root, options, local, remote)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(got) != 3 {
 		t.Fatalf("safe-name preview entries = %#v, want fallback-filled entries", got)
 	}

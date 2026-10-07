@@ -283,40 +283,59 @@ func samePhysicalFilePath(left, right db.ExtendedFileInfo) bool {
 	return leftPath == rightPath
 }
 
-func organizationTargetPath(destinationPath, sourceFolder, originalName string, options settings.OrganizeOptions, contentKind string, templateData map[string]string, nameTry int) string {
-	fileName := getFileName(options, originalName, templateData, nameTry)
-	if options.CreateFolderPerGame {
-		switch contentKind {
-		case "update":
-			if options.UpdatesFolder != "" {
-				return filepath.Join(destinationPath, options.UpdatesFolder, fileName)
-			}
-		case "dlc":
-			if options.DlcFolder != "" {
-				return filepath.Join(destinationPath, options.DlcFolder, fileName)
-			}
+func organizationDestinationFolder(libraryRoot, destinationPath, sourceFolder string, options settings.OrganizeOptions) (string, bool, error) {
+	importing := false
+	if options.MoveScanFilesToLibrary {
+		insideLibrary, err := organizationPathWithin(libraryRoot, sourceFolder)
+		if err != nil {
+			return "", false, err
 		}
-		return filepath.Join(destinationPath, fileName)
+		importing = !insideLibrary
 	}
-
-	switch contentKind {
-	case "update":
-		if options.UpdatesFolder != "" {
-			return filepath.Join(options.UpdatesFolder, fileName)
-		}
-	case "dlc":
-		if options.DlcFolder != "" {
-			return filepath.Join(options.DlcFolder, fileName)
-		}
+	if importing && !options.CreateFolderPerGame {
+		destinationPath = libraryRoot
 	}
-	return filepath.Join(sourceFolder, fileName)
+	return destinationPath, importing, nil
 }
 
-func moveFile(from string, to string) error {
-	if sameOrganizationPath(from, to) {
-		return nil
+func organizationTargetPath(libraryRoot, destinationPath, sourceFolder, originalName string, options settings.OrganizeOptions, contentKind string, templateData map[string]string, nameTry int) (string, error) {
+	var importing bool
+	var err error
+	destinationPath, importing, err = organizationDestinationFolder(libraryRoot, destinationPath, sourceFolder, options)
+	if err != nil {
+		return "", err
 	}
-	return renameNoReplace(from, to)
+	fileName := getFileName(options, originalName, templateData, nameTry)
+	configuredFolder := ""
+	switch contentKind {
+	case "update":
+		configuredFolder = options.UpdatesFolder
+	case "dlc":
+		configuredFolder = options.DlcFolder
+	}
+	if configuredFolder == "" {
+		if !options.CreateFolderPerGame && !importing {
+			return filepath.Join(sourceFolder, fileName), nil
+		}
+		return filepath.Join(destinationPath, fileName), nil
+	}
+	if importing && filepath.IsAbs(configuredFolder) {
+		return filepath.Join(configuredFolder, fileName), nil
+	}
+	if !options.CreateFolderPerGame && !importing {
+		return filepath.Join(configuredFolder, fileName), nil
+	}
+	target := filepath.Join(destinationPath, configuredFolder, fileName)
+	if importing {
+		insideLibrary, err := organizationPathWithin(libraryRoot, target)
+		if err != nil {
+			return "", err
+		}
+		if !insideLibrary {
+			return "", fmt.Errorf("relative organization folder %q escapes the library folder", configuredFolder)
+		}
+	}
+	return target, nil
 }
 
 func applyTemplate(templateData map[string]string, useSafeNames bool, template string, nameTry int) string {
