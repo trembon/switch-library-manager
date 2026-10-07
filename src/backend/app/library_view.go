@@ -17,12 +17,10 @@ if value.File.Metadata != nil && value.File.Metadata.Ncap != nil {
 				name = value.File.Metadata.Ncap.TitleName["AmericanEnglish"].Title
 			}
 
-			if len(value.Updates) != 0 {
-				if value.Updates[value.LatestUpdate].Metadata.Ncap != nil {
-					version = value.Updates[value.LatestUpdate].Metadata.Ncap.DisplayVersion
-				} else {
-					version = ""
-				}
+if latest, ok := value.Updates[value.LatestUpdate]; ok && latest.Metadata != nil && latest.Metadata.Ncap != nil {
+				version = latest.Metadata.Ncap.DisplayVersion
+			} else {
+				version = ""
 			}
 
 			if title, ok := switchDB.TitlesMap[key]; ok {
