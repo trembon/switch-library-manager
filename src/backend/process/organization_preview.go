@@ -152,12 +152,8 @@ func organizationPreviewForGame(baseFolder string, options settings.OrganizeOpti
 	if len(dlcIDs) > 0 {
 		dlc := game.Dlc[dlcIDs[0]]
 		if !(game.BaseExist && samePhysicalFilePath(game.File.ExtendedInfo, dlc.ExtendedInfo)) {
-			templateData[settings.TEMPLATE_VERSION] = "0"
-			templateData[settings.TEMPLATE_VERSION_TXT] = ""
+			setDlcVersionTemplateData(templateData, dlc)
 			templateData[settings.TEMPLATE_TITLE_ID] = dlcIDs[0]
-			if dlc.Metadata != nil {
-				templateData[settings.TEMPLATE_VERSION] = strconv.Itoa(dlc.Metadata.Version)
-			}
 			templateData[settings.TEMPLATE_TYPE] = "DLC"
 			templateData[settings.TEMPLATE_DLC_NAME] = getDlcName(title, dlc)
 			setFileSizeTemplateData(templateData, dlc.ExtendedInfo.Size)

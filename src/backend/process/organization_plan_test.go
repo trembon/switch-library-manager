@@ -238,6 +238,87 @@ func TestBuildOrganizationPlanUsesFilenameMetadataWithoutRemoteTitle(t *testing.
 	}
 }
 
+func TestBuildOrganizationPlanUsesV0DLCDisplayVersionFallback(t *testing.T) {
+	base := t.TempDir()
+	source := filepath.Join(base, "incoming")
+	mustMkdir(t, source)
+	writeFixture(t, filepath.Join(source, "dlc.nsp"), "synthetic DLC")
+	dlcID := "0100E9500403A001"
+	local := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{
+		"0100e95004039": {
+			Dlc: map[string]db.SwitchFileInfo{
+				dlcID: {
+					ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: "dlc.nsp"},
+					Metadata:     metadataForID(dlcID, 0),
+				},
+			},
+		},
+	}}
+	remote := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{
+		"0100e95004039": {Attributes: db.TitleAttributes{Name: "Game"}},
+	}}
+	options := settings.OrganizeOptions{
+		RenameFiles:                true,
+		FileNameTemplate:           "{TITLE_NAME} [v{VERSION}][v{VERSION_TXT}]",
+		ProcessWhenMissingBaseGame: true,
+	}
+
+	plan, err := BuildOrganizationPlan(base, local, remote, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(source, "Game [v0][v1.0.0].nsp")
+	if len(plan.Moves) != 1 || plan.Moves[0].Destination != want {
+		t.Fatalf("moves = %#v, want destination %q", plan.Moves, want)
+	}
+}
+
+func TestBuildOrganizationPlanBlocksOccupiedV0DLCFallbackDestination(t *testing.T) {
+	base := t.TempDir()
+	source := filepath.Join(base, "incoming")
+	mustMkdir(t, source)
+	sourcePath := filepath.Join(source, "dlc.nsp")
+	destinationPath := filepath.Join(source, "Game [v0][v1.0.0].nsp")
+	writeFixture(t, sourcePath, "synthetic DLC")
+	writeFixture(t, destinationPath, "existing destination")
+	dlcID := "0100E9500403A001"
+	local := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{
+		"0100e95004039": {
+			Dlc: map[string]db.SwitchFileInfo{
+				dlcID: {
+					ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: filepath.Base(sourcePath)},
+					Metadata:     metadataForID(dlcID, 0),
+				},
+			},
+		},
+	}}
+	remote := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{
+		"0100e95004039": {Attributes: db.TitleAttributes{Name: "Game"}},
+	}}
+	options := settings.OrganizeOptions{
+		RenameFiles:                true,
+		FileNameTemplate:           "{TITLE_NAME} [v{VERSION}][v{VERSION_TXT}]",
+		ProcessWhenMissingBaseGame: true,
+	}
+
+	plan, err := BuildOrganizationPlan(base, local, remote, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Conflicts) != 1 || plan.Conflicts[0].Destination != destinationPath {
+		t.Fatalf("conflicts = %#v, want occupied destination %q", plan.Conflicts, destinationPath)
+	}
+	if err := ExecuteOrganizationPlan(plan, local, base, options, nil); err == nil {
+		t.Fatal("ExecuteOrganizationPlan() accepted an occupied v0 DLC destination")
+	}
+	if content, err := os.ReadFile(sourcePath); err != nil || string(content) != "synthetic DLC" {
+		t.Fatalf("source changed during planning: content=%q err=%v", content, err)
+	}
+	if content, err := os.ReadFile(destinationPath); err != nil || string(content) != "existing destination" {
+		t.Fatalf("destination changed during planning: content=%q err=%v", content, err)
+	}
+}
+
 func TestBuildOrganizationPlanRejectsInvalidSplitModel(t *testing.T) {
 	base := t.TempDir()
 	sourceFolder := filepath.Join(base, "split")

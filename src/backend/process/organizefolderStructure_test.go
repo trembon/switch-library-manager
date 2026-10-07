@@ -351,7 +351,7 @@ func TestOrganizeByFoldersMovesBaseUpdateAndDLC(t *testing.T) {
 			BaseExist: true,
 			Updates:   map[int]db.SwitchFileInfo{5: {ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: updateName, Size: 2_700_000_000}, Metadata: contentMetadata(updateID, 5, "5.0.0")}},
 			Dlc: map[string]db.SwitchFileInfo{
-				dlcOneID: {ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: dlcOneName, Size: 1_200_000_000}, Metadata: metadataForID(dlcOneID, 1)},
+				dlcOneID: {ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: dlcOneName, Size: 1_200_000_000}, Metadata: metadataForID(dlcOneID, 0)},
 				dlcTwoID: {ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: dlcTwoName, Size: 3_000_000_000}, Metadata: metadataForID(dlcTwoID, 1)},
 			},
 		},
@@ -369,13 +369,44 @@ func TestOrganizeByFoldersMovesBaseUpdateAndDLC(t *testing.T) {
 	destination := filepath.Join(baseFolder, "Test Game")
 	assertMoved(t, filepath.Join(source, baseName), filepath.Join(destination, baseID+"_BASE_0_1.0.0_0.6GB_600MB.nsp"), "base")
 	assertMoved(t, filepath.Join(source, updateName), filepath.Join(destination, "updates", updateID+"_UPD_5_5.0.0_2.7GB_2700MB.nsp"), "update")
-	assertMoved(t, filepath.Join(source, dlcOneName), filepath.Join(destination, "dlc", dlcOneID+"_DLC_1__1.2GB_1200MB.nsp"), "first DLC")
-	assertMoved(t, filepath.Join(source, dlcTwoName), filepath.Join(destination, "dlc", dlcTwoID+"_DLC_1__3.0GB_3000MB.nsp"), "second DLC")
+	assertMoved(t, filepath.Join(source, dlcOneName), filepath.Join(destination, "dlc", dlcOneID+"_DLC_0_1.0.0_1.2GB_1200MB.nsp"), "v0 DLC")
+	assertMoved(t, filepath.Join(source, dlcTwoName), filepath.Join(destination, "dlc", dlcTwoID+"_DLC_1__3.0GB_3000MB.nsp"), "nonzero DLC without a display version")
 	if len(progress.events) == 0 || progress.events[len(progress.events)-1].message != "done" {
 		t.Fatalf("organization progress did not finish: %#v", progress.events)
 	}
 
 	OrganizeByFolders(baseFolder, local, remote, nil)
+}
+
+func TestSetDlcVersionTemplateData(t *testing.T) {
+	tests := []struct {
+		name            string
+		metadata        *switchfs.ContentMetaAttributes
+		wantVersion     string
+		wantDisplayText string
+	}{
+		{name: "missing metadata", wantVersion: "0"},
+		{name: "v0 without NACP", metadata: metadataForID("0100E9500403A001", 0), wantVersion: "0", wantDisplayText: "1.0.0"},
+		{name: "v0 with empty display version", metadata: contentMetadata("0100E9500403A001", 0, ""), wantVersion: "0", wantDisplayText: "1.0.0"},
+		{name: "v0 with display version", metadata: contentMetadata("0100E9500403A001", 0, "2.3.4"), wantVersion: "0", wantDisplayText: "2.3.4"},
+		{name: "nonzero without display version", metadata: metadataForID("0100E9500403A001", 1), wantVersion: "1"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			templateData := map[string]string{
+				settings.TEMPLATE_VERSION:     "previous version",
+				settings.TEMPLATE_VERSION_TXT: "previous display version",
+			}
+			setDlcVersionTemplateData(templateData, db.SwitchFileInfo{Metadata: test.metadata})
+			if got := templateData[settings.TEMPLATE_VERSION]; got != test.wantVersion {
+				t.Errorf("version = %q, want %q", got, test.wantVersion)
+			}
+			if got := templateData[settings.TEMPLATE_VERSION_TXT]; got != test.wantDisplayText {
+				t.Errorf("display version = %q, want %q", got, test.wantDisplayText)
+			}
+		})
+	}
 }
 
 func TestOrganizeByFoldersUsesHighestBundledUpdateVersion(t *testing.T) {

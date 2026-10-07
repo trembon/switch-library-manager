@@ -177,6 +177,23 @@ func getFileName(options settings.OrganizeOptions, originalName string, template
 	return result + ext
 }
 
+func setDlcVersionTemplateData(templateData map[string]string, dlc db.SwitchFileInfo) {
+	templateData[settings.TEMPLATE_VERSION] = "0"
+	templateData[settings.TEMPLATE_VERSION_TXT] = ""
+	if dlc.Metadata == nil {
+		return
+	}
+
+	templateData[settings.TEMPLATE_VERSION] = strconv.Itoa(dlc.Metadata.Version)
+	if dlc.Metadata.Ncap != nil && dlc.Metadata.Ncap.DisplayVersion != "" {
+		templateData[settings.TEMPLATE_VERSION_TXT] = dlc.Metadata.Ncap.DisplayVersion
+		return
+	}
+	if dlc.Metadata.Version == 0 {
+		templateData[settings.TEMPLATE_VERSION_TXT] = "1.0.0"
+	}
+}
+
 func setBaseFileVersionTemplateData(templateData map[string]string, game *db.SwitchGameFiles) {
 	templateData[settings.TEMPLATE_VERSION] = "0"
 	templateData[settings.TEMPLATE_VERSION_TXT] = ""

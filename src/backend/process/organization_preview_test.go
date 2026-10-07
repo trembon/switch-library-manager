@@ -68,6 +68,45 @@ func TestBuildOrganizationPreviewUsesActualBaseUpdateAndDLC(t *testing.T) {
 	}
 }
 
+func TestBuildOrganizationPreviewUsesV0DLCDisplayVersionFallback(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "incoming")
+	dlcID := "0100E9500403A001"
+	options := settings.OrganizeOptions{
+		RenameFiles:                true,
+		FileNameTemplate:           "{TITLE_NAME} [v{VERSION}][v{VERSION_TXT}]",
+		ProcessWhenMissingBaseGame: true,
+	}
+	local := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{
+		"0100e95004039": {
+			Dlc: map[string]db.SwitchFileInfo{
+				dlcID: {
+					ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: "dlc.nsp"},
+					Metadata:     previewTestMetadata(dlcID, 0, ""),
+				},
+			},
+		},
+	}}
+	remote := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{
+		"0100e95004039": {Attributes: db.TitleAttributes{Name: "Preview Game"}},
+	}}
+
+	got, err := BuildOrganizationPreview(root, options, local, remote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join("incoming", "Preview Game [v0][v1.0.0].nsp")
+	for _, entry := range got {
+		if entry.Kind == "dlc" {
+			if entry.Path != want {
+				t.Fatalf("DLC preview = %q, want %q", entry.Path, want)
+			}
+			return
+		}
+	}
+	t.Fatalf("preview = %#v, missing DLC at %q", got, want)
+}
+
 func TestBuildOrganizationPreviewUsesBundledVersionForBaseFile(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "incoming")

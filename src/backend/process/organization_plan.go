@@ -161,11 +161,7 @@ func BuildOrganizationPlan(
 			if game.BaseExist && samePhysicalFilePath(game.File.ExtendedInfo, dlc.ExtendedInfo) {
 				continue
 			}
-			templateData[settings.TEMPLATE_VERSION] = "0"
-			templateData[settings.TEMPLATE_VERSION_TXT] = ""
-			if dlc.Metadata != nil {
-				templateData[settings.TEMPLATE_VERSION] = strconv.Itoa(dlc.Metadata.Version)
-			}
+			setDlcVersionTemplateData(templateData, dlc)
 			templateData[settings.TEMPLATE_TYPE] = "DLC"
 			templateData[settings.TEMPLATE_TITLE_ID] = id
 			templateData[settings.TEMPLATE_DLC_NAME] = getDlcName(title, dlc)
