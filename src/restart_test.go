@@ -99,12 +99,23 @@ func TestWaitForRestartParentObservesExitedProcess(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	if err := waitForRestartParent(cmd.Process.Pid, 2*time.Second); err != nil {
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
+	pid := cmd.Process.Pid
+	// Reap the child concurrently: on Unix, an exited child still exists as a
+	// zombie until Wait collects it, so polling for its disappearance would time out.
+	waitDone := make(chan error, 1)
+	go func() {
+		waitDone <- cmd.Wait()
+	}()
+	if err := waitForRestartParent(pid, 2*time.Second); err != nil {
+		if killErr := cmd.Process.Kill(); killErr != nil && !errors.Is(killErr, os.ErrProcessDone) {
+			t.Errorf("kill wait helper process: %v", killErr)
+		}
+		if waitErr := <-waitDone; waitErr != nil {
+			t.Logf("wait helper process after timeout: %v", waitErr)
+		}
 		t.Fatalf("waitForRestartParent() error = %v", err)
 	}
-	if err := cmd.Wait(); err != nil {
+	if err := <-waitDone; err != nil {
 		t.Fatalf("wait helper process: %v", err)
 	}
 }
