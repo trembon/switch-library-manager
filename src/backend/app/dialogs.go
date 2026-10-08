@@ -50,21 +50,21 @@ func (a *App) ShowInFolder(path string) error {
 	if path == "" {
 		return errors.New("path is empty")
 	}
-	var command string
-	var args []string
-	switch runtime.GOOS {
-	case "windows":
-		command = "explorer.exe"
-		args = []string{"/select," + filepath.Clean(path)}
-	case "darwin":
-		command = "open"
-		args = []string{"-R", filepath.Clean(path)}
-	default:
-		command = "xdg-open"
-		args = []string{filepath.Dir(filepath.Clean(path))}
-	}
+	command, args := fileManagerCommand(path)
 	if err := exec.Command(command, args...).Start(); err != nil {
 		return fmt.Errorf("show %q in file manager: %w", path, err)
 	}
 	return nil
+}
+
+func fileManagerCommand(path string) (string, []string) {
+	cleanPath := filepath.Clean(path)
+	switch runtime.GOOS {
+	case "windows":
+		return "explorer.exe", []string{"/select,", cleanPath}
+	case "darwin":
+		return "open", []string{"-R", cleanPath}
+	default:
+		return "xdg-open", []string{filepath.Dir(cleanPath)}
+	}
 }
