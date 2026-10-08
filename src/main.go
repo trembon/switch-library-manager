@@ -1,71 +1,104 @@
 package main
 
 import (
+	"embed"
 	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 
-	"github.com/trembon/switch-library-manager/console"
-	"github.com/trembon/switch-library-manager/settings"
+	"github.com/trembon/switch-library-manager/backend/app"
+	"github.com/trembon/switch-library-manager/backend/console"
+	"github.com/trembon/switch-library-manager/backend/consoleapp"
+	"github.com/trembon/switch-library-manager/backend/settings"
 	"go.uber.org/zap"
 )
 
+//go:embed all:frontend
+var frontendAssets embed.FS
+
 func main() {
+	args, restartParentPID, err := stripRestartParentArgument(os.Args[1:])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to restart Switch Library Manager: %v\n", err)
+		return
+	}
+	if restartParentPID != 0 {
+		if err := waitForRestartParent(restartParentPID, restartParentTimeout); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to restart Switch Library Manager: %v\n", err)
+			return
+		}
+	}
+	os.Args = append([]string{os.Args[0]}, args...)
+
 	exePath, err := os.Executable()
 	if err != nil {
 		fmt.Println("failed to get executable directory, please ensure app has sufficient permissions. aborting")
 		return
 	}
 
-	workingFolder := filepath.Dir(exePath)
-
-	if runtime.GOOS == "darwin" {
-		if strings.Contains(workingFolder, ".app") {
-			appIndex := strings.Index(workingFolder, ".app")
-			sepIndex := strings.LastIndex(workingFolder[:appIndex], string(os.PathSeparator))
-			workingFolder = workingFolder[:sepIndex]
-		}
+	dataFolder, err := resolveRuntimeDataFolder(runtime.GOOS, exePath, os.UserConfigDir)
+	if err != nil {
+		fmt.Printf("failed to prepare application data directory: %v\n", err)
+		return
 	}
 
-	appSettings := settings.ReadSettings(workingFolder)
+	console.InitializeFlags()
+	consoleFlags := console.GetFlagsValues()
 
-	logger := createLogger(workingFolder, appSettings.Debug)
+	preparedSettings, err := settings.PrepareSettings(dataFolder)
+	if err != nil {
+		fmt.Printf("failed to load settings: %v\n", err)
+		return
+	}
+	appSettings := preparedSettings.Settings
+
+	logger := createLogger(dataFolder, appSettings.Logging.Debug)
 
 	defer logger.Sync() // flushes buffer, if any
 	sugar := logger.Sugar()
 
 	sugar.Info("[SLM starts]")
 	sugar.Infof("[Executable: %v]", exePath)
-	sugar.Infof("[Working directory: %v]", workingFolder)
+	sugar.Infof("[Data directory: %v]", dataFolder)
 
-	files, err := AssetDir(workingFolder)
-	if files == nil && err == nil {
-		appSettings.GUI = false
-	}
-
-	console.InitializeFlags()
 	console.LogFlags(sugar)
 
-	consoleFlags := console.GetFlagsValues()
-	useGUI := appSettings.GUI
-	if consoleFlags.Mode.IsSet() {
-		mode := consoleFlags.Mode.String()
-		if mode == "console" {
-			useGUI = false
-		} else if mode == "gui" {
-			useGUI = true
-		}
+	useGUI := resolveGUIMode(appSettings.GUI.Enabled, consoleFlags.Mode.IsSet(), consoleFlags.Mode.String())
+	if shouldAbortConsoleMigration(useGUI, preparedSettings.Migration) {
+		fmt.Printf("settings migration required: the older settings file was preserved as %s; update the new settings.json using docs/settings.md before using console mode\n", preparedSettings.Migration.BackupPath)
+		return
 	}
 
 	if useGUI {
-		CreateGUI(workingFolder, sugar).Start()
+		if err := app.StartWithOptions(dataFolder, sugar, frontendAssets, app.StartupOptions{
+			MigrationInfo: preparedSettings.Migration,
+			Restart:       func() error { return launchReplacementApplication(exePath, os.Getpid()) },
+		}); err != nil {
+			sugar.Error("GUI startup failed", err)
+		}
 	} else {
 		console.FixConsoleOutput()
-		CreateConsole(workingFolder, sugar, consoleFlags).Start()
+		consoleapp.CreateConsole(dataFolder, sugar, consoleFlags).Start()
 	}
+}
+
+func resolveGUIMode(settingsGUIEnabled, modeSet bool, mode string) bool {
+	if !modeSet {
+		return settingsGUIEnabled
+	}
+	if mode == "console" {
+		return false
+	}
+	if mode == "gui" {
+		return true
+	}
+	return settingsGUIEnabled
+}
+
+func shouldAbortConsoleMigration(useGUI bool, migration *settings.MigrationInfo) bool {
+	return !useGUI && migration != nil
 }
 
 func createLogger(workingFolder string, debug bool) *zap.Logger {

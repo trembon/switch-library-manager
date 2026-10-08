@@ -5,8 +5,6 @@ Wails is under active development and will also result in better performance and
 
 With this I am also doing a lot of the changes I have wanted under the years.
 
-Updates are available under the release tab and make sure to read what changes are done, as some are breaking changes from version 1 (like the new settings.json structure)
-
 # Switch library manager
 
 Fork of [Switch Library Manager](https://github.com/giwty/switch-library-manager) created by giwty with continued improvements and changes
@@ -38,63 +36,13 @@ Easily manage your switch game backups
 
 Having a prod.keys file will allow you to ensure the files you have a correctly classified.
 The app will look for the "prod.keys" file in the app folder or under ${HOME}/.switch/
-You can also specify a custom location in the settings.json (see below)
+You can also specify a custom location in [`settings.json`](docs/settings.md).
 
 Note: Only the header_key, and the key_area_key_application_XX keys are required.
 
 ## Settings
 
-During the App first launch a "settings.json" file will be created, that allows for granular control over the Apps execution.
-
-You can customize the folder/file re-naming, as well as turn on/off features, and set specific title ids of DLC or updates to ignore.
-
-```json
-{
- "versions_json_url": "https://raw.githubusercontent.com/blawar/titledb/master/versions.json",
- "versions_etag": "W/\"c3f5ecb3392d61:0\"",
- "titles_json_url": "https://tinfoil.io/repo/db/titles.json",
- "titles_etag": "W/\"4a4fcc163a92d61:0\"",
- "prod_keys": "",
- "folder": "",
- "scan_folders": [],
- "gui": false,
- "debug": false, # Deprecated, no longer works
- "check_for_missing_updates": true,
- "check_for_missing_dlc": true,
- "hide_missing_games": false, # hides the missing games tab
- "hide_demo_games": false, # hide demo games from the list on the missing games tab
- "organize_options": {
-  "create_folder_per_game": false,
-  "dlc_folder": "", # ex change to DLC to place DLC files in a separate folder
-  "updates_folder": "", # ex change to Updates to place update folder in a separate folder
-  "rename_files": false,
-  "delete_empty_folders": false,
-  "delete_old_update_files": false,
-  "folder_name_template": "{TITLE_NAME}",
-  "switch_safe_file_names": true,
-  "file_name_template": "{TITLE_NAME} ({DLC_NAME})[{TITLE_ID}][v{VERSION}]",
-  "process_when_missing_base_game": false # if you want to organize updates and dlcs without having the base game present
- },
- "scan_recursively": true,
- "gui_page_size": 100,
- "ignore_dlc_updates": false,
- "ignore_dlc_title_ids": [], # Enter as a list of string, e.g. ["1234567890ABCDEF", "1234567890ABCDEE", "1234567890ABCDFF"]
- "ignore_update_title_ids": [] # Enter as a list of string, e.g. ["1234567890ABCDEF", "1234567890ABCDEE", "1234567890ABCDFF"]
- "ignore_file_types": [] # List of file types that should ignore the 'file type is not supported message', e.g. ["txt"]
-}
-```
-
-## Naming template
-
-The following template elements are supported:
-
-- {TITLE_NAME} - game name
-- {TITLE_ID} - title id
-- {VERSION} - version id (only applicable to files)
-- {VERSION_TXT} - version number (like 1.0.0) (only applicable to files)
-- {REGION} - region
-- {TYPE} - impacts DLCs/updates, will appear as ["UPD","DLC"]
-- {DLC_NAME} - DLC name (only applicable to DLCs)
+The application creates a current `settings.json` on first launch. You can customize paths, scanning, organization, missing-content checks, and GUI behavior there. See the [complete settings reference](docs/settings.md) for the format, cache behavior, and migration instructions, and the [naming template guide](docs/naming.md) for file and folder naming options.
 
 ## Usage
 
@@ -102,51 +50,73 @@ The following template elements are supported:
 
 - Extract the zip file
 - Double click the Exe file
-- If you want to use command line mode, update the settings.json with `'GUI':false`
+- If you want to use command line mode, update `settings.json` with `"gui": {"enabled": false}`, or pass `-m console`
   - Open `cmd`
   - Run `switch-library-manager.exe`
 
-### macOS or Linux
+### macOS
 
 - Extract the zip file
 - Double click the App file
-- If you want to use command line mode, update the settings.json with `'GUI':false`
+- If you want to use command line mode, update `settings.json` with `"gui": {"enabled": false}`, or pass `-m console`
   - Open your Terminal
   - `cd` to the folder containing `switch-library-manager`
   - `chmod +x switch-library-manager` to make it executable
-  - Run `./switch-library-manager'
+  - Run `./switch-library-manager`
+
+### Linux
+
+- The `linux-amd64-webkit40` archive is built on Ubuntu 22.04 and requires WebKitGTK 4.0. The `linux-amd64-webkit41` archive is built on Ubuntu 24.04 and requires WebKitGTK 4.1; it may also need newer system libraries than older distributions provide.
+- Install the matching WebKitGTK runtime library and GTK 3. Ubuntu 22.04 example: `sudo apt install libwebkit2gtk-4.0-37`. Ubuntu 24.04 example: `sudo apt install libwebkit2gtk-4.1-0`. These packages bring in their runtime dependencies, including GTK 3.
+- Extract the archive, open a terminal in its folder, and run `chmod +x switch-library-manager` followed by `./switch-library-manager`.
+- The executable also runs console mode (`./switch-library-manager -m console`) and has the same WebKitGTK runtime requirement.
+
+The release archives are named `switch-library-manager-v<VERSION>.linux-amd64-webkit40.tar.gz` and `switch-library-manager-v<VERSION>.linux-amd64-webkit41.tar.gz`; the suffix identifies the required WebKitGTK API version.
 
 ### Console parameters
 
-NOTE: parameters are only usable in command line mode, except the parameter -m (mode) which will override the gui setting.
+NOTE: parameters are only usable in command line mode, except the parameter -m (mode) which will override `gui.enabled`.
 
 | Name           | Flag | Value       | Description                                                                                          |
 | -------------- | ---- | ----------- | ---------------------------------------------------------------------------------------------------- |
-| Mode           | -m   | console/gui | Which mode to start the application in, overrides **gui** in settings.json                           |
-| NSP Folder     | -    | _path_      | Path to the NSP folder, overrides **folder** in settings.json                                        |
-| Recursive scan | -r   | true/false  | If recursive scan should be used for the NSP folder, overrides **scan_recursively** in settings.json |
-| Export CSV     | -e   | _path_      | Which folder to output missing_updates, missing_dlcs and issues in CSV format                        |
+| Mode           | -m   | console/gui | Which mode to start the application in, overrides **gui.enabled** in settings.json                 |
+| NSP Folder     | -    | _path_      | Path to the NSP folder, overrides **paths.library_folder** in settings.json                        |
+| Recursive scan | -r   | true/false  | If recursive scan should be used for the NSP folder, overrides **scan.recursive** in settings.json |
+| Export CSV     | -e   | _path_      | Which folder to output missing_updates, missing_dlcs and issues in CSV format                       |
 
 ## Building
 
-### Windows
-- Install and setup Go
-- Clone the repo: `git clone https://github.com/trembon/switch-library-manager.git`
-- Move into the src folder `cd src`
-- Get the bundler `go get -u github.com/asticode/go-astilectron-bundler/...`
-- Install bundler `go install github.com/asticode/go-astilectron-bundler/astilectron-bundler`
-- Copy bundler binary to the src folder `copy %USERPROFILE%\go\bin\astilectron-bundler.exe .`
-- Execute `astilectron-bundler.exe`
-- Binaries will be available under output
+### Source layout
 
-### macOS or Linux
-- Install and setup Go
+- `src/frontend` contains the embedded vanilla JavaScript frontend and generated Wails bindings.
+- `src/backend/app` contains Wails GUI orchestration and frontend DTOs.
+- `src/backend/consoleapp` contains the command-line workflow.
+- `src/backend/db`, `fileio`, `process`, `settings`, and `switchfs` contain reusable domain logic.
+- `src/assets/icons` contains source application icons; Wails build assets are generated under `src/build`.
+
+### Windows, macOS, or Linux
+
+- Install and set up Go and the Wails CLI: `go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0`
 - Clone the repo: `git clone https://github.com/trembon/switch-library-manager.git`
-- Move into the src folder `cd src`
-- Install the bundler `go install github.com/asticode/go-astilectron-bundler/astilectron-bundler@v0.7.12`
-- Copy bundler binary to the source folder `cd switch-library-manager` and then `mv $HOME/go/bin/astilectron-bundler .`
-- Execute `./astilectron-bundler`
-- Binaries will be available under output
+- From the repository root, prepare the Wails build assets:
+  - PowerShell: `pwsh -File .\scripts\prepare-wails-build-assets.ps1`
+  - Bash/Git Bash: `bash scripts/prepare-wails-build-assets.sh`
+- Move into the Go/Wails project: `cd switch-library-manager/src`
+- Generate the Wails bindings: `wails generate module`
+- Build the application: `wails build`
+- Binaries will be available under `src/build/bin`
+
+#### Linux WebKitGTK variants
+
+From the `src` directory, install the build dependencies matching the selected version. For WebKitGTK 4.0, use `libgtk-3-dev` and `libwebkit2gtk-4.0-dev`, then run `wails generate module` and `wails build -platform linux/amd64 -webview2 embed`. For WebKitGTK 4.1, use `libgtk-3-dev` and `libwebkit2gtk-4.1-dev`, then run `wails generate module -tags webkit2_41` and `wails build -platform linux/amd64 -webview2 embed -tags webkit2_41`.
+
+### Visual Studio Code debugging
+
+- Install the Go and Wails extensions and ensure `wails` is available on `PATH`.
+- Open the repository root in VS Code and press `F5`.
+- Select `Wails: Debug Switch Library Manager`. The launch configuration builds with debug symbols and starts the combined executable in GUI mode.
+
+The same executable still supports the console workflow. Run `src/build/bin/switch-library-manager.exe -m console` on Windows, or `./src/build/bin/switch-library-manager -m console` on macOS/Linux.
 
 ## Thanks
 

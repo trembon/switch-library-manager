@@ -1,0 +1,1480 @@
+package db
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/trembon/switch-library-manager/backend/settings"
+	"github.com/trembon/switch-library-manager/backend/switchfs"
+	bolt "go.etcd.io/bbolt"
+)
+
+type progressRecorder struct {
+	mu      sync.Mutex
+	updates []string
+}
+
+func (p *progressRecorder) UpdateProgress(_ int, _ int, message string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.updates = append(p.updates, message)
+}
+
+func resetDBSettings(t *testing.T, baseFolder string, configure func(*settings.AppSettings)) {
+	t.Helper()
+	appSettings := &settings.AppSettings{Paths: settings.PathSettings{ScanFolders: []string{}}, Scan: settings.ScanSettings{IgnoreFileTypes: []string{}}}
+	configure(appSettings)
+	settings.SaveSettings(appSettings, baseFolder)
+}
+
+func TestCreateSwitchTitleDBGroupsTitlesAndVersions(t *testing.T) {
+	titles := `{
+		"0100000000010000":{"id":"0100000000010000","name":"Game","releaseDate":20240102},
+		"0100000000010800":{"id":"0100000000010800","name":"Update"},
+		"0100000000011001":{"id":"0100000000011001","name":"DLC"}
+	}`
+	versions := `{"0100000000010000":{"1":"2024-01-01","2":"2024-02-01"}}`
+
+	db, err := CreateSwitchTitleDB(strings.NewReader(titles), strings.NewReader(versions))
+	if err != nil {
+		t.Fatal(err)
+	}
+	game, ok := db.TitlesMap["0100000000010"]
+	if !ok {
+		t.Fatalf("group not found: %#v", db.TitlesMap)
+	}
+	if game.Attributes.Name != "Game" || game.Attributes.ParsedReleaseDate != "2024-01-02" {
+		t.Fatalf("unexpected base attributes: %#v", game.Attributes)
+	}
+	if len(game.Updates) != 2 || game.Updates[2] != "2024-02-01" {
+		t.Fatalf("unexpected updates: %#v", game.Updates)
+	}
+	if game.Dlc["0100000000011001"].Name != "DLC" {
+		t.Fatalf("unexpected DLC: %#v", game.Dlc)
+	}
+}
+
+func TestCreateSwitchTitleDBSkipsUnsupportedIDAndKeepsSupportedTitles(t *testing.T) {
+	titles := `{"0100000000010000":{"id":"0100000000010000","name":"Game"},"0100000000000816":{"id":"0100000000000816","name":"Unsupported DLC"}}`
+	versions := `{"0100000000010000":{"1":"2024-01-01"},"0100000000000816":{"1":"2024-01-01"}}`
+
+	if err := ValidateTitlesJSON([]byte(titles)); err != nil {
+		t.Fatalf("titles validator rejected an unsupported ID: %v", err)
+	}
+	if err := ValidateVersionsJSON([]byte(versions)); err != nil {
+		t.Fatalf("versions validator rejected an unsupported ID: %v", err)
+	}
+
+	database, err := CreateSwitchTitleDB(strings.NewReader(titles), strings.NewReader(versions))
+	if err != nil {
+		t.Fatalf("create title database: %v", err)
+	}
+	if len(database.TitlesMap) != 1 {
+		t.Fatalf("unsupported ID affected title grouping: %#v", database.TitlesMap)
+	}
+	game, ok := database.TitlesMap["0100000000010"]
+	if !ok || game.Attributes.Name != "Game" {
+		t.Fatalf("supported title was not retained: %#v", database.TitlesMap)
+	}
+}
+
+func TestCreateSwitchTitleDBRejectsInvalidInput(t *testing.T) {
+	tests := []struct {
+		name   string
+		titles string
+	}{
+		{name: "bad titles JSON", titles: "{"},
+		{name: "bad versions JSON", titles: `{"0100000000010000":{}}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			versions := strings.NewReader(`{}`)
+			if tt.name == "bad versions JSON" {
+				versions = strings.NewReader("[")
+			}
+			_, err := CreateSwitchTitleDB(strings.NewReader(tt.titles), versions)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	}
+	if _, err := titleIDPrefix("0100000000010001"); err == nil {
+		t.Fatal("expected invalid DLC group nibble error")
+	}
+}
+
+func TestCreateSwitchTitleDBSkipsUnsupportedTitleIDs(t *testing.T) {
+	titles := `{
+		"0100000000000816":{"name":"Unsupported system item"},
+		"0100000000010000":{"name":"Game"}
+	}`
+
+	db, err := CreateSwitchTitleDB(strings.NewReader(titles), strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := db.TitlesMap["010000000000"]; ok {
+		t.Fatal("unsupported title ID was added to the database")
+	}
+	if game, ok := db.TitlesMap["0100000000010"]; !ok || game.Attributes.Name != "Game" {
+		t.Fatalf("valid title was not loaded: %#v", db.TitlesMap)
+	}
+}
+
+func TestFilenameParsing(t *testing.T) {
+	if version, err := parseVersionFromFileName("game [v123].nsp"); err != nil || *version != 123 {
+		t.Fatalf("version with v: %v, %v", version, err)
+	}
+	if version, err := parseVersionFromFileName("game [V7].nsp"); err != nil || *version != 7 {
+		t.Fatalf("version with V: %v, %v", version, err)
+	}
+	if version, err := parseVersionFromFileName("game [0].nsp"); err != nil || *version != 0 {
+		t.Fatalf("version without v: %v, %v", version, err)
+	}
+	if _, err := parseVersionFromFileName("game.nsp"); err == nil {
+		t.Fatal("expected missing version error")
+	}
+	if id, err := parseTitleIdFromFileName("Game [0100000000010000].nsp"); err != nil || *id != "0100000000010000" {
+		t.Fatalf("title ID: %v, %v", id, err)
+	}
+	if _, err := parseTitleIdFromFileName("Game [010000000001000G].nsp"); err == nil {
+		t.Fatal("expected invalid title ID error")
+	}
+	if ParseTitleNameFromFileName("Game [id][v1].nsp") != "Game " || ParseTitleNameFromFileName("Game.nsp") != "Game.nsp" {
+		t.Fatal("unexpected title name parsing")
+	}
+}
+
+func TestScanFolderAndClassifyFilenameFallback(t *testing.T) {
+	base := t.TempDir()
+	library := filepath.Join(base, "library")
+	if err := os.Mkdir(library, 0755); err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(library, "nested")
+	if err := os.Mkdir(nested, 0755); err != nil {
+		t.Fatal(err)
+	}
+	resetDBSettings(t, base, func(s *settings.AppSettings) {
+		s.Scan.IgnoreFileTypes = []string{".ignored"}
+	})
+	files := []string{
+		"Base [0100000000010000][v1].nsp",
+		"Duplicate Base [0100000000010000][v1].nsp",
+		"Update New [0100000000010800][v2].nsp",
+		"Update Old [0100000000010800][v1].nsp",
+		"Update Duplicate [0100000000010800][v2].nsp",
+		"DLC New [0100000000011001][v3].nsp",
+		"DLC Old [0100000000011001][v2].nsp",
+		"ignored.ignored",
+		"unsupported.txt",
+		"unknown.nsp",
+	}
+	for _, name := range files {
+		if err := os.WriteFile(filepath.Join(library, name), []byte("synthetic"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(nested, "Nested [0100000000020000][v1].nsp"), []byte("synthetic"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	manager, err := NewLocalSwitchDBManager(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	progress := &progressRecorder{}
+	local, err := manager.CreateLocalSwitchFilesDB([]string{library}, progress, false, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	game := local.TitlesMap["0100000000010"]
+	if game == nil || !game.BaseExist || game.LatestUpdate != 2 || len(game.Dlc) != 1 {
+		t.Fatalf("unexpected local classification: %#v", game)
+	}
+	if game.File.Metadata.TitleId != "0100000000010000" || game.Updates[2].Metadata.Version != 2 {
+		t.Fatalf("unexpected fallback metadata: %#v", game)
+	}
+	if len(local.TitlesMap) != 1 || local.NumFiles != len(files) {
+		t.Fatalf("unexpected scan result: %#v, files=%d", local.TitlesMap, local.NumFiles)
+	}
+	assertSkippedReason(t, local.Skipped, "Duplicate Base", REASON_DUPLICATE)
+	assertSkippedReason(t, local.Skipped, "Update Old", REASON_OLD_UPDATE)
+	assertSkippedReason(t, local.Skipped, "Update New", REASON_DUPLICATE)
+	assertSkippedReason(t, local.Skipped, "DLC Old", REASON_OLD_UPDATE)
+	assertSkippedReason(t, local.Skipped, "unsupported.txt", REASON_UNSUPPORTED_TYPE)
+	assertSkippedReason(t, local.Skipped, "unknown.nsp", REASON_UNRECOGNISED)
+	if len(local.CleanupCandidates) != 4 {
+		t.Fatalf("verified cleanup candidates = %#v, want the four standalone duplicate/old files", local.CleanupCandidates)
+	}
+	if _, ok := findSkipped(local.Skipped, "ignored.ignored"); ok {
+		t.Fatal("ignored extension was recorded")
+	}
+	if len(progress.updates) == 0 {
+		t.Fatal("expected progress updates")
+	}
+	recursive, err := manager.CreateLocalSwitchFilesDB([]string{library}, nil, true, true)
+	if err != nil || recursive.NumFiles != len(files)+1 || recursive.TitlesMap["0100000000020"] == nil {
+		t.Fatalf("recursive scan: result=%#v err=%v", recursive, err)
+	}
+	manager.Close()
+	manager, err = NewLocalSwitchDBManager(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	cached, err := manager.CreateLocalSwitchFilesDB([]string{filepath.Join(base, "does-not-exist")}, nil, false, false)
+	if err != nil || cached.NumFiles != len(files)+1 {
+		t.Fatalf("cached scan: result=%#v err=%v", cached, err)
+	}
+	if len(cached.CleanupCandidates) != 0 {
+		t.Fatalf("cached scan reused destructive cleanup candidates: %#v", cached.CleanupCandidates)
+	}
+}
+
+func TestScannerDeduplicatesPhysicalFilesAcrossOverlappingRoots(t *testing.T) {
+	base := t.TempDir()
+	library := filepath.Join(base, "library")
+	nested := filepath.Join(library, "nested")
+	if err := os.MkdirAll(nested, 0755); err != nil {
+		t.Fatal(err)
+	}
+	fileName := "Game [0100000000010000][v1].nsp"
+	if err := os.WriteFile(filepath.Join(nested, fileName), []byte("synthetic game file"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	resetDBSettings(t, base, func(*settings.AppSettings) {})
+	manager, err := NewLocalSwitchDBManager(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	local, err := manager.CreateLocalSwitchFilesDB([]string{library, nested}, nil, true, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if local.NumFiles != 1 {
+		t.Fatalf("physical files scanned = %d, want 1", local.NumFiles)
+	}
+	game := local.TitlesMap["0100000000010"]
+	if game == nil || !game.BaseExist {
+		t.Fatalf("overlapping roots lost the base record: %#v", local.TitlesMap)
+	}
+	if len(local.Skipped) != 0 {
+		t.Fatalf("overlapping roots created false duplicate issues: %#v", local.Skipped)
+	}
+}
+
+func TestScanFolderSkipsSubfolderTraversalUnlessRecursive(t *testing.T) {
+	root := t.TempDir()
+	nested := filepath.Join(root, "a-nested")
+	deep := filepath.Join(nested, "deeper")
+	if err := os.MkdirAll(deep, 0755); err != nil {
+		t.Fatal(err)
+	}
+	rootGame := filepath.Join(root, "z-root.nsp")
+	nestedGame := filepath.Join(nested, "nested.nsp")
+	deepGame := filepath.Join(deep, "deep.nsp")
+	for _, path := range []string{rootGame, nestedGame, deepGame} {
+		if err := os.WriteFile(path, []byte("synthetic fixture"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, test := range []struct {
+		name      string
+		folders   []string
+		recursive bool
+		want      []string
+	}{
+		{name: "nonrecursive", folders: []string{root}, want: []string{rootGame}},
+		{name: "nonrecursive explicit subfolder", folders: []string{root, nested}, want: []string{rootGame, nestedGame}},
+		{name: "recursive", folders: []string{root}, recursive: true, want: []string{rootGame, nestedGame, deepGame}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			files := []ExtendedFileInfo{}
+			seenFiles := map[string][]os.FileInfo{}
+			visited := map[string]bool{}
+			walk := func(folder string, fn filepath.WalkFunc) error {
+				return walkDirWithFileInfo(folder, func(path string, info os.FileInfo, err error) error {
+					visited[path] = true
+					return fn(path, info, err)
+				})
+			}
+			for _, folder := range test.folders {
+				if err := scanFolderWithWalker(folder, test.recursive, &files, nil, seenFiles, walk); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got := map[string]bool{}
+			for _, file := range files {
+				got[filepath.Join(file.BaseFolder, file.FileName)] = true
+			}
+			if len(files) != len(test.want) {
+				t.Fatalf("scanned files = %#v, want paths %#v", files, test.want)
+			}
+			for _, path := range test.want {
+				if !got[path] {
+					t.Errorf("scanned files %#v do not include %q", got, path)
+				}
+			}
+			if !test.recursive {
+				for path := range visited {
+					allowed := false
+					for _, folder := range test.folders {
+						if path == folder || filepath.Dir(path) == folder {
+							allowed = true
+							break
+						}
+					}
+					if !allowed {
+						t.Errorf("nonrecursive scan visited descendant %q", path)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestScanFolderContinuesAfterDeniedSubfolders(t *testing.T) {
+	root := t.TempDir()
+	denied := filepath.Join(root, "denied")
+	readable := filepath.Join(root, "readable")
+	for _, folder := range []string{denied, readable} {
+		if err := os.Mkdir(folder, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rootGame := filepath.Join(root, "Root game [0100000000010000][v1].nsp")
+	deniedGame := filepath.Join(denied, "Hidden game [0100000000020000][v1].nsp")
+	nestedGame := filepath.Join(readable, "Nested game [0100000000030000][v1].nsp")
+	for _, path := range []string{rootGame, deniedGame, nestedGame} {
+		if err := os.WriteFile(path, []byte("synthetic filename-only fixture"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rootInfo, err := os.Stat(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deniedInfo, err := os.Stat(denied)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readableInfo, err := os.Stat(readable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootGameInfo, err := os.Stat(rootGame)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nestedGameInfo, err := os.Stat(nestedGame)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, test := range []struct {
+		name      string
+		recursive bool
+		want      []string
+	}{
+		{name: "recursive", recursive: true, want: []string{rootGame, nestedGame}},
+		{name: "nonrecursive", want: []string{rootGame}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			files := []ExtendedFileInfo{}
+			walkWithDeniedFolder := func(_ string, fn filepath.WalkFunc) error {
+				entries := []struct {
+					path string
+					info os.FileInfo
+					err  error
+				}{
+					{path: root, info: rootInfo},
+					{path: denied, info: deniedInfo, err: fmt.Errorf("read directory: %w", os.ErrPermission)},
+					{path: rootGame, info: rootGameInfo},
+					{path: readable, info: readableInfo},
+					{path: nestedGame, info: nestedGameInfo},
+				}
+				skippedFolder := ""
+				for _, entry := range entries {
+					if skippedFolder != "" && strings.HasPrefix(entry.path, skippedFolder+string(os.PathSeparator)) {
+						continue
+					}
+					if err := fn(entry.path, entry.info, entry.err); err != nil {
+						if err == filepath.SkipDir && entry.info != nil && entry.info.IsDir() {
+							skippedFolder = entry.path
+							continue
+						}
+						return err
+					}
+				}
+				return nil
+			}
+			if err := scanFolderWithWalker(root, test.recursive, &files, nil, map[string][]os.FileInfo{}, walkWithDeniedFolder); err != nil {
+				t.Fatalf("scan returned error: %v", err)
+			}
+			got := make(map[string]bool, len(files))
+			for _, file := range files {
+				got[filepath.Join(file.BaseFolder, file.FileName)] = true
+			}
+			if len(got) != len(test.want) {
+				t.Fatalf("scanned files = %#v, want paths %#v", got, test.want)
+			}
+			for _, path := range test.want {
+				if !got[path] {
+					t.Errorf("scanned files %#v do not include %q", got, path)
+				}
+			}
+			if got[deniedGame] {
+				t.Fatal("scan included a file from the denied folder")
+			}
+		})
+	}
+}
+
+func TestScanFolderKeepsRootAndNonPermissionErrorsFatal(t *testing.T) {
+	root := t.TempDir()
+	rootInfo, err := os.Stat(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	child := filepath.Join(root, "child")
+	if err := os.Mkdir(child, 0755); err != nil {
+		t.Fatal(err)
+	}
+	childInfo, err := os.Stat(child)
+	if err != nil {
+		t.Fatal(err)
+	}
+	errDeviceIO := errors.New("device I/O error")
+
+	for _, test := range []struct {
+		name string
+		walk func(string, filepath.WalkFunc) error
+		want error
+	}{
+		{
+			name: "root permission error",
+			walk: func(path string, fn filepath.WalkFunc) error {
+				return fn(path, nil, fmt.Errorf("read root: %w", os.ErrPermission))
+			},
+			want: os.ErrPermission,
+		},
+		{
+			name: "non-permission child error",
+			walk: func(path string, fn filepath.WalkFunc) error {
+				if err := fn(path, rootInfo, nil); err != nil {
+					return err
+				}
+				return fn(child, childInfo, fmt.Errorf("read child: %w", errDeviceIO))
+			},
+			want: errDeviceIO,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			files := []ExtendedFileInfo{}
+			err := scanFolderWithWalker(root, true, &files, nil, map[string][]os.FileInfo{}, test.walk)
+			if err == nil {
+				t.Fatal("expected scan error")
+			}
+			if !errors.Is(err, test.want) {
+				t.Fatalf("error = %v, want an error wrapping %v", err, test.want)
+			}
+		})
+	}
+}
+
+func TestClearLocalLibrarySnapshotForcesNextCachedReadToRescan(t *testing.T) {
+	base := t.TempDir()
+	library := filepath.Join(base, "library")
+	if err := os.MkdirAll(library, 0755); err != nil {
+		t.Fatal(err)
+	}
+	resetDBSettings(t, base, func(*settings.AppSettings) {})
+	firstPath := filepath.Join(library, "First [0100000000010000][v0].nsp")
+	if err := os.WriteFile(firstPath, []byte("first"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := NewLocalSwitchDBManager(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	if err := manager.ClearLocalLibrarySnapshot(); err != nil {
+		t.Fatalf("ClearLocalLibrarySnapshot() before first scan = %v", err)
+	}
+	if _, err := manager.CreateLocalSwitchFilesDB([]string{library}, nil, false, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.ClearLocalLibrarySnapshot(); err != nil {
+		t.Fatalf("ClearLocalLibrarySnapshot() = %v", err)
+	}
+	if err := os.Remove(firstPath); err != nil {
+		t.Fatal(err)
+	}
+	secondPath := filepath.Join(library, "Second [0100000000020000][v0].nsp")
+	if err := os.WriteFile(secondPath, []byte("second"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	local, err := manager.CreateLocalSwitchFilesDB([]string{library}, nil, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if local.NumFiles != 1 || local.TitlesMap["0100000000020"] == nil || local.TitlesMap["0100000000010"] != nil {
+		t.Fatalf("cached read reused the cleared snapshot: %#v", local)
+	}
+}
+
+func TestScannerPropagatesCorruptSkippedAndTitleSnapshots(t *testing.T) {
+	for _, corruptKey := range []string{"skipped", "titles"} {
+		t.Run(corruptKey, func(t *testing.T) {
+			base := t.TempDir()
+			resetDBSettings(t, base, func(*settings.AppSettings) {})
+			manager, err := NewLocalSwitchDBManager(base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer manager.Close()
+			entries := map[string]interface{}{
+				"files":   []ExtendedFileInfo{},
+				"skipped": map[ExtendedFileInfo]SkippedFile{},
+				"titles":  map[string]*SwitchGameFiles{},
+			}
+			entries[corruptKey] = "not a scan map"
+			if err := manager.db.addEntries(DB_TABLE_LOCAL_LIBRARY, entries); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := manager.CreateLocalSwitchFilesDB(nil, nil, false, false); err == nil {
+				t.Fatalf("CreateLocalSwitchFilesDB() accepted corrupt %s snapshot", corruptKey)
+			}
+		})
+	}
+}
+
+func TestClearScanDataToleratesMissingMetadataBucket(t *testing.T) {
+	manager, err := NewLocalSwitchDBManager(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	if err := manager.ClearScanData(); err != nil {
+		t.Fatalf("ClearScanData() without an existing cache = %v", err)
+	}
+}
+
+func TestBuildCleanupCandidatesRejectsUncertainAndSplitFiles(t *testing.T) {
+	base := t.TempDir()
+	keeperPath := filepath.Join(base, "keeper.nsp")
+	for _, name := range []string{"split.nsp.00", "multi.nsp", "unknown.nsp", "invalid-id.nsp", "unmapped-id.nsp", "directory.nsp", "unsupported.nsp"} {
+		if err := os.WriteFile(filepath.Join(base, name), []byte(name), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	keeper := ExtendedFileInfo{BaseFolder: base, FileName: filepath.Base(keeperPath)}
+	files := []ExtendedFileInfo{
+		{BaseFolder: base, FileName: "split.nsp.00"},
+		{BaseFolder: base, FileName: "multi.nsp"},
+		{BaseFolder: base, FileName: "unknown.nsp"},
+		{BaseFolder: base, FileName: "invalid-id.nsp"},
+		{BaseFolder: base, FileName: "unmapped-id.nsp"},
+		{BaseFolder: base, FileName: "directory.nsp", IsDir: true},
+		{BaseFolder: base, FileName: "unsupported.nsp"},
+	}
+	id := "0100000000010000"
+	otherID := "010000000002A001"
+	contents := map[ExtendedFileInfo]map[string]*switchfs.ContentMetaAttributes{
+		files[0]: {id: {TitleId: id}},
+		files[1]: {
+			id:                 {TitleId: id},
+			"0100000000011001": {TitleId: "0100000000011001"},
+		},
+		files[2]: {id: nil},
+		files[3]: {"bad": {TitleId: "bad"}},
+		files[4]: {otherID: {TitleId: otherID}},
+		files[5]: {id: {TitleId: id}},
+		files[6]: {id: {TitleId: id}},
+	}
+	titles := map[string]*SwitchGameFiles{"0100000000010": {
+		BaseExist: true,
+		File:      SwitchFileInfo{ExtendedInfo: keeper, Metadata: &switchfs.ContentMetaAttributes{TitleId: id}},
+	}}
+	skipped := map[ExtendedFileInfo]SkippedFile{
+		files[0]: {ReasonCode: REASON_DUPLICATE},
+		files[1]: {ReasonCode: REASON_DUPLICATE},
+		files[2]: {ReasonCode: REASON_DUPLICATE},
+		files[3]: {ReasonCode: REASON_DUPLICATE},
+		files[4]: {ReasonCode: REASON_DUPLICATE},
+		files[5]: {ReasonCode: REASON_DUPLICATE},
+		files[6]: {ReasonCode: REASON_UNSUPPORTED_TYPE},
+	}
+	if candidates := buildCleanupCandidates(files, contents, titles, skipped); len(candidates) != 0 {
+		t.Fatalf("uncertain and split files became cleanup candidates: %#v", candidates)
+	}
+	if _, ok := cleanupReplacement(&SwitchGameFiles{}, &switchfs.ContentMetaAttributes{TitleId: "0100000000011001"}, ExtendedFileInfo{}); ok {
+		t.Fatal("cleanupReplacement() accepted a DLC with no scanned keeper")
+	}
+}
+
+func TestSplitPartNameDetectionAndEmptyPhysicalPaths(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		want bool
+	}{
+		{name: "", want: false},
+		{name: "game.00", want: true},
+		{name: "game.01", want: false},
+	} {
+		if got := isSplitFilePart(test.name); got != test.want {
+			t.Errorf("isSplitFilePart(%q) = %t, want %t", test.name, got, test.want)
+		}
+	}
+	if sameExtendedFilePath(ExtendedFileInfo{}, ExtendedFileInfo{BaseFolder: t.TempDir(), FileName: "file.nsp"}) {
+		t.Fatal("sameExtendedFilePath() accepted an empty filename")
+	}
+}
+
+func TestScannerCanIgnoreUnsupportedFileTypes(t *testing.T) {
+	base := t.TempDir()
+	resetDBSettings(t, base, func(s *settings.AppSettings) {
+		s.Scan.IgnoreFileTypes = []string{"ignored"}
+		s.Scan.IgnoreUnsupportedFileTypes = true
+	})
+	manager, err := NewLocalSwitchDBManager(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	files := []ExtendedFileInfo{
+		{FileName: "sidecar.txt", BaseFolder: base},
+		{FileName: "manually-ignored.ignored", BaseFolder: base},
+		{FileName: "unknown.nsp", BaseFolder: base},
+	}
+	skipped := map[ExtendedFileInfo]SkippedFile{}
+	manager.processLocalFiles(files, nil, map[string]*SwitchGameFiles{}, skipped)
+
+	if _, ok := findSkipped(skipped, "sidecar.txt"); ok {
+		t.Fatal("unsupported extension should be omitted when configured")
+	}
+	if _, ok := findSkipped(skipped, "manually-ignored.ignored"); ok {
+		t.Fatal("explicitly ignored extension should remain omitted")
+	}
+	assertSkippedReason(t, skipped, "unknown.nsp", REASON_UNRECOGNISED)
+}
+
+func assertSkippedReason(t *testing.T, skipped map[ExtendedFileInfo]SkippedFile, name string, reason int) {
+	t.Helper()
+	entry, ok := findSkipped(skipped, name)
+	if !ok || entry.ReasonCode != reason {
+		t.Fatalf("%q missing or reason=%d, want %d; skipped=%#v", name, entry.ReasonCode, reason, skipped)
+	}
+}
+
+func findSkipped(skipped map[ExtendedFileInfo]SkippedFile, name string) (SkippedFile, bool) {
+	for file, entry := range skipped {
+		if file.FileName == name || strings.HasPrefix(file.FileName, name+" ") {
+			return entry, true
+		}
+	}
+	return SkippedFile{}, false
+}
+
+func TestPersistenceRoundTripAndCacheClearing(t *testing.T) {
+	base := t.TempDir()
+	manager, err := NewLocalSwitchDBManager(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := map[string]int{"answer": 42}
+	if err := manager.db.AddEntry("test", "value", value); err != nil {
+		t.Fatal(err)
+	}
+	var loaded map[string]int
+	if err := manager.db.GetEntry("test", "value", &loaded); err != nil {
+		t.Fatal(err)
+	}
+	if loaded["answer"] != 42 {
+		t.Fatalf("loaded value: %#v", loaded)
+	}
+	if err := manager.db.ClearTable("test"); err != nil {
+		t.Fatal(err)
+	}
+	var cleared map[string]int
+	if err := manager.db.GetEntry("test", "value", &cleared); err != nil {
+		t.Fatal(err)
+	}
+	if cleared != nil {
+		t.Fatalf("cleared value was returned: %#v", cleared)
+	}
+	if err := manager.db.AddEntry(DB_TABLE_FILE_SCAN_METADATA, "cache", value); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.ClearScanData(); err != nil {
+		t.Fatal(err)
+	}
+	manager.Close()
+
+	reopened, err := NewLocalSwitchDBManager(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	var missing map[string]int
+	if err := reopened.db.GetEntry("test", "value", &missing); err != nil {
+		t.Fatal(err)
+	}
+	if missing != nil {
+		t.Fatalf("cleared value survived reopen: %#v", missing)
+	}
+	var clearedCache map[string]int
+	if err := reopened.db.GetEntry(DB_TABLE_FILE_SCAN_METADATA, "cache", &clearedCache); err != nil {
+		t.Fatal(err)
+	}
+	if clearedCache != nil {
+		t.Fatalf("cleared cache survived reopen: %#v", clearedCache)
+	}
+	if invalid, err := NewPersistentDB(filepath.Join(base, "missing-parent")); err == nil || invalid != nil {
+		t.Fatalf("expected open error for missing parent: db=%v err=%v", invalid, err)
+	}
+}
+
+func TestAddEntriesEncodesSnapshotBeforeWriting(t *testing.T) {
+	base := t.TempDir()
+	database, err := NewPersistentDB(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	if err := database.addEntries("atomic", map[string]interface{}{"current": "saved"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.addEntries("atomic", map[string]interface{}{
+		"current": "replacement",
+		"invalid": func() {},
+	}); err == nil {
+		t.Fatal("expected unsupported gob value to fail encoding")
+	}
+
+	var current string
+	if err := database.GetEntry("atomic", "current", &current); err != nil {
+		t.Fatal(err)
+	}
+	if current != "saved" {
+		t.Fatalf("failed snapshot write changed existing value to %q", current)
+	}
+}
+
+func TestFreshLibraryScanPersistsSnapshotAtomicallyAndKeepsDeepCache(t *testing.T) {
+	base := t.TempDir()
+	primary := filepath.Join(base, "primary")
+	additional := filepath.Join(base, "additional")
+	nested := filepath.Join(additional, "nested")
+	for _, folder := range []string{primary, nested} {
+		if err := os.MkdirAll(folder, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resetDBSettings(t, base, func(settingsObj *settings.AppSettings) {
+		settingsObj.Paths.LibraryFolder = primary
+		settingsObj.Paths.ScanFolders = []string{additional}
+		settingsObj.Scan.Recursive = true
+	})
+
+	first := filepath.Join(primary, "First [0100000000001000][v0].nsp")
+	second := filepath.Join(nested, "Second [0100000000002000][v0].nsp")
+	for _, filename := range []string{first, second} {
+		if err := os.WriteFile(filename, []byte("synthetic"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	manager, err := NewLocalSwitchDBManager(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	for filename, titleID := range map[string]string{
+		first:  "0100000000001000",
+		second: "0100000000002000",
+	} {
+		info, err := os.Stat(filename)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fileName := filepath.Base(filename)
+		fileKey := filename + "|" + fileName + "|" + strconv.Itoa(int(info.Size()))
+		metadata := map[string]*switchfs.ContentMetaAttributes{
+			titleID: {TitleId: titleID, Version: 0},
+		}
+		if err := manager.db.AddEntry(DB_TABLE_FILE_SCAN_METADATA, fileKey, metadata); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	initial, err := manager.CreateLocalSwitchFilesDB([]string{primary, additional}, nil, true, true)
+	if err != nil || initial.NumFiles != 2 {
+		t.Fatalf("initial fresh scan: result=%#v err=%v", initial, err)
+	}
+
+	deepMetadata := map[string]int{"version": 9}
+	if err := manager.db.AddEntry(DB_TABLE_FILE_SCAN_METADATA, "synthetic-cache-entry", deepMetadata); err != nil {
+		t.Fatal(err)
+	}
+	third := filepath.Join(primary, "Third [0100000000003000][v0].nsp")
+	if err := os.WriteFile(third, []byte("synthetic"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	refreshed, err := manager.CreateLocalSwitchFilesDB([]string{primary, additional}, nil, true, true)
+	if err != nil || refreshed.NumFiles != 3 {
+		t.Fatalf("refreshed scan: result=%#v err=%v", refreshed, err)
+	}
+	var retained map[string]int
+	if err := manager.db.GetEntry(DB_TABLE_FILE_SCAN_METADATA, "synthetic-cache-entry", &retained); err != nil || retained["version"] != 9 {
+		t.Fatalf("ordinary refresh lost deep metadata cache: value=%#v err=%v", retained, err)
+	}
+
+	if err := os.Remove(first); err != nil {
+		t.Fatal(err)
+	}
+	deleted, err := manager.CreateLocalSwitchFilesDB([]string{primary, additional}, nil, true, true)
+	if err != nil || deleted.NumFiles != 2 {
+		t.Fatalf("scan after deletion: result=%#v err=%v", deleted, err)
+	}
+	fromCache, err := manager.CreateLocalSwitchFilesDB([]string{filepath.Join(base, "unused")}, nil, true, false)
+	if err != nil || fromCache.NumFiles != 2 {
+		t.Fatalf("persisted snapshot after deletion: result=%#v err=%v", fromCache, err)
+	}
+
+	if _, err := manager.CreateLocalSwitchFilesDB([]string{filepath.Join(base, "missing-folder")}, nil, true, true); err == nil {
+		t.Fatal("fresh scan accepted a missing folder")
+	}
+	fromCache, err = manager.CreateLocalSwitchFilesDB(nil, nil, true, false)
+	if err != nil || fromCache.NumFiles != 2 {
+		t.Fatalf("failed scan replaced persisted snapshot: result=%#v err=%v", fromCache, err)
+	}
+
+	if err := manager.ClearScanData(); err != nil {
+		t.Fatal(err)
+	}
+	var cleared map[string]int
+	if err := manager.db.GetEntry(DB_TABLE_FILE_SCAN_METADATA, "synthetic-cache-entry", &cleared); err != nil || cleared != nil {
+		t.Fatalf("hard rescan cache clear: value=%#v err=%v", cleared, err)
+	}
+
+	emptyFolder := filepath.Join(base, "empty")
+	if err := os.Mkdir(emptyFolder, 0755); err != nil {
+		t.Fatal(err)
+	}
+	empty, err := manager.CreateLocalSwitchFilesDB([]string{emptyFolder}, nil, true, true)
+	if err != nil || empty.NumFiles != 0 || len(empty.TitlesMap) != 0 {
+		t.Fatalf("empty folder scan: result=%#v err=%v", empty, err)
+	}
+}
+
+func TestLoadAndUpdateFileETagFallbackAndValidation(t *testing.T) {
+	base := t.TempDir()
+	path := filepath.Join(base, "titles.json")
+	initialContents := []byte(`{"title":"cached"}`)
+	if err := os.WriteFile(path, initialContents, 0644); err != nil {
+		t.Fatal(err)
+	}
+	var requests int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		switch requests {
+		case 1:
+			if got := r.Header.Get("If-None-Match"); got != "old" {
+				t.Errorf("If-None-Match = %q", got)
+			}
+			w.Header().Set("ETag", "new")
+			_, _ = w.Write([]byte(`{"title":"ok"}`))
+		case 2:
+			if got := r.Header.Get("If-None-Match"); got != "new" {
+				t.Errorf("If-None-Match = %q", got)
+			}
+			w.WriteHeader(http.StatusNotModified)
+		case 3:
+			w.Header().Set("ETag", "bad")
+			_, _ = w.Write([]byte("not-json"))
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	defer server.Close()
+
+	file, cached, err := LoadAndUpdateFile(server.URL, path, RemoteFileCache{
+		URL: server.URL, ETag: "old", SHA256: hashBytes(initialContents),
+	}, validateJSONObject)
+	if err != nil || cached.ETag != "new" || cached.URL != server.URL {
+		t.Fatalf("download: file=%v cache=%#v err=%v", file, cached, err)
+	}
+	file.Close()
+	contents, _ := os.ReadFile(path)
+	if string(contents) != `{"title":"ok"}` {
+		t.Fatalf("saved contents: %s", contents)
+	}
+	file, cached, err = LoadAndUpdateFile(server.URL, path, cached, validateJSONObject)
+	if err != nil || cached.ETag != "new" {
+		t.Fatalf("304 fallback: file=%v cache=%#v err=%v", file, cached, err)
+	}
+	file.Close()
+	file, cached, err = LoadAndUpdateFile(server.URL, path, cached, validateJSONObject)
+	if err != nil || cached.ETag != "new" {
+		t.Fatalf("invalid JSON fallback: file=%v cache=%#v err=%v", file, cached, err)
+	}
+	file.Close()
+	contents, _ = os.ReadFile(path)
+	if string(contents) != `{"title":"ok"}` {
+		t.Fatal("invalid JSON replaced valid local file")
+	}
+
+	missing := filepath.Join(base, "missing.json")
+	if file, _, err = LoadAndUpdateFile(server.URL+"/missing", missing, RemoteFileCache{ETag: "stale"}, validateJSONObject); err == nil || file != nil {
+		t.Fatalf("expected missing fallback error, file=%v err=%v", file, err)
+	}
+}
+
+func TestLoadAndUpdateFileDownloadsWithoutETagWhenLocalFileIsMissingOrEmpty(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		createFile bool
+	}{
+		{name: "missing"},
+		{name: "empty", createFile: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "titles.json")
+			if test.createFile {
+				if err := os.WriteFile(path, nil, 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if got := r.Header.Get("If-None-Match"); got != "" {
+					t.Errorf("If-None-Match = %q, want empty without a local cache", got)
+				}
+				w.Header().Set("ETag", "fresh")
+				_, _ = w.Write([]byte(`{"title":"downloaded"}`))
+			}))
+			defer server.Close()
+
+			file, cache, err := LoadAndUpdateFile(server.URL, path, RemoteFileCache{
+				URL: server.URL, ETag: `W/"default"`, SHA256: "stale-hash",
+			}, validateJSONObject)
+			if err != nil {
+				t.Fatalf("download without local cache: %v", err)
+			}
+			if cache.ETag != "fresh" || cache.URL != server.URL || cache.SHA256 == "" {
+				file.Close()
+				t.Fatalf("cache = %#v, want fresh validator metadata", cache)
+			}
+			if err := file.Close(); err != nil {
+				t.Fatal(err)
+			}
+			contents, err := os.ReadFile(path)
+			if err != nil || string(contents) != `{"title":"downloaded"}` {
+				t.Fatalf("downloaded file = %q, err = %v", contents, err)
+			}
+		})
+	}
+}
+
+func TestLoadAndUpdateFileInvalidatesETagForURLOrLocalFileChanges(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		cacheURL  string
+		cacheHash string
+	}{
+		{name: "missing cache"},
+		{name: "source URL changed", cacheURL: "https://old.example/titles.json", cacheHash: hashBytes([]byte(`{"title":"cached"}`))},
+		{name: "local file changed", cacheURL: "https://data.example/titles.json", cacheHash: "old-hash"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "titles.json")
+			if err := os.WriteFile(path, []byte(`{"title":"cached"}`), 0644); err != nil {
+				t.Fatal(err)
+			}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if got := r.Header.Get("If-None-Match"); got != "" {
+					t.Errorf("If-None-Match = %q, want empty for stale cache metadata", got)
+				}
+				w.Header().Set("ETag", "fresh")
+				_, _ = w.Write([]byte(`{"title":"updated"}`))
+			}))
+			defer server.Close()
+
+			file, cache, err := LoadAndUpdateFile(server.URL, path, RemoteFileCache{
+				URL: test.cacheURL, ETag: "stale", SHA256: test.cacheHash,
+			}, validateJSONObject)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer file.Close()
+			if cache.URL != server.URL || cache.ETag != "fresh" || cache.SHA256 != hashBytes([]byte(`{"title":"updated"}`)) {
+				t.Fatalf("cache metadata = %#v", cache)
+			}
+			contents, err := os.ReadFile(path)
+			if err != nil || string(contents) != `{"title":"updated"}` {
+				t.Fatalf("updated file = %q, err = %v", contents, err)
+			}
+		})
+	}
+}
+
+func TestLoadAndUpdateFileUsesLocalFallbackWithoutRetainingStaleETag(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "titles.json")
+	local := []byte(`{"title":"edited"}`)
+	if err := os.WriteFile(path, local, 0644); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("If-None-Match"); got != "" {
+			t.Errorf("If-None-Match = %q, want empty after local edit", got)
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	file, cache, err := LoadAndUpdateFile(server.URL, path, RemoteFileCache{
+		URL: server.URL, ETag: "old", SHA256: hashBytes([]byte(`{"title":"original"}`)),
+	}, validateJSONObject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if cache.ETag != "" || cache.URL != server.URL || cache.SHA256 != hashBytes(local) {
+		t.Fatalf("fallback cache metadata = %#v", cache)
+	}
+	contents, err := os.ReadFile(path)
+	if err != nil || string(contents) != string(local) {
+		t.Fatalf("fallback file = %q, err = %v", contents, err)
+	}
+}
+
+func TestLoadAndUpdateFileRetries304WithoutUsableLocalCopy(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "titles.json")
+	var requests int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if got := r.Header.Get("If-None-Match"); got != "" {
+			t.Errorf("request %d If-None-Match = %q, want empty", requests, got)
+		}
+		if requests == 1 {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		_, _ = w.Write([]byte(`{"title":"downloaded"}`))
+	}))
+	defer server.Close()
+
+	file, _, err := LoadAndUpdateFile(server.URL, path, RemoteFileCache{}, validateJSONObject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	file.Close()
+	if requests != 2 {
+		t.Fatalf("request count = %d, want unconditional retry", requests)
+	}
+}
+
+func TestValidateRemoteDataJSON(t *testing.T) {
+	if err := ValidateTitlesJSON([]byte(`{"0100000000010000":{"id":"0100000000010000","name":"Game"}}`)); err != nil {
+		t.Fatalf("valid titles JSON rejected: %v", err)
+	}
+	if err := ValidateVersionsJSON([]byte(`{"0100000000010000":{"1":"2024-01-01"}}`)); err != nil {
+		t.Fatalf("valid versions JSON rejected: %v", err)
+	}
+	tests := []struct {
+		name     string
+		validate JSONValidator
+		data     string
+	}{
+		{name: "empty titles", validate: ValidateTitlesJSON, data: `{}`},
+		{name: "empty versions", validate: ValidateVersionsJSON, data: `{}`},
+		{name: "malformed titles", validate: ValidateTitlesJSON, data: `{"0100000000010000":`},
+		{name: "malformed versions", validate: ValidateVersionsJSON, data: `{"0100000000010000":`},
+		{name: "invalid title shape", validate: ValidateTitlesJSON, data: `{"0100000000010000":"Game"}`},
+		{name: "invalid versions shape", validate: ValidateVersionsJSON, data: `{"0100000000010000":"1"}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := test.validate([]byte(test.data)); err == nil {
+				t.Fatal("expected invalid remote data to be rejected")
+			}
+		})
+	}
+}
+
+func validateJSONObject(data []byte) error {
+	var object map[string]interface{}
+	if err := json.Unmarshal(data, &object); err != nil {
+		return err
+	}
+	if object == nil {
+		return errors.New("expected a JSON object")
+	}
+	return nil
+}
+
+func TestDownloadBytesRejectsBadURLAndStatus(t *testing.T) {
+	if _, _, _, err := downloadBytesFromURL(":", ""); err == nil {
+		t.Fatal("expected bad URL error")
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer server.Close()
+	if _, _, _, err := downloadBytesFromURL(server.URL, ""); err == nil || !strings.Contains(err.Error(), "HTTP status") {
+		t.Fatalf("unexpected status error: %v", err)
+	}
+}
+
+func TestGetGameMetadataUsesDeepCacheWhenKeysAvailable(t *testing.T) {
+	base := t.TempDir()
+	resetDBSettings(t, base, func(s *settings.AppSettings) {})
+	keyPath := filepath.Join(base, "prod.keys")
+	if err := os.WriteFile(keyPath, []byte("header_key = synthetic\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	settings.SaveSettings(&settings.AppSettings{Paths: settings.PathSettings{ProdKeys: keyPath, ScanFolders: []string{}}}, base)
+	if _, err := settings.InitSwitchKeys(base); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := NewLocalSwitchDBManager(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	file := ExtendedFileInfo{FileName: "cached.nsp", BaseFolder: base, Size: 10}
+	cached := map[string]*switchfs.ContentMetaAttributes{
+		"0100000000010000": {TitleId: "0100000000010000", Version: 9},
+	}
+	key := filepath.Join(base, file.FileName) + "|" + file.FileName + "|10"
+	if err := manager.db.AddEntry(DB_TABLE_FILE_SCAN_METADATA, key, cached); err != nil {
+		t.Fatal(err)
+	}
+	got, err := manager.getGameMetadata(file, filepath.Join(base, file.FileName), map[ExtendedFileInfo]SkippedFile{})
+	if err != nil || got["0100000000010000"].Version != 9 {
+		t.Fatalf("cached metadata: %#v, %v", got, err)
+	}
+}
+
+func TestFilenameFallbackHandlesShortAndInvalidFiles(t *testing.T) {
+	base := t.TempDir()
+	resetDBSettings(t, base, func(s *settings.AppSettings) {})
+	settings.SaveSettings(&settings.AppSettings{Paths: settings.PathSettings{ProdKeys: filepath.Join(base, "missing.keys")}}, base)
+	if _, err := settings.InitSwitchKeys(base); err == nil {
+		t.Fatal("expected synthetic key lookup to fail")
+	}
+	manager, err := NewLocalSwitchDBManager(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	titles := map[string]*SwitchGameFiles{}
+	skipped := map[ExtendedFileInfo]SkippedFile{}
+	manager.processLocalFiles([]ExtendedFileInfo{
+		{FileName: "x", BaseFolder: base, Size: 1},
+		{FileName: "directory", BaseFolder: base, IsDir: true},
+		{FileName: "bad [010000000001000G][v1].nsp", BaseFolder: base, Size: 1},
+	}, nil, titles, skipped)
+	if len(skipped) != 2 || skipped[(ExtendedFileInfo{FileName: "bad [010000000001000G][v1].nsp", BaseFolder: base, Size: 1})].ReasonCode != REASON_UNRECOGNISED {
+		t.Fatalf("unexpected short/invalid-file diagnostics: %#v", skipped)
+	}
+}
+
+func TestPersistentDBHandlesBadGob(t *testing.T) {
+	base := t.TempDir()
+	pd, err := NewPersistentDB(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pd.AddEntry("bad", "value", func() {}); err == nil {
+		t.Fatal("expected gob encoding error")
+	}
+	pd.Close()
+}
+
+func TestScannerPropagatesDatabaseErrors(t *testing.T) {
+	base := t.TempDir()
+	manager, err := NewLocalSwitchDBManager(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager.Close()
+
+	if got, err := manager.CreateLocalSwitchFilesDB(nil, nil, false, false); err == nil || got != nil {
+		t.Fatalf("expected cached read error, result=%#v err=%v", got, err)
+	}
+	if got, err := manager.CreateLocalSwitchFilesDB(nil, nil, false, true); err == nil || got != nil {
+		t.Fatalf("expected scan write error, result=%#v err=%v", got, err)
+	}
+	if got, err := NewLocalSwitchDBManager(filepath.Join(base, "missing")); err == nil || got != nil {
+		t.Fatalf("expected manager creation error, manager=%v err=%v", got, err)
+	}
+}
+
+func TestScannerClassifiesCachedMultiContentAndDlcEdges(t *testing.T) {
+	base := t.TempDir()
+	resetDBSettings(t, base, func(s *settings.AppSettings) {})
+	if _, err := settings.InitSwitchKeys(filepath.Join(base, "no-keys")); err == nil {
+		t.Fatal("expected missing keys")
+	}
+	manager, err := NewLocalSwitchDBManager(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	file := ExtendedFileInfo{FileName: "multi.nsp", BaseFolder: base, Size: 20}
+	filePath := filepath.Join(base, file.FileName)
+	metadata := map[string]*switchfs.ContentMetaAttributes{
+		"0100000000010000": {TitleId: "0100000000010000", Version: 1},
+		"0100000000011001": {TitleId: "0100000000011001", Version: 1},
+	}
+	key := filePath + "|" + file.FileName + "|20"
+	if err := manager.db.AddEntry(DB_TABLE_FILE_SCAN_METADATA, key, metadata); err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range metadata {
+		entry.TitleId = strings.ToUpper(entry.TitleId)
+	}
+	manager.processLocalFiles([]ExtendedFileInfo{file}, nil, map[string]*SwitchGameFiles{}, map[ExtendedFileInfo]SkippedFile{})
+
+	titles := map[string]*SwitchGameFiles{}
+	skipped := map[ExtendedFileInfo]SkippedFile{}
+	manager.processLocalFiles([]ExtendedFileInfo{
+		{FileName: "update old [0100000000010800][v1].nsp", BaseFolder: base},
+		{FileName: "update new [0100000000010800][v2].nsp", BaseFolder: base},
+		{FileName: "dlc [0100000000011001][v1].nsp", BaseFolder: base},
+		{FileName: "dlc duplicate [0100000000011001][v1].nsp", BaseFolder: base},
+		{FileName: "dlc newer [0100000000011001][v2].nsp", BaseFolder: base},
+	}, nil, titles, skipped)
+	game := titles["0100000000010"]
+	if game == nil || game.LatestUpdate != 2 || game.Dlc["0100000000011001"].Metadata.Version != 2 {
+		t.Fatalf("unexpected edge classification: %#v", game)
+	}
+	assertSkippedReason(t, skipped, "update old", REASON_OLD_UPDATE)
+	assertSkippedReason(t, skipped, "dlc duplicate", REASON_DUPLICATE)
+}
+
+func TestScannerKeepsPackagedUpdatesOutOfRemovableUpdateIssues(t *testing.T) {
+	testCases := []struct {
+		name                string
+		packageVersion      int
+		standaloneVersion   int
+		packageFirst        bool
+		wantStandaloneIssue int
+	}{
+		{"package older scanned first", 65536, 196608, true, 0},
+		{"package older scanned last", 65536, 196608, false, 0},
+		{"standalone older scanned first", 65536, 32768, false, REASON_OLD_UPDATE},
+		{"standalone older scanned last", 65536, 32768, true, REASON_OLD_UPDATE},
+		{"duplicate standalone scanned first", 65536, 65536, false, REASON_DUPLICATE},
+		{"duplicate standalone scanned last", 65536, 65536, true, REASON_DUPLICATE},
+	}
+
+	const (
+		baseID   = "010087e01fcd6000"
+		updateID = "010087e01fcd6800"
+	)
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			base := t.TempDir()
+			resetDBSettings(t, base, func(s *settings.AppSettings) {})
+			keyPath := filepath.Join(base, "prod.keys")
+			if err := os.WriteFile(keyPath, []byte("header_key = synthetic\n"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			settings.SaveSettings(&settings.AppSettings{Paths: settings.PathSettings{ProdKeys: keyPath, ScanFolders: []string{}}}, base)
+			if _, err := settings.InitSwitchKeys(base); err != nil {
+				t.Fatal(err)
+			}
+			manager, err := NewLocalSwitchDBManager(base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer manager.Close()
+
+			packageFile := addCachedScannerFixture(t, manager, base, "package.xci", map[string]*switchfs.ContentMetaAttributes{
+				baseID:   {TitleId: baseID, Version: 0},
+				updateID: {TitleId: updateID, Version: test.packageVersion},
+			})
+			standaloneFile := addCachedScannerFixture(t, manager, base, "standalone.nsp", map[string]*switchfs.ContentMetaAttributes{
+				updateID: {TitleId: updateID, Version: test.standaloneVersion},
+			})
+
+			files := []ExtendedFileInfo{packageFile, standaloneFile}
+			if !test.packageFirst {
+				files[0], files[1] = files[1], files[0]
+			}
+			titles := map[string]*SwitchGameFiles{}
+			skipped := map[ExtendedFileInfo]SkippedFile{}
+			manager.processLocalFiles(files, nil, titles, skipped)
+
+			game := titles["010087e01fcd6"]
+			if game == nil {
+				t.Fatal("expected Cuisineer title group")
+			}
+			wantLatest := test.packageVersion
+			if test.standaloneVersion > wantLatest {
+				wantLatest = test.standaloneVersion
+			}
+			if game.LatestUpdate != wantLatest {
+				t.Fatalf("LatestUpdate = %d, want %d", game.LatestUpdate, wantLatest)
+			}
+			if got := game.Updates[test.packageVersion].ExtendedInfo.FileName; got != packageFile.FileName {
+				t.Fatalf("packaged update source = %q, want %q", got, packageFile.FileName)
+			}
+			if issue, ok := skipped[packageFile]; ok {
+				t.Fatalf("package XCI was marked as a removable update issue: %#v", issue)
+			}
+			if got := skipped[standaloneFile].ReasonCode; got != test.wantStandaloneIssue {
+				t.Fatalf("standalone issue reason = %d, want %d (all diagnostics: %#v)", got, test.wantStandaloneIssue, skipped)
+			}
+		})
+	}
+}
+
+func addCachedScannerFixture(t *testing.T, manager *LocalSwitchDBManager, base, name string, metadata map[string]*switchfs.ContentMetaAttributes) ExtendedFileInfo {
+	t.Helper()
+	contents := []byte("synthetic container fixture")
+	filePath := filepath.Join(base, name)
+	if err := os.WriteFile(filePath, contents, 0644); err != nil {
+		t.Fatal(err)
+	}
+	file := ExtendedFileInfo{FileName: name, BaseFolder: base, Size: int64(len(contents))}
+	cacheKey := filePath + "|" + file.FileName + "|" + strconv.Itoa(int(file.Size))
+	if err := manager.db.AddEntry(DB_TABLE_FILE_SCAN_METADATA, cacheKey, metadata); err != nil {
+		t.Fatal(err)
+	}
+	return file
+}
+
+func TestScannerRecordsInvalidCachedMetadataAndSplitErrors(t *testing.T) {
+	base := t.TempDir()
+	resetDBSettings(t, base, func(s *settings.AppSettings) {})
+	keyPath := filepath.Join(base, "prod.keys")
+	if err := os.WriteFile(keyPath, []byte("header_key = synthetic\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	settings.SaveSettings(&settings.AppSettings{Paths: settings.PathSettings{ProdKeys: keyPath, ScanFolders: []string{}}}, base)
+	if _, err := settings.InitSwitchKeys(base); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := NewLocalSwitchDBManager(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	invalid := ExtendedFileInfo{FileName: "invalid.nsp", BaseFolder: base, Size: 1}
+	invalidKey := filepath.Join(base, invalid.FileName) + "|" + invalid.FileName + "|1"
+	if err := manager.db.AddEntry(DB_TABLE_FILE_SCAN_METADATA, invalidKey, map[string]*switchfs.ContentMetaAttributes{
+		"invalid": {TitleId: "invalid", Version: 1},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	skipped := map[ExtendedFileInfo]SkippedFile{}
+	manager.processLocalFiles([]ExtendedFileInfo{invalid}, nil, map[string]*SwitchGameFiles{}, skipped)
+	assertSkippedReason(t, skipped, invalid.FileName, REASON_UNRECOGNISED)
+
+	for _, name := range []string{"bad.nsp", "bad.xci", "bad00"} {
+		file := ExtendedFileInfo{FileName: name, BaseFolder: base, Size: 1}
+		if err := os.WriteFile(filepath.Join(base, name), []byte("bad"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		got, err := manager.getGameMetadata(file, filepath.Join(base, name), skipped)
+		if err == nil || got != nil {
+			t.Fatalf("%s: expected parser error, metadata=%#v err=%v", name, got, err)
+		}
+		if skipped[file].ReasonCode != REASON_MALFORMED_FILE {
+			t.Fatalf("%s: unexpected diagnostic: %#v", name, skipped[file])
+		}
+	}
+}
+
+func TestPersistentDBReadAndWriteErrors(t *testing.T) {
+	base := t.TempDir()
+	pd, err := NewPersistentDB(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pd.db.Update(func(tx *bolt.Tx) error {
+		bucket, err := tx.CreateBucket([]byte("corrupt"))
+		if err != nil {
+			return err
+		}
+		return bucket.Put([]byte("value"), []byte("not-gob"))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]string
+	if err := pd.GetEntry("corrupt", "value", &value); err == nil {
+		t.Fatal("expected gob decoding error")
+	}
+	if err := replaceFileAtomically(filepath.Join(base, "missing", "directory"), []byte("data")); err == nil {
+		t.Fatal("expected atomic replacement error")
+	}
+	pd.Close()
+	if err := pd.AddEntry("closed", "value", "value"); err == nil {
+		t.Fatal("expected closed database write error")
+	}
+	if err := pd.GetEntry("closed", "value", &value); err == nil {
+		t.Fatal("expected closed database read error")
+	}
+}
+
+func TestDownloadAndLoadFileCreationErrors(t *testing.T) {
+	base := t.TempDir()
+	if _, _, err := LoadAndUpdateFile(":", filepath.Join(base, "missing", "titles.json"), RemoteFileCache{}, validateJSONObject); err == nil {
+		t.Fatal("expected request error")
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"valid":true}`))
+	}))
+	url := server.URL
+	server.Close()
+	if _, _, _, err := downloadBytesFromURL(url, ""); err == nil {
+		t.Fatal("expected HTTP client error")
+	}
+}
+
+func TestTitleIDPrefixValidationAndGrouping(t *testing.T) {
+	tests := []struct {
+		id      string
+		prefix  string
+		wantErr bool
+	}{
+		{id: "0100000000010000", prefix: "0100000000010"},
+		{id: "0100000000010800", prefix: "0100000000010"},
+		{id: "0100000000012101", prefix: "0100000000011"},
+		{id: "short", wantErr: true},
+		{id: "010000000001000g", wantErr: true},
+		{id: "0100000000010001", wantErr: true},
+	}
+	for _, tt := range tests {
+		got, err := titleIDPrefix(tt.id)
+		if tt.wantErr {
+			if err == nil {
+				t.Errorf("titleIDPrefix(%q) accepted invalid ID", tt.id)
+			}
+		} else if err != nil || got != tt.prefix {
+			t.Errorf("titleIDPrefix(%q) = %q, %v; want %q", tt.id, got, err, tt.prefix)
+		}
+	}
+}

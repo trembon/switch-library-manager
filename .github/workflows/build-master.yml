@@ -4,18 +4,47 @@ on:
   push:
     branches:
       - "master"
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows/amd64
+            artifact: switch-library-manager.windows-amd64
+          - os: ubuntu-22.04
+            platform: linux/amd64
+            webkit_version: "4.0"
+            artifact: switch-library-manager.linux-amd64-webkit40
+          - os: ubuntu-24.04
+            platform: linux/amd64
+            webkit_version: "4.1"
+            artifact: switch-library-manager.linux-amd64-webkit41
+          - os: macos-15-intel
+            platform: darwin/amd64
+            artifact: switch-library-manager.darwin-amd64
+          - os: macos-15
+            platform: darwin/arm64
+            artifact: switch-library-manager.darwin-arm64
+
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
 
       - name: Setup environment
         uses: ./.github/actions/setup-environment
+        with:
+          webkit-version: ${{ matrix.webkit_version || '4.0' }}
 
       - name: Build app
         uses: ./.github/actions/build-app
+        with:
+          platform: ${{ matrix.platform }}
+          webkit-version: ${{ matrix.webkit_version || '4.0' }}
 
       - name: Publish artifacts
         uses: ./.github/actions/publish-artifacts
+        with:
+          artifact-name: ${{ matrix.artifact }}

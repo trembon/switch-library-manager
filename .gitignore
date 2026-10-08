@@ -1,9 +1,9 @@
 .idea
-resources/app/vendor
+frontend/vendor
 output
+build
 windows.syso
 bind_*_amd64.go
 astilectron-bundler.exe
-games
-build
+games/
 prod.keys
