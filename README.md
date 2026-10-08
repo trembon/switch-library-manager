@@ -66,8 +66,8 @@ The application creates a current `settings.json` on first launch. You can custo
 
 ### Linux
 
-- Choose the `linux-amd64-webkit41` download when your distribution provides WebKitGTK 4.1, including CachyOS and Ubuntu 24.04. The WebKitGTK 4.0 download is a compatibility option for systems that provide 4.0 but not 4.1.
-- Install the matching WebKitGTK runtime library and GTK 3. Ubuntu 22.04 examples: `sudo apt install libwebkit2gtk-4.0-37` or `sudo apt install libwebkit2gtk-4.1-0`. These packages bring in their runtime dependencies, including GTK 3.
+- The `linux-amd64-webkit40` archive is built on Ubuntu 22.04 and requires WebKitGTK 4.0. The `linux-amd64-webkit41` archive is built on Ubuntu 24.04 and requires WebKitGTK 4.1; it may also need newer system libraries than older distributions provide.
+- Install the matching WebKitGTK runtime library and GTK 3. Ubuntu 22.04 example: `sudo apt install libwebkit2gtk-4.0-37`. Ubuntu 24.04 example: `sudo apt install libwebkit2gtk-4.1-0`. These packages bring in their runtime dependencies, including GTK 3.
 - Extract the archive, open a terminal in its folder, and run `chmod +x switch-library-manager` followed by `./switch-library-manager`.
 - The executable also runs console mode (`./switch-library-manager -m console`) and has the same WebKitGTK runtime requirement.
 
