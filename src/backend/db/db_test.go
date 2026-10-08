@@ -3,6 +3,7 @@ package db
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -272,6 +273,226 @@ func TestScannerDeduplicatesPhysicalFilesAcrossOverlappingRoots(t *testing.T) {
 	}
 	if len(local.Skipped) != 0 {
 		t.Fatalf("overlapping roots created false duplicate issues: %#v", local.Skipped)
+	}
+}
+
+func TestScanFolderSkipsSubfolderTraversalUnlessRecursive(t *testing.T) {
+	root := t.TempDir()
+	nested := filepath.Join(root, "a-nested")
+	deep := filepath.Join(nested, "deeper")
+	if err := os.MkdirAll(deep, 0755); err != nil {
+		t.Fatal(err)
+	}
+	rootGame := filepath.Join(root, "z-root.nsp")
+	nestedGame := filepath.Join(nested, "nested.nsp")
+	deepGame := filepath.Join(deep, "deep.nsp")
+	for _, path := range []string{rootGame, nestedGame, deepGame} {
+		if err := os.WriteFile(path, []byte("synthetic fixture"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, test := range []struct {
+		name      string
+		folders   []string
+		recursive bool
+		want      []string
+	}{
+		{name: "nonrecursive", folders: []string{root}, want: []string{rootGame}},
+		{name: "nonrecursive explicit subfolder", folders: []string{root, nested}, want: []string{rootGame, nestedGame}},
+		{name: "recursive", folders: []string{root}, recursive: true, want: []string{rootGame, nestedGame, deepGame}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			files := []ExtendedFileInfo{}
+			seenFiles := map[string][]os.FileInfo{}
+			visited := map[string]bool{}
+			walk := func(folder string, fn filepath.WalkFunc) error {
+				return walkDirWithFileInfo(folder, func(path string, info os.FileInfo, err error) error {
+					visited[path] = true
+					return fn(path, info, err)
+				})
+			}
+			for _, folder := range test.folders {
+				if err := scanFolderWithWalker(folder, test.recursive, &files, nil, seenFiles, walk); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got := map[string]bool{}
+			for _, file := range files {
+				got[filepath.Join(file.BaseFolder, file.FileName)] = true
+			}
+			if len(files) != len(test.want) {
+				t.Fatalf("scanned files = %#v, want paths %#v", files, test.want)
+			}
+			for _, path := range test.want {
+				if !got[path] {
+					t.Errorf("scanned files %#v do not include %q", got, path)
+				}
+			}
+			if !test.recursive {
+				for path := range visited {
+					allowed := false
+					for _, folder := range test.folders {
+						if path == folder || filepath.Dir(path) == folder {
+							allowed = true
+							break
+						}
+					}
+					if !allowed {
+						t.Errorf("nonrecursive scan visited descendant %q", path)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestScanFolderContinuesAfterDeniedSubfolders(t *testing.T) {
+	root := t.TempDir()
+	denied := filepath.Join(root, "denied")
+	readable := filepath.Join(root, "readable")
+	for _, folder := range []string{denied, readable} {
+		if err := os.Mkdir(folder, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rootGame := filepath.Join(root, "Root game [0100000000010000][v1].nsp")
+	deniedGame := filepath.Join(denied, "Hidden game [0100000000020000][v1].nsp")
+	nestedGame := filepath.Join(readable, "Nested game [0100000000030000][v1].nsp")
+	for _, path := range []string{rootGame, deniedGame, nestedGame} {
+		if err := os.WriteFile(path, []byte("synthetic filename-only fixture"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rootInfo, err := os.Stat(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deniedInfo, err := os.Stat(denied)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readableInfo, err := os.Stat(readable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootGameInfo, err := os.Stat(rootGame)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nestedGameInfo, err := os.Stat(nestedGame)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, test := range []struct {
+		name      string
+		recursive bool
+		want      []string
+	}{
+		{name: "recursive", recursive: true, want: []string{rootGame, nestedGame}},
+		{name: "nonrecursive", want: []string{rootGame}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			files := []ExtendedFileInfo{}
+			walkWithDeniedFolder := func(_ string, fn filepath.WalkFunc) error {
+				entries := []struct {
+					path string
+					info os.FileInfo
+					err  error
+				}{
+					{path: root, info: rootInfo},
+					{path: denied, info: deniedInfo, err: fmt.Errorf("read directory: %w", os.ErrPermission)},
+					{path: rootGame, info: rootGameInfo},
+					{path: readable, info: readableInfo},
+					{path: nestedGame, info: nestedGameInfo},
+				}
+				skippedFolder := ""
+				for _, entry := range entries {
+					if skippedFolder != "" && strings.HasPrefix(entry.path, skippedFolder+string(os.PathSeparator)) {
+						continue
+					}
+					if err := fn(entry.path, entry.info, entry.err); err != nil {
+						if err == filepath.SkipDir && entry.info != nil && entry.info.IsDir() {
+							skippedFolder = entry.path
+							continue
+						}
+						return err
+					}
+				}
+				return nil
+			}
+			if err := scanFolderWithWalker(root, test.recursive, &files, nil, map[string][]os.FileInfo{}, walkWithDeniedFolder); err != nil {
+				t.Fatalf("scan returned error: %v", err)
+			}
+			got := make(map[string]bool, len(files))
+			for _, file := range files {
+				got[filepath.Join(file.BaseFolder, file.FileName)] = true
+			}
+			if len(got) != len(test.want) {
+				t.Fatalf("scanned files = %#v, want paths %#v", got, test.want)
+			}
+			for _, path := range test.want {
+				if !got[path] {
+					t.Errorf("scanned files %#v do not include %q", got, path)
+				}
+			}
+			if got[deniedGame] {
+				t.Fatal("scan included a file from the denied folder")
+			}
+		})
+	}
+}
+
+func TestScanFolderKeepsRootAndNonPermissionErrorsFatal(t *testing.T) {
+	root := t.TempDir()
+	rootInfo, err := os.Stat(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	child := filepath.Join(root, "child")
+	if err := os.Mkdir(child, 0755); err != nil {
+		t.Fatal(err)
+	}
+	childInfo, err := os.Stat(child)
+	if err != nil {
+		t.Fatal(err)
+	}
+	errDeviceIO := errors.New("device I/O error")
+
+	for _, test := range []struct {
+		name string
+		walk func(string, filepath.WalkFunc) error
+		want error
+	}{
+		{
+			name: "root permission error",
+			walk: func(path string, fn filepath.WalkFunc) error {
+				return fn(path, nil, fmt.Errorf("read root: %w", os.ErrPermission))
+			},
+			want: os.ErrPermission,
+		},
+		{
+			name: "non-permission child error",
+			walk: func(path string, fn filepath.WalkFunc) error {
+				if err := fn(path, rootInfo, nil); err != nil {
+					return err
+				}
+				return fn(child, childInfo, fmt.Errorf("read child: %w", errDeviceIO))
+			},
+			want: errDeviceIO,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			files := []ExtendedFileInfo{}
+			err := scanFolderWithWalker(root, true, &files, nil, map[string][]os.FileInfo{}, test.walk)
+			if err == nil {
+				t.Fatal("expected scan error")
+			}
+			if !errors.Is(err, test.want) {
+				t.Fatalf("error = %v, want an error wrapping %v", err, test.want)
+			}
+		})
 	}
 }
 

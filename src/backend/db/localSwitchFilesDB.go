@@ -147,8 +147,34 @@ func (ldb *LocalSwitchDBManager) CreateLocalSwitchFilesDB(folders []string,
 }
 
 func scanFolder(folder string, recursive bool, files *[]ExtendedFileInfo, progress ProgressUpdater, seenFiles map[string][]os.FileInfo) error {
-	return filepath.Walk(folder, func(path string, info os.FileInfo, err error) error {
+	return scanFolderWithWalker(folder, recursive, files, progress, seenFiles, walkDirWithFileInfo)
+}
+
+func walkDirWithFileInfo(folder string, fn filepath.WalkFunc) error {
+	// WalkDir lets the callback skip a directory before its contents are read.
+	return filepath.WalkDir(folder, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
+			return fn(path, nil, err)
+		}
+		info, err := entry.Info()
+		return fn(path, info, err)
+	})
+}
+
+func scanFolderWithWalker(
+	folder string,
+	recursive bool,
+	files *[]ExtendedFileInfo,
+	progress ProgressUpdater,
+	seenFiles map[string][]os.FileInfo,
+	walk func(string, filepath.WalkFunc) error,
+) error {
+	return walk(folder, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			if path != folder && errors.Is(err, os.ErrPermission) {
+				zap.S().Warnw("Permission denied while scanning; skipping path", "path", path, "error", err)
+				return nil
+			}
 			zap.S().Error("Error while scanning folders", err)
 			return err
 		}
@@ -159,6 +185,9 @@ func scanFolder(folder string, recursive bool, files *[]ExtendedFileInfo, progre
 			return fmt.Errorf("file information is unavailable for %q", path)
 		}
 		if info.IsDir() {
+			if !recursive {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 
@@ -167,10 +196,6 @@ func scanFolder(folder string, recursive bool, files *[]ExtendedFileInfo, progre
 		}
 
 		base := path[0 : len(path)-len(info.Name())]
-		if strings.TrimSuffix(base, string(os.PathSeparator)) != strings.TrimSuffix(folder, string(os.PathSeparator)) &&
-			!recursive {
-			return nil
-		}
 		if physicalFileSeen(info, seenFiles) {
 			return nil
 		}
