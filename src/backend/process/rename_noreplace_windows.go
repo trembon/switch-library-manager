@@ -13,5 +13,7 @@ func renameNoReplace(from, to string) error {
 	if err != nil {
 		return err
 	}
+	// Keep flags at zero: MOVEFILE_REPLACE_EXISTING would overwrite a file that
+	// appears at the destination after organization preflight.
 	return windows.MoveFileEx(fromPath, toPath, 0)
 }
