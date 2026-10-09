@@ -19,11 +19,13 @@ import {
     UpdateLocalLibrary,
 } from './wailsjs/go/app/App.js'
 import {
+    Environment,
     EventsOn,
     WindowSetDarkTheme,
     WindowSetLightTheme,
     WindowSetSystemDefaultTheme,
 } from './wailsjs/runtime/runtime.js'
+import { registerRescanShortcuts } from './rescan_shortcuts.js'
 
 $(function () {
 
@@ -37,6 +39,7 @@ $(function () {
         settingsFeedback: undefined,
         organizationPreview: undefined,
         libraryRefreshError: undefined,
+        platform: undefined,
         keys:false
     };
 
@@ -46,6 +49,9 @@ $(function () {
     let themeMediaQuery
     let themeMediaQueryHandler
     let restartRequired = false
+    let settingsSavePending = false
+    let scanInProgress = false
+    let libraryDataGeneration = 0
 
     function createTable(element, options, exportKind) {
         currTable = new Tabulator(element, options);
@@ -444,6 +450,34 @@ $(function () {
         restartButton.focus();
     }
 
+    function updateRescanControlLabels(root = document.querySelector("#organize")) {
+        if (!root) {
+            return;
+        }
+        const isMacOS = state.platform === "darwin";
+        const labels = isMacOS
+            ? {
+                rescan: "⌘R",
+                hardRescan: "⌘⇧R",
+                rescanKeys: "Meta+r Control+r",
+                hardRescanKeys: "Meta+Shift+r Control+Shift+r"
+            }
+            : {
+                rescan: "Ctrl+R",
+                hardRescan: "Ctrl+Shift+R",
+                rescanKeys: "Control+r",
+                hardRescanKeys: "Control+Shift+r"
+            };
+
+        root.querySelectorAll(".rescan-action").forEach(button => {
+            const hard = button.dataset.hard === "true";
+            button.textContent = hard
+                ? "Hard rescan (" + labels.hardRescan + ")"
+                : "Rescan (" + labels.rescan + ")";
+            button.setAttribute("aria-keyshortcuts", hard ? labels.hardRescanKeys : labels.rescanKeys);
+        });
+    }
+
     //handle tabs action
     $('.tabgroup > div').hide();
     // loadTab($('.tabgroup > div:first-of-type'));
@@ -475,6 +509,12 @@ $(function () {
         });
 
         EventsOn("error", showError);
+        Environment()
+            .then(environment => {
+                state.platform = environment.platform;
+                updateRescanControlLabels();
+            })
+            .catch(error => console.error("Could not determine the current platform:", error));
         LoadSettings().then(function (message) {
             state.settings = message;
             state.settingsDraft = undefined;
@@ -508,26 +548,27 @@ $(function () {
                 .catch(error => showError(error.message));
         };
 
-        let scanLocalFolder = function(mode, startup){
+        let scanLocalFolder = function(mode, startup, returnTab = "#library"){
             if (!state.settings.paths.library_folder){
                 loadTab("#library");
                 hideProgress();
                 return Promise.resolve();
             }
+            const generation = ++libraryDataGeneration;
             showProgress("Scanning local library...");
-
-            state.library = undefined;
-            state.updates = undefined;
-            state.dlc = undefined;
-            state.missingGames = undefined;
-            state.organizationPreview = undefined;
 
             const scan = startup ? UpdateLocalLibrary(Boolean(mode)) : RescanLibrary(Boolean(mode));
             return scan.then(result => {
+                if (generation !== libraryDataGeneration) {
+                    return result;
+                }
+                state.updates = undefined;
+                state.dlc = undefined;
+                state.missingGames = undefined;
+                state.organizationPreview = undefined;
                 state.library = result;
                 state.libraryRefreshError = undefined;
-                state.organizationPreview = undefined;
-                loadTab("#library");
+                loadTab(returnTab);
                 hideProgress();
                 return result;
             });
@@ -708,29 +749,48 @@ $(function () {
                 const organization = state.settings.organization;
                 if (!folder) {
                     $(target).html($(target + "Template").render({folder: folder, organization: organization}));
+                    updateRescanControlLabels(document.querySelector(target));
                     return;
                 }
                 if (!state.organizationPreview || state.organizationPreview.root_folder !== folder) {
                     $(target).html($(target + "Template").render({folder: folder, organization: organization, previewLoading: true}));
+                    updateRescanControlLabels(document.querySelector(target));
+                    const generation = libraryDataGeneration;
                     GetOrganizationPreview().then(preview => {
+                        if (generation !== libraryDataGeneration) {
+                            return;
+                        }
                         state.organizationPreview = preview;
                         if (!restartRequired && $(target).is(":visible")) {
                             loadTab(target);
                         }
-                    }).catch(error => showError(error.message));
+                    }).catch(error => {
+                        if (generation === libraryDataGeneration) {
+                            showError(error.message);
+                        }
+                    });
                     return;
                 }
                 let html = $(target + "Template").render({folder: folder, organization: organization, preview: state.organizationPreview})
                 $(target).html(html);
+                updateRescanControlLabels(document.querySelector(target));
             } else if (target === "#updates") {
                 if (state.settings.paths.library_folder && !state.library){
                     return
                 }
                 if (state.library && !state.updates){
+                    const generation = libraryDataGeneration;
                     GetMissingUpdates().then(r => {
+                        if (generation !== libraryDataGeneration) {
+                            return;
+                        }
                         state.updates = r
                         loadTab("#updates")
-                    }).catch(error => showError(error.message));
+                    }).catch(error => {
+                        if (generation === libraryDataGeneration) {
+                            showError(error.message);
+                        }
+                    });
                     return
                 }
                 let html = $(target + "Template").render({folder: state.settings.paths.library_folder,updates:state.updates})
@@ -765,10 +825,18 @@ $(function () {
                     return
                 }
                 if (state.library && !state.dlc){
+                    const generation = libraryDataGeneration;
                     GetMissingDLC().then(r => {
+                        if (generation !== libraryDataGeneration) {
+                            return;
+                        }
                         state.dlc = r
                         loadTab("#dlc")
-                    }).catch(error => showError(error.message));
+                    }).catch(error => {
+                        if (generation === libraryDataGeneration) {
+                            showError(error.message);
+                        }
+                    });
                     return
                 }
                 const missingDlcRows = (state.dlc || []).flatMap(game =>
@@ -872,10 +940,18 @@ $(function () {
                     return
                 }
                 if (state.library && !state.missingGames){
+                    const generation = libraryDataGeneration;
                     GetMissingGames().then(r => {
+                        if (generation !== libraryDataGeneration) {
+                            return;
+                        }
                         state.missingGames = r
                         loadTab("#missing")
-                    }).catch(error => showError(error.message));
+                    }).catch(error => {
+                        if (generation === libraryDataGeneration) {
+                            showError(error.message);
+                        }
+                    });
                     return
                 }
                 let html = $(target + "Template").render({folder: state.settings.paths.library_folder,missingGames:state.missingGames});
@@ -916,18 +992,36 @@ $(function () {
             }
         });
 
-        $("body").on("click", ".rescan-action", e => {
-            if (restartRequired) {
+        const requestRescan = hard => {
+            if (restartRequired || settingsSavePending || scanInProgress || wrapper.classList.contains("is-loading") || !state.settings.paths.library_folder) {
                 return;
             }
-            state.library = undefined;
-            state.updates = undefined;
-            state.dlc = undefined;
-            state.missingGames = undefined;
-            state.organizationPreview = undefined;
-            const hard = e.currentTarget.dataset.hard === "true";
-            scanLocalFolder(hard).catch(error => showError(error.message));
+            const returnTab = $("#tab_btns a.active").attr("href") || "#library";
+            if (returnTab === "#settings") {
+                captureSettingsDraft();
+            }
+            if (gameDetailsDialog.open) {
+                gameDetailsDialog.close();
+            }
+            scanInProgress = true;
+            Promise.resolve()
+                .then(() => scanLocalFolder(Boolean(hard), false, returnTab))
+                .catch(error => showError(error.message, returnTab))
+                .finally(() => {
+                    scanInProgress = false;
+                });
+        };
+
+        $("body").on("click", ".rescan-action", e => {
+            requestRescan(e.currentTarget.dataset.hard === "true");
         });
+
+        registerRescanShortcuts(
+            window,
+            () => state.platform === "darwin",
+            () => restartRequired || settingsSavePending || scanInProgress || wrapper.classList.contains("is-loading") || !state.settings.paths.library_folder,
+            requestRescan
+        );
 
         $("body").on("click", ".alert-dismiss", e => {
             $(e.currentTarget).closest(".alert").hide();
@@ -984,8 +1078,12 @@ $(function () {
 
         $("body").on("submit", "#settings-form", e => {
             e.preventDefault();
+            if (settingsSavePending || restartRequired) {
+                return;
+            }
             const value = collectSettings(e.currentTarget);
             state.settingsDraft = value;
+            settingsSavePending = true;
             SaveSettings(value)
                 .then(() => LoadSettings())
                 .then(saved => {
@@ -994,7 +1092,10 @@ $(function () {
                     state.settingsFeedback = undefined;
                     lockForRestart();
                 })
-                .catch(error => showSettingsFeedback("danger", settingsErrorMessage(error)));
+                .catch(error => showSettingsFeedback("danger", settingsErrorMessage(error)))
+                .finally(() => {
+                    settingsSavePending = false;
+                });
         });
 
         $("body").on("click", ".library-organize-action", e => {
