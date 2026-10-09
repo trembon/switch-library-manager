@@ -18,7 +18,12 @@ import {
     UpdateDB,
     UpdateLocalLibrary,
 } from './wailsjs/go/app/App.js'
-import { EventsOn } from './wailsjs/runtime/runtime.js'
+import {
+    EventsOn,
+    WindowSetDarkTheme,
+    WindowSetLightTheme,
+    WindowSetSystemDefaultTheme,
+} from './wailsjs/runtime/runtime.js'
 
 $(function () {
 
@@ -100,6 +105,18 @@ $(function () {
     }
 
     function applyTheme(theme) {
+        switch (theme) {
+        case THEME_LIGHT:
+            WindowSetLightTheme();
+            break;
+        case THEME_DARK:
+            WindowSetDarkTheme();
+            break;
+        default:
+            WindowSetSystemDefaultTheme();
+            break;
+        }
+
         if (themeMediaQuery && themeMediaQueryHandler) {
             if (themeMediaQuery.removeEventListener) {
                 themeMediaQuery.removeEventListener("change", themeMediaQueryHandler);
