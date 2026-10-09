@@ -3,6 +3,7 @@ package process
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -69,6 +70,36 @@ func TestApplyTemplate(t *testing.T) {
 	}
 	if got := applyTemplate(emptyData, false, "{TITLE_NAME} {PACKAGE_CONTENTS}", 0); got != "The Game" {
 		t.Fatalf("applyTemplate() with empty package contents = %q, want %q", got, "The Game")
+	}
+}
+
+func TestApplyTemplateTrimsDLCNameEdges(t *testing.T) {
+	tests := []struct {
+		name    string
+		dlcName string
+		want    string
+	}{
+		{name: "ASCII separator", dlcName: "Game - Expansion", want: "Game (Expansion)"},
+		{name: "Unicode separator", dlcName: "Game – Expansion", want: "Game (Expansion)"},
+		{name: "game name at end", dlcName: "Expansion - Game", want: "Game (Expansion)"},
+		{name: "repeated separators", dlcName: "Game --- Expansion", want: "Game (Expansion)"},
+		{name: "Unicode whitespace", dlcName: "\u00a0Game —\u00a0Expansion\u00a0", want: "Game (Expansion)"},
+		{name: "internal hyphens preserved", dlcName: "Game - Expansion - Pack", want: "Game (Expansion - Pack)"},
+		{name: "empty after trimming", dlcName: "Game —", want: "Game"},
+	}
+
+	for _, test := range tests {
+		for _, safe := range []bool{false, true} {
+			t.Run(test.name+"/safe="+strconv.FormatBool(safe), func(t *testing.T) {
+				data := map[string]string{
+					settings.TEMPLATE_TITLE_NAME: "Game",
+					settings.TEMPLATE_DLC_NAME:   test.dlcName,
+				}
+				if got := applyTemplate(data, safe, "{TITLE_NAME} ({DLC_NAME})", 0); got != test.want {
+					t.Fatalf("applyTemplate() = %q, want %q", got, test.want)
+				}
+			})
+		}
 	}
 }
 

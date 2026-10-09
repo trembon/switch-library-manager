@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/trembon/switch-library-manager/backend/db"
 	"github.com/trembon/switch-library-manager/backend/settings"
@@ -368,9 +369,9 @@ func applyTemplate(templateData map[string]string, useSafeNames bool, template s
 
 	//remove title name from dlc name
 	dlcName := strings.Replace(templateData[settings.TEMPLATE_DLC_NAME], templateData[settings.TEMPLATE_TITLE_NAME], "", 1)
-	dlcName = strings.TrimSpace(dlcName)
-	dlcName = strings.TrimPrefix(dlcName, "-")
-	dlcName = strings.TrimSpace(dlcName)
+	dlcName = strings.TrimFunc(dlcName, func(r rune) bool {
+		return unicode.IsSpace(r) || unicode.Is(unicode.Dash, r)
+	})
 
 	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_DLC_NAME+"}", dlcName)
 	result = strings.ReplaceAll(result, "[]", "")

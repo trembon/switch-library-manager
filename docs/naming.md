@@ -44,6 +44,7 @@ For a base package with update version `65536` and one DLC, `{PACKAGE_CONTENTS}`
 - A file template must contain `{TITLE_NAME}` or `{TITLE_ID}` when file renaming is enabled. A folder template has the same requirement when per-game folders are enabled.
 - File extensions are kept from the original file and appended after the template output; do not include an extension in the template.
 - Update and DLC files can be placed in the configured `organization.updates_folder` and `organization.dlc_folder`. These subfolders can also apply when per-game folders are disabled.
+- After the game title is removed from `{DLC_NAME}`, leading and trailing Unicode whitespace and dash characters are trimmed. Dashes within the DLC name are preserved.
 - When `organization.switch_safe_file_names` is enabled, the generated name is converted to a Switch-safe name.
 - Split archives are moved as a set and keep their original part filenames.
 
