@@ -68,9 +68,17 @@
     <dialog id="game-details-dialog" class="game-details-dialog" aria-label="Game details">
       <button type="button" class="btn-close game-details-close" aria-label="Close game details" data-game-details-close></button>
       <div class="game-details-layout">
+        <div id="game-details-file-error" class="alert alert-danger game-details-file-error" role="alert" hidden></div>
         <div id="game-details-content" class="game-details-content"></div>
       </div>
+      <div id="game-details-path-tooltip" class="game-details-path-tooltip" role="tooltip" hidden></div>
     </dialog>
+
+    <template id="game-details-path-action-template">
+      <button type="button" class="game-details-path-info" aria-label="Show in folder" aria-describedby="game-details-path-tooltip">
+        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M5 2.5h6L15.5 7v9.5A1.5 1.5 0 0 1 14 18H5a1.5 1.5 0 0 1-1.5-1.5V4A1.5 1.5 0 0 1 5 2.5Z"/><path d="M11 2.75V7h4.25M6.5 9.25h3.25M6.5 11.5h2"/><circle cx="13.25" cy="14" r="3.25" class="game-details-path-info-badge"/><path d="M13.25 13.75v2M13.25 12.5h.01" class="game-details-path-info-mark"/></svg>
+      </button>
+    </template>
 
     <script id="settingsTemplate" type="text/x-jsrender">
       {{if feedback}}
@@ -540,7 +548,7 @@
             </dl>
             {{if base_collected && base_path}}
             <div class="game-details-local-file">
-              <strong>Base game file:</strong> <code>{{:base_path}}</code>
+              <strong>Base game file:</strong> <code>{{>base_path}}</code> <span class="game-details-file-action-placeholder" data-file-path="{{attr:base_path}}"></span>
             </div>
             {{/if}}
             {{if attributes.description}}
@@ -574,7 +582,7 @@
                     <th scope="row">v{{:version}}</th>
                     <td>{{if date}}{{:date}}{{else}}Unknown{{/if}}</td>
                     <td>{{if status === "collected"}}<span class="badge text-bg-success">Collected</span>{{else status === "ignored"}}<span class="badge text-bg-secondary">Ignored</span>{{else}}<span class="badge text-bg-warning">Missing</span>{{/if}}</td>
-                    <td>{{if path}}<button type="button" class="game-details-path-info" title="{{:path}}" aria-label="Local file path: {{:path}}"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M5 2.5h6L15.5 7v9.5A1.5 1.5 0 0 1 14 18H5a1.5 1.5 0 0 1-1.5-1.5V4A1.5 1.5 0 0 1 5 2.5Z"/><path d="M11 2.75V7h4.25M6.5 9.25h3.25M6.5 11.5h2"/><circle cx="13.25" cy="14" r="3.25" class="game-details-path-info-badge"/><path d="M13.25 13.75v2M13.25 12.5h.01" class="game-details-path-info-mark"/></svg></button>{{else}}<span class="text-secondary">—</span>{{/if}}</td>
+                    <td>{{if path}}<span class="game-details-file-action-placeholder" data-file-path="{{attr:path}}"></span>{{else}}<span class="text-secondary">—</span>{{/if}}</td>
                   </tr>
                   {{/for}}
                 </tbody>
@@ -595,7 +603,7 @@
                   <tr>
                     <th scope="row">v{{:version}}</th>
                     <td><span class="badge text-bg-success">Collected</span></td>
-                    <td><button type="button" class="game-details-path-info" title="{{:path}}" aria-label="Local file path: {{:path}}"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M5 2.5h6L15.5 7v9.5A1.5 1.5 0 0 1 14 18H5a1.5 1.5 0 0 1-1.5-1.5V4A1.5 1.5 0 0 1 5 2.5Z"/><path d="M11 2.75V7h4.25M6.5 9.25h3.25M6.5 11.5h2"/><circle cx="13.25" cy="14" r="3.25" class="game-details-path-info-badge"/><path d="M13.25 13.75v2M13.25 12.5h.01" class="game-details-path-info-mark"/></svg></button></td>
+                    <td>{{if path}}<span class="game-details-file-action-placeholder" data-file-path="{{attr:path}}"></span>{{else}}<span class="text-secondary">—</span>{{/if}}</td>
                   </tr>
                   {{/for}}
                 </tbody>
@@ -629,7 +637,7 @@
                       <span class="badge text-bg-warning">Missing</span>
                       {{/if}}
                     </td>
-                    <td>{{if path}}<button type="button" class="game-details-path-info" title="{{:path}}" aria-label="Local file path: {{:path}}"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M5 2.5h6L15.5 7v9.5A1.5 1.5 0 0 1 14 18H5a1.5 1.5 0 0 1-1.5-1.5V4A1.5 1.5 0 0 1 5 2.5Z"/><path d="M11 2.75V7h4.25M6.5 9.25h3.25M6.5 11.5h2"/><circle cx="13.25" cy="14" r="3.25" class="game-details-path-info-badge"/><path d="M13.25 13.75v2M13.25 12.5h.01" class="game-details-path-info-mark"/></svg></button>{{else}}<span class="text-secondary">—</span>{{/if}}</td>
+                    <td>{{if path}}<span class="game-details-file-action-placeholder" data-file-path="{{attr:path}}"></span>{{else}}<span class="text-secondary">—</span>{{/if}}</td>
                   </tr>
                   {{/for}}
                 </tbody>
@@ -652,7 +660,7 @@
                     <td><code>{{:titleId}}</code></td>
                     <td>{{if has_local_version}}v{{:local_version}}{{else}}Unknown{{/if}}</td>
                     <td><span class="badge text-bg-success">Collected</span></td>
-                    <td><button type="button" class="game-details-path-info" title="{{:path}}" aria-label="Local file path: {{:path}}"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M5 2.5h6L15.5 7v9.5A1.5 1.5 0 0 1 14 18H5a1.5 1.5 0 0 1-1.5-1.5V4A1.5 1.5 0 0 1 5 2.5Z"/><path d="M11 2.75V7h4.25M6.5 9.25h3.25M6.5 11.5h2"/><circle cx="13.25" cy="14" r="3.25" class="game-details-path-info-badge"/><path d="M13.25 13.75v2M13.25 12.5h.01" class="game-details-path-info-mark"/></svg></button></td>
+                    <td>{{if path}}<span class="game-details-file-action-placeholder" data-file-path="{{attr:path}}"></span>{{else}}<span class="text-secondary">—</span>{{/if}}</td>
                   </tr>
                   {{/for}}
                 </tbody>

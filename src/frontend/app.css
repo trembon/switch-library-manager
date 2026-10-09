@@ -482,6 +482,11 @@ body {
     flex-direction: column;
 }
 
+.game-details-file-error {
+    flex: 0 0 auto;
+    margin: 0.75rem 1rem 0;
+}
+
 .game-details-header {
     position: relative;
     z-index: 1;
@@ -659,7 +664,9 @@ body {
     border: 0;
     background: transparent;
     color: var(--bs-secondary-color);
-    cursor: help;
+    cursor: pointer;
+    margin-left: 0.25rem;
+    vertical-align: middle;
 }
 
 .game-details-path-info svg {
@@ -689,6 +696,28 @@ body {
 .game-details-path-info:focus-visible {
     outline: 2px solid var(--bs-primary);
     outline-offset: 2px;
+}
+
+.game-details-path-tooltip {
+    position: fixed;
+    z-index: 1080;
+    width: max-content;
+    max-width: min(32rem, calc(100vw - 1rem));
+    max-height: calc(100vh - 1rem);
+    overflow: auto;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    background: var(--bs-body-bg);
+    box-shadow: 0 0.25rem 0.75rem rgb(0 0 0 / 20%);
+    color: var(--bs-body-color);
+    overflow-wrap: anywhere;
+    pointer-events: auto;
+    white-space: normal;
+}
+
+.game-details-path-tooltip[hidden] {
+    display: none;
 }
 
 .game-details-message {

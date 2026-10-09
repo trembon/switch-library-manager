@@ -137,8 +137,87 @@ $(function () {
     const progressBar = $('.progress-bar');
     const gameDetailsDialog = document.getElementById("game-details-dialog");
     const gameDetailsContent = document.getElementById("game-details-content");
+    const gameDetailsFileError = document.getElementById("game-details-file-error");
+    const gameDetailsPathTooltip = document.getElementById("game-details-path-tooltip");
+    const gameDetailsPathActionTemplate = document.getElementById("game-details-path-action-template");
     let gameDetailsRequest = 0;
     let gameDetailsReturnFocus = null;
+    let gameDetailsFileRequest = 0;
+    let gameDetailsPathTooltipTarget = null;
+    let gameDetailsPathTooltipHideTimer;
+
+    function hideGameDetailsPathTooltip() {
+        if (gameDetailsPathTooltipHideTimer !== undefined) {
+            window.clearTimeout(gameDetailsPathTooltipHideTimer);
+            gameDetailsPathTooltipHideTimer = undefined;
+        }
+        gameDetailsPathTooltip.hidden = true;
+        gameDetailsPathTooltipTarget = null;
+    }
+
+    function positionGameDetailsPathTooltip(button) {
+        const buttonRect = button.getBoundingClientRect();
+        const tooltipRect = gameDetailsPathTooltip.getBoundingClientRect();
+        const margin = 8;
+        const maxLeft = Math.max(margin, window.innerWidth - tooltipRect.width - margin);
+        const maxTop = Math.max(margin, window.innerHeight - tooltipRect.height - margin);
+        const left = Math.max(margin, Math.min(buttonRect.left, maxLeft));
+        let top = buttonRect.bottom;
+        if (top + tooltipRect.height > window.innerHeight - margin) {
+            top = buttonRect.top - tooltipRect.height;
+        }
+        top = Math.max(margin, Math.min(top, maxTop));
+        gameDetailsPathTooltip.style.left = left + "px";
+        gameDetailsPathTooltip.style.top = top + "px";
+    }
+
+    function showGameDetailsPathTooltip(button) {
+        const path = button.dataset.filePath;
+        if (!path || !button.isConnected || !gameDetailsDialog.open) {
+            return;
+        }
+        if (gameDetailsPathTooltipHideTimer !== undefined) {
+            window.clearTimeout(gameDetailsPathTooltipHideTimer);
+            gameDetailsPathTooltipHideTimer = undefined;
+        }
+        gameDetailsPathTooltipTarget = button;
+        gameDetailsPathTooltip.textContent = path;
+        gameDetailsPathTooltip.hidden = false;
+        positionGameDetailsPathTooltip(button);
+    }
+
+    function scheduleGameDetailsPathTooltipHide() {
+        if (gameDetailsPathTooltipHideTimer !== undefined) {
+            window.clearTimeout(gameDetailsPathTooltipHideTimer);
+        }
+        gameDetailsPathTooltipHideTimer = window.setTimeout(() => {
+            gameDetailsPathTooltipHideTimer = undefined;
+            const button = gameDetailsPathTooltipTarget;
+            if (button && (button.matches(":hover") || document.activeElement === button || gameDetailsPathTooltip.matches(":hover"))) {
+                return;
+            }
+            hideGameDetailsPathTooltip();
+        }, 120);
+    }
+
+    function clearGameDetailsFileError() {
+        gameDetailsFileError.hidden = true;
+        gameDetailsFileError.textContent = "";
+    }
+
+    function renderGameDetailsFileActions() {
+        const prototype = gameDetailsPathActionTemplate.content.firstElementChild;
+        gameDetailsContent.querySelectorAll(".game-details-file-action-placeholder").forEach(placeholder => {
+            const path = placeholder.dataset.filePath;
+            if (!path || !prototype) {
+                placeholder.remove();
+                return;
+            }
+            const button = prototype.cloneNode(true);
+            button.dataset.filePath = path;
+            placeholder.replaceWith(button);
+        });
+    }
 
     function openGameDetails(titleID, returnFocusElement) {
         if (!titleID || !gameDetailsDialog || !gameDetailsContent) {
@@ -146,6 +225,9 @@ $(function () {
         }
 
         const request = ++gameDetailsRequest;
+        gameDetailsFileRequest++;
+        hideGameDetailsPathTooltip();
+        clearGameDetailsFileError();
         gameDetailsReturnFocus = returnFocusElement || document.activeElement;
         const loading = document.createElement("div");
         loading.className = "game-details-message";
@@ -161,6 +243,7 @@ $(function () {
             }
             gameDetailsDialog.setAttribute("aria-label", details.name ? "Game details for " + details.name : "Game details");
             gameDetailsContent.innerHTML = $("#gameDetailsTemplate").render(details);
+            renderGameDetailsFileActions();
         }).catch(error => {
             if (request !== gameDetailsRequest || !gameDetailsDialog.open) {
                 return;
@@ -174,8 +257,74 @@ $(function () {
         });
     }
 
+    gameDetailsDialog.addEventListener("pointerover", event => {
+        const button = event.target.closest && event.target.closest(".game-details-path-info");
+        if (button) {
+            showGameDetailsPathTooltip(button);
+        } else if (event.target === gameDetailsPathTooltip || gameDetailsPathTooltip.contains(event.target)) {
+            if (gameDetailsPathTooltipHideTimer !== undefined) {
+                window.clearTimeout(gameDetailsPathTooltipHideTimer);
+                gameDetailsPathTooltipHideTimer = undefined;
+            }
+        }
+    });
+
+    gameDetailsDialog.addEventListener("pointerout", event => {
+        const button = event.target.closest && event.target.closest(".game-details-path-info");
+        if (button === gameDetailsPathTooltipTarget || event.target === gameDetailsPathTooltip || gameDetailsPathTooltip.contains(event.target)) {
+            scheduleGameDetailsPathTooltipHide();
+        }
+    });
+
+    gameDetailsDialog.addEventListener("focusin", event => {
+        const button = event.target.closest && event.target.closest(".game-details-path-info");
+        if (button) {
+            showGameDetailsPathTooltip(button);
+        }
+    });
+
+    gameDetailsDialog.addEventListener("focusout", event => {
+        const button = event.target.closest && event.target.closest(".game-details-path-info");
+        if (button === gameDetailsPathTooltipTarget) {
+            scheduleGameDetailsPathTooltipHide();
+        }
+    });
+
+    gameDetailsDialog.addEventListener("scroll", hideGameDetailsPathTooltip, true);
+    window.addEventListener("resize", hideGameDetailsPathTooltip);
+
+    gameDetailsDialog.addEventListener("cancel", event => {
+        if (!gameDetailsPathTooltip.hidden) {
+            event.preventDefault();
+            hideGameDetailsPathTooltip();
+        }
+    });
+
+    gameDetailsDialog.addEventListener("click", async event => {
+        const button = event.target.closest && event.target.closest(".game-details-path-info");
+        if (!button || !button.dataset.filePath) {
+            return;
+        }
+
+        clearGameDetailsFileError();
+        const request = ++gameDetailsFileRequest;
+        try {
+            await ShowInFolder(button.dataset.filePath);
+        } catch (error) {
+            if (request !== gameDetailsFileRequest || !gameDetailsDialog.open || !gameDetailsContent.contains(button)) {
+                return;
+            }
+            const detail = error && error.message ? error.message : String(error);
+            gameDetailsFileError.textContent = "Unable to show the file in its folder: " + detail;
+            gameDetailsFileError.hidden = false;
+        }
+    });
+
     gameDetailsDialog.addEventListener("close", () => {
         gameDetailsRequest++;
+        gameDetailsFileRequest++;
+        hideGameDetailsPathTooltip();
+        clearGameDetailsFileError();
         if (gameDetailsReturnFocus && gameDetailsReturnFocus.isConnected) {
             gameDetailsReturnFocus.focus();
         }
