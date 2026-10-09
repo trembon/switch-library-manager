@@ -298,7 +298,7 @@ func TestTitleNameAndDLCNameHelpers(t *testing.T) {
 		t.Fatalf("NACP title name = %q", got)
 	}
 	local.File.Metadata.Ncap.TitleName = nil
-	if got := getTitleName(nil, local); got != "Name From File " {
+	if got := getTitleName(nil, local); got != "Name From File" {
 		t.Fatalf("filename title name = %q", got)
 	}
 	if got := getTitleName(nil, nil); got != "Unknown Title" {
@@ -858,8 +858,8 @@ func assertNotExists(t *testing.T, path string) {
 
 func TestParseTitleNameFromFileName(t *testing.T) {
 	for _, test := range []struct{ input, want string }{
-		{"Name [id].nsp", "Name "},
-		{"Name.nsp", "Name.nsp"},
+		{"Name [id].nsp", "Name"},
+		{"Name.nsp", "Name"},
 		{"[id].nsp", ""},
 	} {
 		if got := db.ParseTitleNameFromFileName(test.input); got != test.want {

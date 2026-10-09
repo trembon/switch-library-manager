@@ -149,8 +149,76 @@ func TestFilenameParsing(t *testing.T) {
 	if _, err := parseTitleIdFromFileName("Game [010000000001000G].nsp"); err == nil {
 		t.Fatal("expected invalid title ID error")
 	}
-	if ParseTitleNameFromFileName("Game [id][v1].nsp") != "Game " || ParseTitleNameFromFileName("Game.nsp") != "Game.nsp" {
-		t.Fatal("unexpected title name parsing")
+}
+
+func TestParseTitleNameFromFileName(t *testing.T) {
+	tests := []struct {
+		name     string
+		fileName string
+		want     string
+	}{
+		{
+			name:     "existing bracket tags",
+			fileName: "Game [id][v1].nsp",
+			want:     "Game",
+		},
+		{
+			name:     "reported combined version suffix",
+			fileName: "Capcom Fighting Collection 2 (v0 v1.0.0).nsp",
+			want:     "Capcom Fighting Collection 2",
+		},
+		{
+			name:     "reported adjacent version suffixes",
+			fileName: "Capcom Fighting Collection 2 (v0) (v1.0.0).nsp",
+			want:     "Capcom Fighting Collection 2",
+		},
+		{
+			name:     "adjacent version suffixes without spaces",
+			fileName: "Capcom Fighting Collection 2(v0)(v1.0.0).nsp",
+			want:     "Capcom Fighting Collection 2",
+		},
+		{
+			name:     "version suffixes before bracket tags",
+			fileName: "Capcom Fighting Collection 2 (v0) (v1.0.0)[010044901C5C2000][v0].nsp",
+			want:     "Capcom Fighting Collection 2",
+		},
+		{
+			name:     "repeated extension and version suffixes",
+			fileName: "Capcom Fighting Collection 2 (v0).nsp (v0) (v1.0.0).nsp",
+			want:     "Capcom Fighting Collection 2",
+		},
+		{
+			name:     "empty display version after numeric version",
+			fileName: "Capcom Fighting Collection 2 (v262144) (v).nsp",
+			want:     "Capcom Fighting Collection 2",
+		},
+		{
+			name:     "generated package contents",
+			fileName: "Adventure Game (v65536) (1G+1U+3D).xci",
+			want:     "Adventure Game",
+		},
+		{
+			name:     "ordinary parenthesized subtitle and number",
+			fileName: "Adventure Game (Special Edition) 2.nsp",
+			want:     "Adventure Game (Special Edition) 2",
+		},
+		{
+			name:     "malformed version-like parenthesis remains part of title",
+			fileName: "Adventure Game (vabc).nsz",
+			want:     "Adventure Game (vabc)",
+		},
+		{
+			name:     "bare extension is removed",
+			fileName: "Game.nsp",
+			want:     "Game",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := ParseTitleNameFromFileName(test.fileName); got != test.want {
+				t.Errorf("ParseTitleNameFromFileName(%q) = %q, want %q", test.fileName, got, test.want)
+			}
+		})
 	}
 }
 

@@ -19,8 +19,12 @@ import (
 )
 
 var (
-	versionRegex = regexp.MustCompile(`\[[vV]?(?P<version>[0-9]{1,10})]`)
-	titleIdRegex = regexp.MustCompile(`\[(?P<titleId>[A-Fa-f0-9]{16})]`)
+	versionRegex              = regexp.MustCompile(`\[[vV]?(?P<version>[0-9]{1,10})]`)
+	titleIdRegex              = regexp.MustCompile(`\[(?P<titleId>[A-Fa-f0-9]{16})]`)
+	switchFileExtensionSuffix = regexp.MustCompile(`(?i)\.(nsp|nsz|xci|xcz)$`)
+	versionNameSuffix         = regexp.MustCompile(`(?i)\s*\(v[0-9]+(\.[0-9]+)*(\s+v[0-9]+(\.[0-9]+)*)*\)$`)
+	emptyVersionNameSuffix    = regexp.MustCompile(`(?i)\s*\(v\)$`)
+	packageContentsNameSuffix = regexp.MustCompile(`(?i)\s*\([1-9][0-9]{0,8}g(\+[1-9][0-9]{0,8}u)?(\+[1-9][0-9]{0,8}d)?\)$`)
 )
 
 const (
@@ -607,7 +611,27 @@ func parseTitleIdFromFileName(fileName string) (*string, error) {
 func ParseTitleNameFromFileName(fileName string) string {
 	ind := strings.Index(fileName, "[")
 	if ind != -1 {
-		return fileName[:ind]
+		fileName = fileName[:ind]
 	}
-	return fileName
+
+	name := strings.TrimSpace(fileName)
+	for {
+		if match := switchFileExtensionSuffix.FindStringIndex(name); match != nil {
+			name = strings.TrimSpace(name[:match[0]])
+			continue
+		}
+		if match := packageContentsNameSuffix.FindStringIndex(name); match != nil {
+			name = strings.TrimSpace(name[:match[0]])
+			continue
+		}
+		if match := emptyVersionNameSuffix.FindStringIndex(name); match != nil && versionNameSuffix.MatchString(strings.TrimSpace(name[:match[0]])) {
+			name = strings.TrimSpace(name[:match[0]])
+			continue
+		}
+		if match := versionNameSuffix.FindStringIndex(name); match != nil {
+			name = strings.TrimSpace(name[:match[0]])
+			continue
+		}
+		return name
+	}
 }

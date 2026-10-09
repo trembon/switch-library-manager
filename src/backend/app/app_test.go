@@ -20,8 +20,8 @@ import (
 
 func TestGetLibraryTitleNameFallsBackForEmptyRemoteName(t *testing.T) {
 	title := &db.SwitchTitle{Attributes: db.TitleAttributes{Name: ""}}
-	if got := getLibraryTitleName(title, "", "Golf Story [01005EA00A57E000][v0].nsp"); got != "Golf Story " {
-		t.Fatalf("title name = %q, want %q", got, "Golf Story ")
+	if got := getLibraryTitleName(title, "", "Golf Story [01005EA00A57E000][v0].nsp"); got != "Golf Story" {
+		t.Fatalf("title name = %q, want %q", got, "Golf Story")
 	}
 }
 

@@ -238,6 +238,114 @@ func TestBuildOrganizationPlanUsesFilenameMetadataWithoutRemoteTitle(t *testing.
 	}
 }
 
+func TestBuildOrganizationPlanRepairsRepeatedSuffixesOnce(t *testing.T) {
+	base := t.TempDir()
+	sourceFolder := filepath.Join(base, "incoming")
+	mustMkdir(t, sourceFolder)
+	fileName := "Capcom Fighting Collection 2 (v0 v1.0.0).nsp"
+	source := filepath.Join(sourceFolder, fileName)
+	writeFixture(t, source, "synthetic base")
+
+	titleID := "010044901C5C2000"
+	local := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{
+		"010044901c5c2": {
+			BaseExist: true,
+			File: db.SwitchFileInfo{
+				ExtendedInfo: db.ExtendedFileInfo{BaseFolder: sourceFolder, FileName: fileName},
+				Metadata:     contentMetadata(titleID, 0, "1.0.0"),
+			},
+		},
+	}}
+	remote := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{
+		"010044901c5c2": {Attributes: db.TitleAttributes{Id: titleID, Name: "カプコン ファイティング コレクション2"}},
+	}}
+	options := settings.OrganizeOptions{
+		RenameFiles:      true,
+		FileNameTemplate: "{TITLE_NAME} (v{VERSION}) (v{VERSION_TXT})",
+	}
+	wantPath := filepath.Join(sourceFolder, "Capcom Fighting Collection 2 (v0) (v1.0.0).nsp")
+
+	firstPlan, err := BuildOrganizationPlan(base, local, remote, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(firstPlan.Conflicts) != 0 || len(firstPlan.Moves) != 1 || firstPlan.Moves[0].Destination != wantPath {
+		t.Fatalf("first organization plan = %#v, want one move to %q", firstPlan, wantPath)
+	}
+	if err := ExecuteOrganizationPlan(firstPlan, local, base, options, nil); err != nil {
+		t.Fatalf("execute first organization plan: %v", err)
+	}
+	if _, err := os.Stat(source); !os.IsNotExist(err) {
+		t.Fatalf("original file still exists after repair, stat error = %v", err)
+	}
+	assertExists(t, wantPath)
+
+	secondPlan, err := BuildOrganizationPlan(base, local, remote, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(secondPlan.Conflicts) != 0 || len(secondPlan.Moves) != 0 {
+		t.Fatalf("second organization plan = %#v, want no further moves", secondPlan)
+	}
+}
+
+func TestBuildOrganizationPlanKeepsFilesWhenSuffixRepairCollides(t *testing.T) {
+	base := t.TempDir()
+	sourceFolder := filepath.Join(base, "incoming")
+	mustMkdir(t, sourceFolder)
+
+	const titleName = "カプコン ファイティング コレクション2"
+	files := []struct {
+		id       string
+		fileName string
+	}{
+		{id: "010044901C5C2000", fileName: "Capcom Fighting Collection 2 (v0 v1.0.0).nsp"},
+		{id: "010044901C5C3000", fileName: "Capcom Fighting Collection 2 (v0) (v1.0.0).nsp"},
+	}
+	local := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{}}
+	remote := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{}}
+	for _, file := range files {
+		source := filepath.Join(sourceFolder, file.fileName)
+		writeFixture(t, source, file.id)
+		key := strings.ToLower(file.id[:len(file.id)-3])
+		local.TitlesMap[key] = &db.SwitchGameFiles{
+			BaseExist: true,
+			File: db.SwitchFileInfo{
+				ExtendedInfo: db.ExtendedFileInfo{BaseFolder: sourceFolder, FileName: file.fileName},
+				Metadata:     contentMetadata(file.id, 0, "1.0.0"),
+			},
+		}
+		remote.TitlesMap[key] = &db.SwitchTitle{
+			Attributes: db.TitleAttributes{Id: file.id, Name: titleName},
+		}
+	}
+	options := settings.OrganizeOptions{
+		RenameFiles:         true,
+		CreateFolderPerGame: true,
+		FolderNameTemplate:  "{TITLE_NAME}",
+		FileNameTemplate:    "{TITLE_NAME} (v{VERSION}) (v{VERSION_TXT})",
+	}
+
+	plan, err := BuildOrganizationPlan(base, local, remote, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Conflicts) != 2 || len(plan.Moves) != 2 {
+		t.Fatalf("collision plan = %#v, want both sources blocked", plan)
+	}
+	if err := ExecuteOrganizationPlan(plan, local, base, options, nil); err == nil {
+		t.Fatal("ExecuteOrganizationPlan() accepted colliding repaired names")
+	}
+	for _, file := range files {
+		path := filepath.Join(sourceFolder, file.fileName)
+		content, err := os.ReadFile(path)
+		if err != nil || string(content) != file.id {
+			t.Fatalf("source %q changed: content=%q err=%v", path, content, err)
+		}
+	}
+	assertNotExists(t, filepath.Join(base, titleName, "Capcom Fighting Collection 2 (v0) (v1.0.0).nsp"))
+}
+
 func TestBuildOrganizationPlanUsesV0DLCDisplayVersionFallback(t *testing.T) {
 	base := t.TempDir()
 	source := filepath.Join(base, "incoming")

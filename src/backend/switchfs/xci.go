@@ -70,7 +70,7 @@ func ReadXciMetadata(filePath string) (map[string]*ContentMetaAttributes, error)
 			if currCnmt.Type == "BASE" || currCnmt.Type == "UPD" {
 				nacp, err := ExtractNacp(currCnmt, file, secureHfs0, secureOffset)
 				if err != nil {
-					zap.S().Debug("Failed to extract nacp [%v]\n", err.Error())
+					zap.S().Debugf("Failed to extract NACP for XCI file %q, title ID %q: %v", filePath, currCnmt.TitleId, err)
 				}
 				currCnmt.Ncap = nacp
 			}

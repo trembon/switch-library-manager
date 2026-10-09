@@ -43,7 +43,7 @@ func ReadNspMetadata(filePath string) (map[string]*ContentMetaAttributes, error)
 			if currCnmt.Type != "DLC" {
 				nacp, err := ExtractNacp(currCnmt, file, pfs0, 0)
 				if err != nil {
-					zap.S().Debug("Failed to extract nacp [%v]\n", err.Error())
+					zap.S().Debugf("Failed to extract NACP for NSP file %q, title ID %q: %v", filePath, currCnmt.TitleId, err)
 				}
 				currCnmt.Ncap = nacp
 			}
