@@ -507,4 +507,32 @@ func TestRescanLibraryRefreshesSnapshotAndPreservesMetadataCache(t *testing.T) {
 	if hardScan.NumFiles != 2 {
 		t.Fatalf("hard rescan files = %d, want 2", hardScan.NumFiles)
 	}
+
+	for _, path := range []string{second, additional} {
+		if err := os.Remove(path); err != nil {
+			t.Fatalf("remove %s: %v", path, err)
+		}
+	}
+
+	for _, scan := range []struct {
+		name string
+		run  func() (LocalLibraryData, error)
+	}{
+		{name: "startup scan", run: func() (LocalLibraryData, error) { return application.UpdateLocalLibrary(true) }},
+		{name: "normal rescan", run: func() (LocalLibraryData, error) { return application.RescanLibrary(false) }},
+		{name: "hard rescan", run: func() (LocalLibraryData, error) { return application.RescanLibrary(true) }},
+	} {
+		t.Run("empty library "+scan.name, func(t *testing.T) {
+			got, err := scan.run()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.NumFiles != 0 || len(got.LibraryData) != 0 || len(got.Issues) != 0 {
+				t.Fatalf("empty scan = %#v, want no files, rows, or issues", got)
+			}
+			if got.LibraryData == nil || got.Issues == nil {
+				t.Fatalf("empty scan lists must be non-nil: library=%#v issues=%#v", got.LibraryData, got.Issues)
+			}
+		})
+	}
 }

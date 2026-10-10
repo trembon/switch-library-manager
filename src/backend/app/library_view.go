@@ -7,7 +7,10 @@ import (
 )
 
 func buildLocalLibraryData(localDB *db.LocalSwitchFilesDB, switchDB *db.SwitchTitlesDB) LocalLibraryData {
-	response := LocalLibraryData{}
+	response := LocalLibraryData{
+		LibraryData: make([]LibraryTemplateData, 0),
+		Issues:      make([]Pair, 0),
+	}
 	for key, value := range localDB.TitlesMap {
 		if value.BaseExist {
 			version := ""

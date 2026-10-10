@@ -871,12 +871,13 @@ $(function () {
                 if (state.settings.paths.library_folder && !state.library){
                     return
                 }
-                let html = $(target + "Template").render({folder: state.settings.paths.library_folder,library:state.library ? state.library.issues: undefined,numFiles:state.library ? state.library.num_files:-1});
+                const libraryIssues = state.library?.issues ?? [];
+                let html = $(target + "Template").render({folder: state.settings.paths.library_folder,library:libraryIssues,numFiles:state.library ? state.library.num_files:-1});
                 $(target).html(html);
-                if (state.library.issues && state.library.issues.length) {
+                if (libraryIssues.length) {
                     createTable("#status-table", tableOptions({
                         layout:"fitDataStretch",
-                        data: state.library.issues,
+                        data: libraryIssues,
                         columns: [
                             {formatter:"rownum",download:false},
                             {title: "File name",width:500, headerSort:false, field: "key",formatter:"textarea",cellClick:function(e, cell){
@@ -904,24 +905,26 @@ $(function () {
                 if (state.settings.paths.library_folder && !state.library && !state.libraryRefreshError){
                     return
                 }
+                const libraryData = state.library?.library_data ?? [];
+                const libraryIssues = state.library?.issues ?? [];
                 let html = $(target + "Template").render(
                     {
                         folder: state.settings.paths.library_folder,
                         libraryRefreshError: state.libraryRefreshError,
-                        library: state.library ? state.library.library_data : [] ,
-                        num_issues:state.library ? (state.library.issues ? state.library.issues.length : 0) : 0,
+                        library: libraryData,
+                        num_issues:libraryIssues.length,
                         num_files:state.library ? state.library.num_files : 0,
                         keys:state.keys
                     })
                 $(target).html(html);
-                if (state.library && state.library.library_data.length) {
+                if (libraryData.length) {
                     createTable("#library-table", gameDetailsTableOptions({
                         initialSort:[
                             {column:"name", dir:"asc"}, //sort by this first
                         ],
                         layout:"fitColumns",
                         columnMinWidth:24,
-                        data: state.library.library_data,
+                        data: libraryData,
                         columns: [
                             {formatter:"rownum",download:false,minWidth:24},
                             {field: "icon",minWidth:40,formatter:"image", download:false,headerSort:false,formatterParams:{height:"60px", width:"60px"}},
