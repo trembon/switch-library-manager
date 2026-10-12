@@ -3,6 +3,7 @@ package process
 import (
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/trembon/switch-library-manager/backend/db"
 	"github.com/trembon/switch-library-manager/backend/switchfs"
@@ -43,7 +44,7 @@ func ScanForMissingUpdates(localDB map[string]*db.SwitchGameFiles,
 			continue
 		}
 
-		if _, ok := ignoreTitleIds[switchDB[idPrefix].Attributes.Id]; ok {
+		if _, ok := ignoreTitleIds[strings.ToLower(switchDB[idPrefix].Attributes.Id)]; ok {
 			continue
 		}
 
@@ -103,7 +104,7 @@ func ScanForMissingUpdates(localDB map[string]*db.SwitchGameFiles,
 						continue
 					}
 
-					if _, ok := ignoreTitleIds[localDlc.Metadata.TitleId]; ok {
+					if _, ok := ignoreTitleIds[strings.ToLower(localDlc.Metadata.TitleId)]; ok {
 						continue
 					}
 

@@ -2,6 +2,7 @@ package process
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/trembon/switch-library-manager/backend/db"
@@ -73,6 +74,80 @@ func TestScanForMissingUpdates(t *testing.T) {
 	}
 	if got := ScanForMissingUpdates(noMissing, remote, nil, true); len(got) != 0 {
 		t.Fatalf("complete result = %#v", got)
+	}
+}
+
+func TestScanForMissingUpdatesNormalizesIgnoredBaseIDs(t *testing.T) {
+	baseID := "0100abcd00001000"
+	otherBaseID := "0100feed00001000"
+	tests := []struct {
+		name     string
+		remoteID string
+	}{
+		{name: "uppercase", remoteID: strings.ToUpper(baseID)},
+		{name: "mixed case", remoteID: "0100AbCd00001000"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			local := map[string]*db.SwitchGameFiles{
+				"0100abcd00001": {BaseExist: true, File: db.SwitchFileInfo{Metadata: metadataForID(baseID, 0)}},
+				"0100feed00001": {BaseExist: true, File: db.SwitchFileInfo{Metadata: metadataForID(otherBaseID, 0)}},
+			}
+			remote := map[string]*db.SwitchTitle{
+				"0100abcd00001": {Attributes: db.TitleAttributes{Id: test.remoteID}, Updates: map[int]string{1: "latest"}},
+				"0100feed00001": {Attributes: db.TitleAttributes{Id: otherBaseID}, Updates: map[int]string{1: "latest"}},
+			}
+
+			got := ScanForMissingUpdates(local, remote, map[string]struct{}{baseID: {}}, true)
+			if len(got) != 1 {
+				t.Fatalf("missing updates = %#v, want only the unrelated title", got)
+			}
+			if _, ok := got[otherBaseID]; !ok {
+				t.Fatalf("unrelated title %q was not reported: %#v", otherBaseID, got)
+			}
+		})
+	}
+}
+
+func TestScanForMissingUpdatesNormalizesIgnoredDLCIDs(t *testing.T) {
+	baseID := "0100abcd00001000"
+	ignoredDLCID := "0100abcd00001a01"
+	otherDLCID := "0100abcd00001a02"
+	tests := []struct {
+		name       string
+		metadataID string
+	}{
+		{name: "uppercase", metadataID: strings.ToUpper(ignoredDLCID)},
+		{name: "mixed case", metadataID: "0100AbCd00001A01"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			local := map[string]*db.SwitchGameFiles{"0100abcd00001": {
+				BaseExist: true,
+				File:      db.SwitchFileInfo{Metadata: metadataForID(baseID, 0)},
+				Dlc: map[string]db.SwitchFileInfo{
+					ignoredDLCID: {Metadata: metadataForID(test.metadataID, 1)},
+					otherDLCID:   {Metadata: metadataForID(otherDLCID, 1)},
+				},
+			}}
+			remote := map[string]*db.SwitchTitle{"0100abcd00001": {
+				Attributes: db.TitleAttributes{Id: baseID},
+				Dlc: map[string]db.TitleAttributes{
+					ignoredDLCID: {Id: ignoredDLCID, Version: json.Number("3")},
+					otherDLCID:   {Id: otherDLCID, Version: json.Number("3")},
+				},
+			}}
+
+			got := ScanForMissingUpdates(local, remote, map[string]struct{}{ignoredDLCID: {}}, false)
+			if len(got) != 1 {
+				t.Fatalf("missing updates = %#v, want only the unrelated DLC", got)
+			}
+			if _, ok := got[otherDLCID]; !ok {
+				t.Fatalf("unrelated DLC %q was not reported: %#v", otherDLCID, got)
+			}
+		})
 	}
 }
 
