@@ -14,18 +14,24 @@ func buildLocalLibraryData(localDB *db.LocalSwitchFilesDB, switchDB *db.SwitchTi
 	for key, value := range localDB.TitlesMap {
 		if value.BaseExist {
 			version := ""
-			name := ""
+			titleID := ""
+			if value.File.Metadata != nil {
+				titleID = value.File.Metadata.TitleId
+			}
+			var title *db.SwitchTitle
+			if switchDB != nil {
+				title = switchDB.TitlesMap[key]
+			}
+			name := db.ResolveGameTitleName(title, value)
 			if value.File.Metadata != nil && value.File.Metadata.Ncap != nil {
 				version = value.File.Metadata.Ncap.DisplayVersion
-				name = value.File.Metadata.Ncap.TitleName["AmericanEnglish"].Title
 			}
 
 			if latest, ok := value.Updates[value.LatestUpdate]; ok && latest.Metadata != nil && latest.Metadata.Ncap != nil && latest.Metadata.Ncap.DisplayVersion != "" {
 				version = latest.Metadata.Ncap.DisplayVersion
 			}
 
-			if title, ok := switchDB.TitlesMap[key]; ok {
-				name = getLibraryTitleName(title, name, value.File.ExtendedInfo.FileName)
+			if title != nil {
 				response.LibraryData = append(response.LibraryData, LibraryTemplateData{
 					Icon:    title.Attributes.IconUrl,
 					Name:    name,
@@ -37,15 +43,12 @@ func buildLocalLibraryData(localDB *db.LocalSwitchFilesDB, switchDB *db.SwitchTi
 					Path:    filepath.Join(value.File.ExtendedInfo.BaseFolder, value.File.ExtendedInfo.FileName),
 				})
 			} else {
-				if name == "" {
-					name = db.ParseTitleNameFromFileName(value.File.ExtendedInfo.FileName)
-				}
 				response.LibraryData = append(response.LibraryData, LibraryTemplateData{
 					Name:    name,
 					Update:  value.LatestUpdate,
 					Version: version,
 					Type:    getType(value),
-					TitleId: value.File.Metadata.TitleId,
+					TitleId: titleID,
 					Path:    filepath.Join(value.File.ExtendedInfo.BaseFolder, value.File.ExtendedInfo.FileName),
 				})
 			}
@@ -86,14 +89,4 @@ func getType(gameFile *db.SwitchGameFiles) string {
 		return ext[1:]
 	}
 	return ""
-}
-
-func getLibraryTitleName(title *db.SwitchTitle, name, fileName string) string {
-	if title != nil && title.Attributes.Name != "" {
-		return title.Attributes.Name
-	}
-	if name != "" {
-		return name
-	}
-	return db.ParseTitleNameFromFileName(fileName)
 }

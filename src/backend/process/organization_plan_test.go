@@ -62,6 +62,59 @@ func TestBuildOrganizationPlanFindsDuplicateDestinationsBeforeMoving(t *testing.
 	assertNotExists(t, filepath.Join(source, "Game.nsp"))
 }
 
+func TestOrganizationAndPreviewUseSharedJapaneseTitleFallback(t *testing.T) {
+	root := t.TempDir()
+	sourceFolder := filepath.Join(root, "incoming")
+	mustMkdir(t, sourceFolder)
+	writeFixture(t, filepath.Join(sourceFolder, "test.nsp"), "synthetic base")
+
+	const (
+		baseID = "010044901C5C2000"
+		key    = "010044901c5c2"
+		name   = "カプコン ファイティング コレクション2"
+	)
+	localGame := &db.SwitchGameFiles{
+		BaseExist: true,
+		File: db.SwitchFileInfo{
+			ExtendedInfo: db.ExtendedFileInfo{BaseFolder: sourceFolder, FileName: "test.nsp"},
+			Metadata:     contentMetadata(baseID, 0, ""),
+		},
+	}
+	local := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{key: localGame}}
+	remote := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{
+		key: {Attributes: db.TitleAttributes{Id: baseID, Name: name}},
+	}}
+	options := settings.OrganizeOptions{
+		CreateFolderPerGame: true,
+		FolderNameTemplate:  "{TITLE_NAME}",
+		RenameFiles:         true,
+		FileNameTemplate:    "{TITLE_NAME}",
+	}
+	want := filepath.Join(name, name+".nsp")
+
+	preview, err := BuildOrganizationPreview(root, options, local, remote)
+	if err != nil {
+		t.Fatalf("build preview: %v", err)
+	}
+	gamePreviewPath := ""
+	for _, entry := range preview {
+		if entry.Kind == "game" {
+			gamePreviewPath = entry.Path
+		}
+	}
+	if gamePreviewPath != want {
+		t.Fatalf("game preview path = %q, want %q (all entries: %#v)", gamePreviewPath, want, preview)
+	}
+
+	plan, err := BuildOrganizationPlan(root, local, remote, options)
+	if err != nil {
+		t.Fatalf("build organization plan: %v", err)
+	}
+	if len(plan.Conflicts) != 0 || len(plan.Moves) != 1 || plan.Moves[0].Destination != filepath.Join(root, want) {
+		t.Fatalf("organization plan = %#v, want one move to %q", plan, filepath.Join(root, want))
+	}
+}
+
 func TestDLCNameTrimmingMatchesPreviewAndRemainsStable(t *testing.T) {
 	for _, test := range []struct {
 		name string
@@ -402,7 +455,7 @@ func TestBuildOrganizationPlanRepairsRepeatedSuffixesOnce(t *testing.T) {
 		RenameFiles:      true,
 		FileNameTemplate: "{TITLE_NAME} (v{VERSION}) (v{VERSION_TXT})",
 	}
-	wantPath := filepath.Join(sourceFolder, "Capcom Fighting Collection 2 (v0) (v1.0.0).nsp")
+	wantPath := filepath.Join(sourceFolder, "カプコン ファイティング コレクション2 (v0) (v1.0.0).nsp")
 
 	firstPlan, err := BuildOrganizationPlan(base, local, remote, options)
 	if err != nil {

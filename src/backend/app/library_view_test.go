@@ -110,6 +110,57 @@ func TestBuildLocalLibraryDataPreservesIssueEntries(t *testing.T) {
 	}
 }
 
+func TestBuildLocalLibraryDataUsesSharedTitleResolver(t *testing.T) {
+	const key = "010044901c5c2"
+	game := &db.SwitchGameFiles{
+		BaseExist: true,
+		File: db.SwitchFileInfo{
+			ExtendedInfo: db.ExtendedFileInfo{FileName: "test.nsp"},
+			Metadata: &switchfs.ContentMetaAttributes{Ncap: &switchfs.Nacp{TitleName: map[string]switchfs.NacpTitle{
+				"BritishEnglish": {Title: "British Game Name"},
+			}}},
+		},
+	}
+	remote := &db.SwitchTitle{Attributes: db.TitleAttributes{Id: "010044901C5C2000", Name: "カプコン ファイティング コレクション2"}}
+	localDB := &db.LocalSwitchFilesDB{
+		TitlesMap: map[string]*db.SwitchGameFiles{key: game},
+		Skipped:   map[db.ExtendedFileInfo]db.SkippedFile{},
+	}
+	switchDB := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{key: remote}}
+
+	got := buildLocalLibraryData(localDB, switchDB)
+	if len(got.LibraryData) != 1 || got.LibraryData[0].Name != "British Game Name" {
+		t.Fatalf("Library title = %#v, want embedded British English name", got.LibraryData)
+	}
+	if remote.Attributes.Name != "カプコン ファイティング コレクション2" {
+		t.Fatalf("resolver mutated catalog title: %q", remote.Attributes.Name)
+	}
+
+	game.File.Metadata = nil
+	got = buildLocalLibraryData(localDB, switchDB)
+	if len(got.LibraryData) != 1 || got.LibraryData[0].Name != remote.Attributes.Name {
+		t.Fatalf("Library fallback title = %#v, want catalog title %q", got.LibraryData, remote.Attributes.Name)
+	}
+}
+
+func TestBuildLocalLibraryDataHandlesMissingMetadata(t *testing.T) {
+	const key = "010044901c5c2"
+	localDB := &db.LocalSwitchFilesDB{
+		TitlesMap: map[string]*db.SwitchGameFiles{
+			key: {
+				BaseExist: true,
+				File:      db.SwitchFileInfo{ExtendedInfo: db.ExtendedFileInfo{FileName: "test.nsp"}},
+			},
+		},
+		Skipped: map[db.ExtendedFileInfo]db.SkippedFile{},
+	}
+
+	got := buildLocalLibraryData(localDB, nil)
+	if len(got.LibraryData) != 1 || got.LibraryData[0].Name != "test" || got.LibraryData[0].TitleId != "" {
+		t.Fatalf("Library data = %#v, want filename fallback with no title ID", got.LibraryData)
+	}
+}
+
 func TestBuildLocalLibraryDataFallsBackToBaseDisplayVersion(t *testing.T) {
 	tests := []struct {
 		name         string

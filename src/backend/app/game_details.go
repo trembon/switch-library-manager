@@ -111,12 +111,7 @@ func buildGameDetails(
 			details.BasePath = switchFilePath(local.File)
 		}
 	}
-	if details.Attributes.Name == "" {
-		details.Attributes.Name = localGameName(local)
-	}
-	if details.Attributes.Name == "" && local != nil {
-		details.Attributes.Name = localFallbackName(local)
-	}
+	details.Attributes.Name = db.ResolveGameTitleName(remote, local)
 	details.Name = details.Attributes.Name
 
 	ignoredUpdates := makeIgnoreIDs(missingSettings.IgnoreUpdateIDs)
@@ -290,64 +285,6 @@ func safeHTTPURL(value string) string {
 		return ""
 	}
 	return parsed.String()
-}
-
-func localGameName(local *db.SwitchGameFiles) string {
-	if local == nil {
-		return ""
-	}
-	if local.BaseExist {
-		if name := switchFileTitleName(local.File); name != "" {
-			return name
-		}
-	}
-	versions := make([]int, 0, len(local.Updates))
-	for version := range local.Updates {
-		versions = append(versions, version)
-	}
-	sort.Ints(versions)
-	for _, version := range versions {
-		if name := switchFileTitleName(local.Updates[version]); name != "" {
-			return name
-		}
-	}
-	ids := make([]string, 0, len(local.Dlc))
-	for id := range local.Dlc {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
-	for _, id := range ids {
-		if name := switchFileTitleName(local.Dlc[id]); name != "" {
-			return name
-		}
-	}
-	return ""
-}
-
-func localFallbackName(local *db.SwitchGameFiles) string {
-	if local == nil {
-		return ""
-	}
-	if local.BaseExist {
-		return db.ParseTitleNameFromFileName(local.File.ExtendedInfo.FileName)
-	}
-	versions := make([]int, 0, len(local.Updates))
-	for version := range local.Updates {
-		versions = append(versions, version)
-	}
-	sort.Ints(versions)
-	if len(versions) != 0 {
-		return db.ParseTitleNameFromFileName(local.Updates[versions[len(versions)-1]].ExtendedInfo.FileName)
-	}
-	ids := make([]string, 0, len(local.Dlc))
-	for id := range local.Dlc {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
-	if len(ids) != 0 {
-		return db.ParseTitleNameFromFileName(local.Dlc[ids[0]].ExtendedInfo.FileName)
-	}
-	return ""
 }
 
 func switchFileTitleName(file db.SwitchFileInfo) string {

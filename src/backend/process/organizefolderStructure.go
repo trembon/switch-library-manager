@@ -21,7 +21,6 @@ import (
 var (
 	folderIllegalCharsRegex = regexp.MustCompile(`[/\\?%*:;=|"<>]`)
 	nonAscii                = regexp.MustCompile("[a-zA-Z0-9áéíóú@#%&',.\\s-\\[\\]\\(\\)\\+]")
-	cjk                     = regexp.MustCompile("[\u2f70-\u2FA1\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f\\p{Katakana}\\p{Hiragana}\\p{Hangul}]")
 )
 
 var packageContentsRegex = regexp.MustCompile(`(?i)\(([1-9][0-9]{0,8})g(?:\+([1-9][0-9]{0,8})u)?(?:\+([1-9][0-9]{0,8})d)?\)`)
@@ -135,33 +134,6 @@ func getDlcName(switchTitle *db.SwitchTitle, file db.SwitchFileInfo) string {
 		return name
 	}
 	return ""
-}
-
-func getTitleName(switchTitle *db.SwitchTitle, v *db.SwitchGameFiles) string {
-	// Check if switchTitle is not nil and contains a name
-	if switchTitle != nil && switchTitle.Attributes.Name != "" {
-		res := cjk.FindAllString(switchTitle.Attributes.Name, -1)
-		if len(res) == 0 {
-			return switchTitle.Attributes.Name
-		}
-	}
-
-	// Check if v and its Metadata are present
-	if v != nil && v.File.Metadata != nil && v.File.Metadata.Ncap != nil {
-		// Check if the title name exists
-		name := v.File.Metadata.Ncap.TitleName["AmericanEnglish"].Title
-		if name != "" {
-			return name
-		}
-	}
-
-	// For non-eShop games, get the name from the file
-	if v != nil {
-		return db.ParseTitleNameFromFileName(v.File.ExtendedInfo.FileName)
-	}
-
-	// Default return if no valid name is found
-	return "Unknown Title"
 }
 
 func getFolderName(options settings.OrganizeOptions, templateData map[string]string) string {

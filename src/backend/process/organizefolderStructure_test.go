@@ -316,23 +316,23 @@ func TestIsOptionsValid(t *testing.T) {
 func TestTitleNameAndDLCNameHelpers(t *testing.T) {
 	metadata := contentMetadata("0100abcd00001000", 3, "3.0.0")
 	metadata.Ncap.TitleName["AmericanEnglish"] = switchfs.NacpTitle{Title: "Name From NACP"}
-	local := &db.SwitchGameFiles{File: db.SwitchFileInfo{ExtendedInfo: db.ExtendedFileInfo{FileName: "Name From File [0100abcd00001000][v3].nsp"}, Metadata: metadata}}
+	local := &db.SwitchGameFiles{BaseExist: true, File: db.SwitchFileInfo{ExtendedInfo: db.ExtendedFileInfo{FileName: "Name From File [0100abcd00001000][v3].nsp"}, Metadata: metadata}}
 
 	remote := &db.SwitchTitle{Attributes: db.TitleAttributes{Id: metadata.TitleId, Name: "Remote Name"}, Dlc: map[string]db.TitleAttributes{
 		"0100abcd00001a01": {Name: "Remote Name - Expansion\nPack"},
 	}}
-	if got := getTitleName(remote, local); got != "Remote Name" {
+	if got := db.ResolveGameTitleName(remote, local); got != "Remote Name" {
 		t.Fatalf("remote title name = %q", got)
 	}
 	remote.Attributes.Name = "日本語"
-	if got := getTitleName(remote, local); got != "Name From NACP" {
+	if got := db.ResolveGameTitleName(remote, local); got != "Name From NACP" {
 		t.Fatalf("NACP title name = %q", got)
 	}
 	local.File.Metadata.Ncap.TitleName = nil
-	if got := getTitleName(nil, local); got != "Name From File" {
+	if got := db.ResolveGameTitleName(nil, local); got != "Name From File" {
 		t.Fatalf("filename title name = %q", got)
 	}
-	if got := getTitleName(nil, nil); got != "Unknown Title" {
+	if got := db.ResolveGameTitleName(nil, nil); got != "Unknown Title" {
 		t.Fatalf("nil title name = %q", got)
 	}
 

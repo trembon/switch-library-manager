@@ -167,6 +167,38 @@ func TestBuildGameDetailsUsesLocalFallbackAndHandlesMissingMetadata(t *testing.T
 	}
 }
 
+func TestBuildGameDetailsUsesSharedTitleResolver(t *testing.T) {
+	local := &db.SwitchGameFiles{
+		BaseExist: true,
+		File: detailsFile("test.nsp", &switchfs.ContentMetaAttributes{TitleId: detailsBaseID, Ncap: &switchfs.Nacp{
+			TitleName: map[string]switchfs.NacpTitle{"AmericanEnglish": {Title: "Embedded English Name"}},
+		}}),
+	}
+	remoteTitle := &db.SwitchTitle{Attributes: db.TitleAttributes{Id: detailsBaseID, Name: "カタログ名"}}
+	localDB := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{detailsPrefix: local}}
+	switchDB := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{detailsPrefix: remoteTitle}}
+
+	details, err := buildGameDetails(detailsBaseID, localDB, switchDB, settings.MissingContentSettings{})
+	if err != nil {
+		t.Fatalf("build details: %v", err)
+	}
+	if details.Name != "Embedded English Name" || details.Attributes.Name != details.Name {
+		t.Fatalf("resolved English name is inconsistent: Name=%q Attributes.Name=%q", details.Name, details.Attributes.Name)
+	}
+	if remoteTitle.Attributes.Name != "カタログ名" {
+		t.Fatalf("resolver mutated catalog title: %q", remoteTitle.Attributes.Name)
+	}
+
+	local.File.Metadata.Ncap.TitleName = nil
+	details, err = buildGameDetails(detailsBaseID, localDB, switchDB, settings.MissingContentSettings{})
+	if err != nil {
+		t.Fatalf("build details without English metadata: %v", err)
+	}
+	if details.Name != remoteTitle.Attributes.Name || details.Attributes.Name != details.Name {
+		t.Fatalf("resolved catalog fallback is inconsistent: Name=%q Attributes.Name=%q", details.Name, details.Attributes.Name)
+	}
+}
+
 func TestBuildGameDetailsKeepsCatalogContentWhenGameMetadataIsMissing(t *testing.T) {
 	file := detailsFile("Local Game [0100000000010000][v0].nsp", nil)
 	localDB := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{
