@@ -1,8 +1,13 @@
 package _crypto
 
 import (
+	"bytes"
 	"crypto/aes"
+	"crypto/cipher"
+	"crypto/des"
 	"encoding/hex"
+	"errors"
+	"strings"
 	"testing"
 )
 
@@ -95,5 +100,78 @@ func TestMul2(t *testing.T) {
 	mul2(&tweak)
 	if tweak[0] != 0x87 || tweak[15] != 0 {
 		t.Fatalf("unexpected reduction: %x", tweak)
+	}
+}
+
+func TestXtsRejectsInvalidCipherFactories(t *testing.T) {
+	factoryErr := errors.New("injected cipher creation failure")
+	for _, test := range []struct {
+		name    string
+		factory func([]byte) (cipher.Block, error)
+		want    string
+	}{
+		{"invalid AES half key", aes.NewCipher, "invalid key size"},
+		{"nil block", func([]byte) (cipher.Block, error) { return nil, nil }, "nil block"},
+		{"wrong block size", func([]byte) (cipher.Block, error) { return des.NewCipher(make([]byte, 8)) }, "block size of 16"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			keySize := 32
+			if test.name == "invalid AES half key" {
+				keySize = 30
+			}
+			if _, err := NewCipher(test.factory, make([]byte, keySize)); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("constructor error = %v, want %q", err, test.want)
+			}
+		})
+	}
+	for _, failureCall := range []int{1, 2} {
+		calls := 0
+		_, err := NewCipher(func(key []byte) (cipher.Block, error) {
+			calls++
+			if calls == failureCall {
+				return nil, factoryErr
+			}
+			return aes.NewCipher(key)
+		}, make([]byte, 32))
+		if failureCall == 1 && !errors.Is(err, factoryErr) {
+			t.Fatalf("first cipher error was lost: %v", err)
+		}
+		if err == nil || calls != failureCall {
+			t.Fatalf("factory failure %d: calls=%d, error=%v", failureCall, calls, err)
+		}
+	}
+}
+
+func TestXtsBufferContracts(t *testing.T) {
+	c, err := NewCipher(aes.NewCipher, make([]byte, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	buffer := make([]byte, 48)
+	for _, test := range []struct {
+		name string
+		run  func()
+	}{
+		{"encrypt partial overlap", func() { c.Encrypt(buffer[1:33], buffer[:32], 0) }},
+		{"decrypt partial overlap", func() { c.Decrypt(buffer[1:33], buffer[:32], &[16]byte{}) }},
+		{"decrypt short destination", func() { c.Decrypt(make([]byte, 15), make([]byte, 16), &[16]byte{}) }},
+		{"decrypt unaligned input", func() { c.Decrypt(make([]byte, 15), make([]byte, 15), &[16]byte{}) }},
+	} {
+		t.Run(test.name, func(t *testing.T) { assertPanics(t, test.run) })
+	}
+	plaintext := bytes.Repeat([]byte{0x3c}, 32)
+	inPlace := append([]byte(nil), plaintext...)
+	c.Encrypt(inPlace, inPlace, 0)
+	c.Decrypt(inPlace, inPlace, &[16]byte{})
+	if !bytes.Equal(inPlace, plaintext) {
+		t.Fatalf("in-place round-trip = %x, want %x", inPlace, plaintext)
+	}
+	c.Encrypt(nil, nil, 0)
+	c.Decrypt(nil, nil, &[16]byte{})
+	if InexactOverlap(nil, buffer) || InexactOverlap(buffer, nil) || InexactOverlap(buffer, buffer[:16]) || InexactOverlap(buffer[:16], buffer[16:]) {
+		t.Fatal("empty, matching, or disjoint slices reported inexact overlap")
+	}
+	if !InexactOverlap(buffer[:32], buffer[16:]) {
+		t.Fatal("partially overlapping slices were accepted")
 	}
 }
