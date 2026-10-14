@@ -342,7 +342,7 @@ func applyTemplate(templateData map[string]string, useSafeNames bool, template s
 	//remove title name from dlc name
 	dlcName := strings.Replace(templateData[settings.TEMPLATE_DLC_NAME], templateData[settings.TEMPLATE_TITLE_NAME], "", 1)
 	dlcName = strings.TrimFunc(dlcName, func(r rune) bool {
-		return unicode.IsSpace(r) || unicode.Is(unicode.Dash, r)
+		return r == ':' || unicode.IsSpace(r) || unicode.Is(unicode.Dash, r)
 	})
 
 	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_DLC_NAME+"}", dlcName)

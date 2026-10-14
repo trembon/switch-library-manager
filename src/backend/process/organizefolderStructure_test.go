@@ -103,6 +103,76 @@ func TestApplyTemplateTrimsDLCNameEdges(t *testing.T) {
 	}
 }
 
+func TestApplyTemplateTrimsColonSeparatedDLCNames(t *testing.T) {
+	tests := []struct {
+		name      string
+		titleName string
+		dlcName   string
+		titleID   string
+		wantDLC   string
+	}{
+		{
+			name:      "Aquapark io",
+			titleName: "Aquapark io",
+			dlcName:   "Aquapark io: Animals DLC",
+			titleID:   "010027B01B997003",
+			wantDLC:   "Aquapark io (Animals DLC)[010027B01B997003][v0]",
+		},
+		{
+			name:      "Aquarium Land",
+			titleName: "Aquarium Land",
+			dlcName:   "Aquarium Land: Puppy",
+			titleID:   "0100BAE01C1FB001",
+			wantDLC:   "Aquarium Land (Puppy)[0100BAE01C1FB001][v0]",
+		},
+		{
+			name:      "Across the Obelisk",
+			titleName: "Across the Obelisk",
+			dlcName:   "Across the Obelisk: The Wolf Wars",
+			titleID:   "01004FA01D2C7002",
+			wantDLC:   "Across the Obelisk (The Wolf Wars)[01004FA01D2C7002][v0]",
+		},
+		{
+			name:      "repeated leading and trailing colons",
+			titleName: "Game",
+			dlcName:   "::: Game::: Expansion :::",
+			titleID:   "0100000000001001",
+			wantDLC:   "Game (Expansion)[0100000000001001][v0]",
+		},
+		{
+			name:      "mixed edge separators and internal hyphen",
+			titleName: "Game",
+			dlcName:   " : -Game : - — Expansion - Pack — - : ",
+			titleID:   "0100000000001001",
+			wantDLC:   "Game (Expansion - Pack)[0100000000001001][v0]",
+		},
+		{
+			name:      "empty after trimming removes parentheses",
+			titleName: "Game",
+			dlcName:   "Game : — : ",
+			titleID:   "0100000000001001",
+			wantDLC:   "Game [0100000000001001][v0]",
+		},
+	}
+
+	for _, test := range tests {
+		for _, safe := range []bool{false, true} {
+			t.Run(test.name+"/safe="+strconv.FormatBool(safe), func(t *testing.T) {
+				data := map[string]string{
+					settings.TEMPLATE_TITLE_NAME: test.titleName,
+					settings.TEMPLATE_TITLE_ID:   test.titleID,
+					settings.TEMPLATE_VERSION:    "0",
+					settings.TEMPLATE_DLC_NAME:   test.dlcName,
+				}
+				got := applyTemplate(data, safe, "{TITLE_NAME} ({DLC_NAME})[{TITLE_ID}][v{VERSION}]", 0)
+				if got != test.wantDLC {
+					t.Fatalf("applyTemplate() = %q, want %q", got, test.wantDLC)
+				}
+			})
+		}
+	}
+}
+
 func TestSetFileSizeTemplateData(t *testing.T) {
 	tests := []struct {
 		name string

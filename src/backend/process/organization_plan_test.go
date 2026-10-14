@@ -127,30 +127,30 @@ func TestDLCNameTrimmingMatchesPreviewAndRemainsStable(t *testing.T) {
 			base := t.TempDir()
 			source := filepath.Join(base, "incoming")
 			mustMkdir(t, source)
-			sourcePath := filepath.Join(source, "original.nsp")
+			sourcePath := filepath.Join(source, "Aquarium Land ( Puppy)[0100BAE01C1FB001][v0].nsz")
 			writeFixture(t, sourcePath, "synthetic DLC")
 
-			dlcID := "0100E9500403A001"
-			gameKey := "0100e95004039"
+			dlcID := "0100BAE01C1FB001"
+			gameKey := "0100bae01c1fa"
 			local := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{
 				gameKey: {
 					Dlc: map[string]db.SwitchFileInfo{
 						dlcID: {
 							ExtendedInfo: db.ExtendedFileInfo{BaseFolder: source, FileName: filepath.Base(sourcePath)},
-							Metadata:     metadataForID(dlcID, 1),
+							Metadata:     metadataForID(dlcID, 0),
 						},
 					},
 				},
 			}}
 			remote := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{
 				gameKey: {
-					Attributes: db.TitleAttributes{Name: "Game"},
-					Dlc:        map[string]db.TitleAttributes{dlcID: {Name: "Game – Expansion"}},
+					Attributes: db.TitleAttributes{Name: "Aquarium Land"},
+					Dlc:        map[string]db.TitleAttributes{dlcID: {Name: "Aquarium Land: Puppy"}},
 				},
 			}}
 			options := settings.OrganizeOptions{
 				RenameFiles:                true,
-				FileNameTemplate:           "{TITLE_NAME} ({DLC_NAME})",
+				FileNameTemplate:           "{TITLE_NAME} ({DLC_NAME})[{TITLE_ID}][v{VERSION}]",
 				ProcessWhenMissingBaseGame: true,
 				SwitchSafeFileNames:        test.safe,
 			}
@@ -166,7 +166,7 @@ func TestDLCNameTrimmingMatchesPreviewAndRemainsStable(t *testing.T) {
 					break
 				}
 			}
-			want := filepath.Join(source, "Game (Expansion).nsp")
+			want := filepath.Join(source, "Aquarium Land (Puppy)[0100BAE01C1FB001][v0].nsz")
 			if previewPath != want {
 				t.Fatalf("DLC preview path = %q, want %q", previewPath, want)
 			}
@@ -181,7 +181,7 @@ func TestDLCNameTrimmingMatchesPreviewAndRemainsStable(t *testing.T) {
 			if err := ExecuteOrganizationPlan(plan, local, base, options, nil); err != nil {
 				t.Fatalf("execute first organization: %v", err)
 			}
-			assertMoved(t, sourcePath, previewPath, "DLC after trimmed-name organization")
+			assertMoved(t, sourcePath, previewPath, "DLC after colon-trimmed organization")
 			if content, err := os.ReadFile(previewPath); err != nil || string(content) != "synthetic DLC" {
 				t.Fatalf("renamed DLC content = %q, err = %v", content, err)
 			}
@@ -206,7 +206,6 @@ func TestDLCNameTrimmingCollisionPreservesFiles(t *testing.T) {
 	destinationPath := filepath.Join(source, "Game (Expansion).nsp")
 	writeFixture(t, firstPath, "first DLC")
 	writeFixture(t, secondPath, "second DLC")
-	writeFixture(t, destinationPath, "existing file")
 
 	firstID := "0100E9500403A001"
 	secondID := "0100E9500403A002"
@@ -223,8 +222,8 @@ func TestDLCNameTrimmingCollisionPreservesFiles(t *testing.T) {
 		gameKey: {
 			Attributes: db.TitleAttributes{Name: "Game"},
 			Dlc: map[string]db.TitleAttributes{
-				firstID:  {Name: "Game - Expansion"},
-				secondID: {Name: "Game – Expansion"},
+				firstID:  {Name: "Game: Expansion"},
+				secondID: {Name: "Game - Expansion"},
 			},
 		},
 	}}
@@ -241,6 +240,17 @@ func TestDLCNameTrimmingCollisionPreservesFiles(t *testing.T) {
 	if len(plan.Conflicts) == 0 {
 		t.Fatal("plan accepted DLC names that collide after edge trimming")
 	}
+	duplicateDestination := false
+	for _, conflict := range plan.Conflicts {
+		if conflict.Reason == "multiple files have the same destination" {
+			duplicateDestination = true
+			break
+		}
+	}
+	if !duplicateDestination {
+		t.Fatalf("plan did not report the colon/dash DLC collision: %#v", plan.Conflicts)
+	}
+	writeFixture(t, destinationPath, "existing file")
 	if err := ExecuteOrganizationPlan(plan, local, base, options, nil); err == nil {
 		t.Fatal("execution accepted a plan with a trimmed-name collision")
 	}
