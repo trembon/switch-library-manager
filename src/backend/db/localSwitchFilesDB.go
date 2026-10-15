@@ -120,7 +120,7 @@ func (ldb *LocalSwitchDBManager) CreateLocalSwitchFilesDB(folders []string,
 	}
 
 	if ignoreCache || len(titles) == 0 {
-		seenFiles := map[string][]os.FileInfo{}
+		seenFiles := map[string]struct{}{}
 		for i, folder := range folders {
 			err := scanFolder(folder, recursive, &files, progress, seenFiles)
 			if progress != nil {
@@ -150,7 +150,7 @@ func (ldb *LocalSwitchDBManager) CreateLocalSwitchFilesDB(folders []string,
 	return &LocalSwitchFilesDB{TitlesMap: titles, Skipped: skipped, CleanupCandidates: cleanupCandidates, NumFiles: len(files)}, nil
 }
 
-func scanFolder(folder string, recursive bool, files *[]ExtendedFileInfo, progress ProgressUpdater, seenFiles map[string][]os.FileInfo) error {
+func scanFolder(folder string, recursive bool, files *[]ExtendedFileInfo, progress ProgressUpdater, seenFiles map[string]struct{}) error {
 	return scanFolderWithWalker(folder, recursive, files, progress, seenFiles, walkDirWithFileInfo)
 }
 
@@ -170,9 +170,10 @@ func scanFolderWithWalker(
 	recursive bool,
 	files *[]ExtendedFileInfo,
 	progress ProgressUpdater,
-	seenFiles map[string][]os.FileInfo,
+	seenFiles map[string]struct{},
 	walk func(string, filepath.WalkFunc) error,
 ) error {
+	canonicalRoot := canonicalScanRoot(folder)
 	return walk(folder, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			if path != folder && errors.Is(err, os.ErrPermission) {
@@ -200,7 +201,7 @@ func scanFolderWithWalker(
 		}
 
 		base := path[0 : len(path)-len(info.Name())]
-		if physicalFileSeen(info, seenFiles) {
+		if scannedPathSeen(canonicalRoot, folder, path, seenFiles) {
 			return nil
 		}
 		if progress != nil {
@@ -212,14 +213,42 @@ func scanFolderWithWalker(
 	})
 }
 
-func physicalFileSeen(info os.FileInfo, seenFiles map[string][]os.FileInfo) bool {
-	key := fmt.Sprintf("%d|%d|%d", info.Size(), info.ModTime().UnixNano(), info.Mode())
-	for _, seen := range seenFiles[key] {
-		if os.SameFile(info, seen) {
-			return true
-		}
+// canonicalScanRoot resolves a scan folder so overlapping, symlinked, or
+// junctioned roots produce the same file keys. Resolution failures fall back
+// to the absolute or original path; the walk itself reports unreadable roots.
+func canonicalScanRoot(folder string) string {
+	root, err := filepath.Abs(folder)
+	if err != nil {
+		zap.S().Warnf("unable to resolve absolute scan folder %q: %v", folder, err)
+		root = folder
 	}
-	seenFiles[key] = append(seenFiles[key], info)
+	resolved, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		zap.S().Warnf("unable to resolve links in scan folder %q: %v", root, err)
+		return filepath.Clean(root)
+	}
+	return filepath.Clean(resolved)
+}
+
+// scannedPathSeen reports whether a file was already reached through another
+// scan root. Files are identified by canonical path only. Size, timestamps, and
+// os.SameFile are not used: on Windows, directory entries from volumes without
+// file IDs (exFAT, FAT32, many network shares) compare as the same file whenever
+// size and timestamps match, which silently dropped distinct small DLC files.
+// A hard link under a different name is therefore listed separately, matching
+// the behavior before overlapping roots were deduplicated.
+func scannedPathSeen(canonicalRoot, folder, path string, seenFiles map[string]struct{}) bool {
+	key := filepath.Clean(path)
+	if rel, err := filepath.Rel(folder, path); err == nil {
+		key = filepath.Join(canonicalRoot, rel)
+	}
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		key = strings.ToLower(key)
+	}
+	if _, ok := seenFiles[key]; ok {
+		return true
+	}
+	seenFiles[key] = struct{}{}
 	return false
 }
 
@@ -534,9 +563,10 @@ func (ldb *LocalSwitchDBManager) getGameMetadata(file ExtendedFileInfo,
 			zap.S().Warnf("%v", err)
 		}
 
-		if len(metadata) > 0 {
-			return metadata, nil
+		if cached, dropped := validContentMetadata(metadata); len(cached) > 0 && dropped == 0 {
+			return cached, nil
 		}
+		metadata = nil
 
 		fileName := strings.ToLower(file.FileName)
 		if strings.HasSuffix(fileName, "nsp") ||
@@ -562,15 +592,20 @@ func (ldb *LocalSwitchDBManager) getGameMetadata(file ExtendedFileInfo,
 		}
 	}
 
-	if len(metadata) > 0 {
-		err = ldb.db.AddEntry(DB_TABLE_FILE_SCAN_METADATA, fileKey, metadata)
-
-		if err != nil {
-			zap.S().Warnf("%v", err)
-		}
-		return metadata, nil
+	valid, dropped := validContentMetadata(metadata)
+	if dropped > 0 {
+		skipped[file] = SkippedFile{ReasonCode: REASON_MALFORMED_FILE, ReasonText: fmt.Sprintf("ignored %d content metadata record(s) without a valid title ID", dropped)}
 	}
-	if metadata != nil {
+	if len(valid) > 0 {
+		if dropped == 0 {
+			err = ldb.db.AddEntry(DB_TABLE_FILE_SCAN_METADATA, fileKey, valid)
+			if err != nil {
+				zap.S().Warnf("%v", err)
+			}
+		}
+		return valid, nil
+	}
+	if metadata != nil && dropped == 0 {
 		skipped[file] = SkippedFile{ReasonCode: REASON_MALFORMED_FILE, ReasonText: "no content metadata found in file; trying title ID and version from filename"}
 	}
 
@@ -587,6 +622,27 @@ func (ldb *LocalSwitchDBManager) getGameMetadata(file ExtendedFileInfo,
 	metadata[*titleId] = &switchfs.ContentMetaAttributes{TitleId: *titleId, Version: *version}
 
 	return metadata, nil
+}
+
+// validContentMetadata returns the records with a usable title ID, keyed by
+// the normalized ID, and the number of nil or invalid records it dropped.
+func validContentMetadata(metadata map[string]*switchfs.ContentMetaAttributes) (map[string]*switchfs.ContentMetaAttributes, int) {
+	valid := make(map[string]*switchfs.ContentMetaAttributes, len(metadata))
+	dropped := 0
+	for _, record := range metadata {
+		if record == nil {
+			dropped++
+			continue
+		}
+		id := strings.ToLower(record.TitleId)
+		if _, err := titleIDPrefix(id); err != nil {
+			dropped++
+			continue
+		}
+		record.TitleId = id
+		valid[id] = record
+	}
+	return valid, dropped
 }
 
 func parseVersionFromFileName(fileName string) (*int, error) {

@@ -372,7 +372,7 @@ func TestScanFolderSkipsSubfolderTraversalUnlessRecursive(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			files := []ExtendedFileInfo{}
-			seenFiles := map[string][]os.FileInfo{}
+			seenFiles := map[string]struct{}{}
 			visited := map[string]bool{}
 			walk := func(folder string, fn filepath.WalkFunc) error {
 				return walkDirWithFileInfo(folder, func(path string, info os.FileInfo, err error) error {
@@ -490,7 +490,7 @@ func TestScanFolderContinuesAfterDeniedSubfolders(t *testing.T) {
 				}
 				return nil
 			}
-			if err := scanFolderWithWalker(root, test.recursive, &files, nil, map[string][]os.FileInfo{}, walkWithDeniedFolder); err != nil {
+			if err := scanFolderWithWalker(root, test.recursive, &files, nil, map[string]struct{}{}, walkWithDeniedFolder); err != nil {
 				t.Fatalf("scan returned error: %v", err)
 			}
 			got := make(map[string]bool, len(files))
@@ -553,7 +553,7 @@ func TestScanFolderKeepsRootAndNonPermissionErrorsFatal(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			files := []ExtendedFileInfo{}
-			err := scanFolderWithWalker(root, true, &files, nil, map[string][]os.FileInfo{}, test.walk)
+			err := scanFolderWithWalker(root, true, &files, nil, map[string]struct{}{}, test.walk)
 			if err == nil {
 				t.Fatal("expected scan error")
 			}
@@ -1459,7 +1459,9 @@ func TestScannerRecordsInvalidCachedMetadataAndSplitErrors(t *testing.T) {
 	}
 	skipped := map[ExtendedFileInfo]SkippedFile{}
 	manager.processLocalFiles([]ExtendedFileInfo{invalid}, nil, map[string]*SwitchGameFiles{}, skipped)
-	assertSkippedReason(t, skipped, invalid.FileName, REASON_UNRECOGNISED)
+	// Invalid cached records are not trusted; the file is re-read, and this
+	// fixture has no readable container or filename title ID.
+	assertSkippedReason(t, skipped, invalid.FileName, REASON_MALFORMED_FILE)
 
 	for _, name := range []string{"bad.nsp", "bad.xci", "bad00"} {
 		file := ExtendedFileInfo{FileName: name, BaseFolder: base, Size: 1}
