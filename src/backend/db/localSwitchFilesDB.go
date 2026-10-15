@@ -534,7 +534,7 @@ func (ldb *LocalSwitchDBManager) getGameMetadata(file ExtendedFileInfo,
 			zap.S().Warnf("%v", err)
 		}
 
-		if metadata != nil {
+		if len(metadata) > 0 {
 			return metadata, nil
 		}
 
@@ -562,13 +562,16 @@ func (ldb *LocalSwitchDBManager) getGameMetadata(file ExtendedFileInfo,
 		}
 	}
 
-	if metadata != nil {
+	if len(metadata) > 0 {
 		err = ldb.db.AddEntry(DB_TABLE_FILE_SCAN_METADATA, fileKey, metadata)
 
 		if err != nil {
 			zap.S().Warnf("%v", err)
 		}
 		return metadata, nil
+	}
+	if metadata != nil {
+		skipped[file] = SkippedFile{ReasonCode: REASON_MALFORMED_FILE, ReasonText: "no content metadata found in file; trying title ID and version from filename"}
 	}
 
 	//fallback to parse data from filename
