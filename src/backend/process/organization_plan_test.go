@@ -62,7 +62,7 @@ func TestBuildOrganizationPlanFindsDuplicateDestinationsBeforeMoving(t *testing.
 	assertNotExists(t, filepath.Join(source, "Game.nsp"))
 }
 
-func TestOrganizationAndPreviewUseSharedJapaneseTitleFallback(t *testing.T) {
+func TestOrganizationAndPreviewPreferFilenameOverJapaneseTitle(t *testing.T) {
 	root := t.TempDir()
 	sourceFolder := filepath.Join(root, "incoming")
 	mustMkdir(t, sourceFolder)
@@ -90,7 +90,7 @@ func TestOrganizationAndPreviewUseSharedJapaneseTitleFallback(t *testing.T) {
 		RenameFiles:         true,
 		FileNameTemplate:    "{TITLE_NAME}",
 	}
-	want := filepath.Join(name, name+".nsp")
+	want := filepath.Join("test", "test.nsp")
 
 	preview, err := BuildOrganizationPreview(root, options, local, remote)
 	if err != nil {
@@ -465,7 +465,7 @@ func TestBuildOrganizationPlanRepairsRepeatedSuffixesOnce(t *testing.T) {
 		RenameFiles:      true,
 		FileNameTemplate: "{TITLE_NAME} (v{VERSION}) (v{VERSION_TXT})",
 	}
-	wantPath := filepath.Join(sourceFolder, "カプコン ファイティング コレクション2 (v0) (v1.0.0).nsp")
+	wantPath := filepath.Join(sourceFolder, "Capcom Fighting Collection 2 (v0) (v1.0.0).nsp")
 
 	firstPlan, err := BuildOrganizationPlan(base, local, remote, options)
 	if err != nil {
@@ -545,7 +545,7 @@ func TestBuildOrganizationPlanKeepsFilesWhenSuffixRepairCollides(t *testing.T) {
 			t.Fatalf("source %q changed: content=%q err=%v", path, content, err)
 		}
 	}
-	assertNotExists(t, filepath.Join(base, titleName, "Capcom Fighting Collection 2 (v0) (v1.0.0).nsp"))
+	assertNotExists(t, filepath.Join(base, "Capcom Fighting Collection 2", "Capcom Fighting Collection 2 (v0) (v1.0.0).nsp"))
 }
 
 func TestBuildOrganizationPlanUsesV0DLCDisplayVersionFallback(t *testing.T) {

@@ -138,8 +138,8 @@ func TestBuildLocalLibraryDataUsesSharedTitleResolver(t *testing.T) {
 
 	game.File.Metadata = nil
 	got = buildLocalLibraryData(localDB, switchDB)
-	if len(got.LibraryData) != 1 || got.LibraryData[0].Name != remote.Attributes.Name {
-		t.Fatalf("Library fallback title = %#v, want catalog title %q", got.LibraryData, remote.Attributes.Name)
+	if len(got.LibraryData) != 1 || got.LibraryData[0].Name != "test" {
+		t.Fatalf("Library fallback title = %#v, want filename title %q", got.LibraryData, "test")
 	}
 }
 

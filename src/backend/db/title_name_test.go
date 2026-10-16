@@ -53,15 +53,26 @@ func TestResolveGameTitleName(t *testing.T) {
 			want: "Base English",
 		},
 		{
-			name:   "known Japanese database title wins over an arbitrary filename",
+			name:   "filename wins over a Japanese database title",
 			remote: japanese,
 			local:  titleNameBase("", "", "test.nsp"),
+			want:   "test",
+		},
+		{
+			name:   "update filename wins over a Japanese database title",
+			remote: japanese,
+			local:  titleNameUpdates(map[int]SwitchFileInfo{1: titleNameFile("01.nsp", "", "")}),
+			want:   "01",
+		},
+		{
+			name:   "Japanese database title is used when no local name exists",
+			remote: japanese,
 			want:   japanese.Attributes.Name,
 		},
 		{
-			name:   "known Japanese database title wins over an arbitrary update filename",
+			name:   "Japanese database title is used when local filenames are empty",
 			remote: japanese,
-			local:  titleNameUpdates(map[int]SwitchFileInfo{1: titleNameFile("01.nsp", "", "")}),
+			local:  titleNameBase("", "", " "),
 			want:   japanese.Attributes.Name,
 		},
 		{

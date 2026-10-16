@@ -41,12 +41,6 @@ func ResolveGameTitleName(remote *SwitchTitle, local *SwitchGameFiles) string {
 		}
 	}
 
-	if remote != nil {
-		if name := strings.TrimSpace(remote.Attributes.Name); name != "" {
-			return name
-		}
-	}
-
 	if local != nil {
 		if local.BaseExist {
 			if name := ParseTitleNameFromFileName(local.File.ExtendedInfo.FileName); name != "" {
@@ -70,6 +64,14 @@ func ResolveGameTitleName(remote *SwitchTitle, local *SwitchGameFiles) string {
 			if name := ParseTitleNameFromFileName(local.Dlc[id].ExtendedInfo.FileName); name != "" {
 				return name
 			}
+		}
+	}
+
+	// A CJK catalog title is only a last resort; the filename is preferred so
+	// names are not romanized from Japanese when organizing.
+	if remote != nil {
+		if name := strings.TrimSpace(remote.Attributes.Name); name != "" {
+			return name
 		}
 	}
 

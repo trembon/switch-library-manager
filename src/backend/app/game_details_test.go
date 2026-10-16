@@ -194,8 +194,8 @@ func TestBuildGameDetailsUsesSharedTitleResolver(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build details without English metadata: %v", err)
 	}
-	if details.Name != remoteTitle.Attributes.Name || details.Attributes.Name != details.Name {
-		t.Fatalf("resolved catalog fallback is inconsistent: Name=%q Attributes.Name=%q", details.Name, details.Attributes.Name)
+	if details.Name != "test" || details.Attributes.Name != details.Name {
+		t.Fatalf("resolved filename fallback is inconsistent: Name=%q Attributes.Name=%q", details.Name, details.Attributes.Name)
 	}
 }
 
