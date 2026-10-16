@@ -1,0 +1,35 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "wails generate bindings",
+      "type": "shell",
+      "command": "wails",
+      "args": ["generate", "module"],
+      "options": {
+        "cwd": "${workspaceFolder}/src"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "build",
+      "type": "shell",
+      "command": "go",
+      "args": [
+        "build",
+        "-tags",
+        "dev",
+        "-gcflags",
+        "all=-N -l",
+        "-o",
+        "build/bin/switch-library-manager.exe"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/src"
+      },
+      "dependsOn": "wails generate bindings",
+      "dependsOrder": "sequence",
+      "problemMatcher": "$go"
+    }
+  ]
+}
