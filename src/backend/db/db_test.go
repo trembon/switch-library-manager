@@ -372,7 +372,7 @@ func TestScanFolderSkipsSubfolderTraversalUnlessRecursive(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			files := []ExtendedFileInfo{}
-			seenFiles := map[string]struct{}{}
+			seenFiles := seenScanFiles{}
 			visited := map[string]bool{}
 			walk := func(folder string, fn filepath.WalkFunc) error {
 				return walkDirWithFileInfo(folder, func(path string, info os.FileInfo, err error) error {
@@ -490,7 +490,7 @@ func TestScanFolderContinuesAfterDeniedSubfolders(t *testing.T) {
 				}
 				return nil
 			}
-			if err := scanFolderWithWalker(root, test.recursive, &files, nil, map[string]struct{}{}, walkWithDeniedFolder); err != nil {
+			if err := scanFolderWithWalker(root, test.recursive, &files, nil, seenScanFiles{}, walkWithDeniedFolder); err != nil {
 				t.Fatalf("scan returned error: %v", err)
 			}
 			got := make(map[string]bool, len(files))
@@ -553,7 +553,7 @@ func TestScanFolderKeepsRootAndNonPermissionErrorsFatal(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			files := []ExtendedFileInfo{}
-			err := scanFolderWithWalker(root, true, &files, nil, map[string]struct{}{}, test.walk)
+			err := scanFolderWithWalker(root, true, &files, nil, seenScanFiles{}, test.walk)
 			if err == nil {
 				t.Fatal("expected scan error")
 			}

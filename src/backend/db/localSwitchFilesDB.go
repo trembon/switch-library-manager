@@ -120,7 +120,7 @@ func (ldb *LocalSwitchDBManager) CreateLocalSwitchFilesDB(folders []string,
 	}
 
 	if ignoreCache || len(titles) == 0 {
-		seenFiles := map[string]struct{}{}
+		seenFiles := seenScanFiles{}
 		for i, folder := range folders {
 			err := scanFolder(folder, recursive, &files, progress, seenFiles)
 			if progress != nil {
@@ -150,7 +150,7 @@ func (ldb *LocalSwitchDBManager) CreateLocalSwitchFilesDB(folders []string,
 	return &LocalSwitchFilesDB{TitlesMap: titles, Skipped: skipped, CleanupCandidates: cleanupCandidates, NumFiles: len(files)}, nil
 }
 
-func scanFolder(folder string, recursive bool, files *[]ExtendedFileInfo, progress ProgressUpdater, seenFiles map[string]struct{}) error {
+func scanFolder(folder string, recursive bool, files *[]ExtendedFileInfo, progress ProgressUpdater, seenFiles seenScanFiles) error {
 	return scanFolderWithWalker(folder, recursive, files, progress, seenFiles, walkDirWithFileInfo)
 }
 
@@ -170,7 +170,7 @@ func scanFolderWithWalker(
 	recursive bool,
 	files *[]ExtendedFileInfo,
 	progress ProgressUpdater,
-	seenFiles map[string]struct{},
+	seenFiles seenScanFiles,
 	walk func(string, filepath.WalkFunc) error,
 ) error {
 	canonicalRoot := canonicalScanRoot(folder)
@@ -230,26 +230,62 @@ func canonicalScanRoot(folder string) string {
 	return filepath.Clean(resolved)
 }
 
+// seenScanFiles holds the files already reached during one scan, keyed by a
+// canonical path that is case-folded where volumes are usually
+// case-insensitive.
+type seenScanFiles map[string][]seenScanFile
+
+type seenScanFile struct {
+	canonicalPath string
+	path          string
+}
+
 // scannedPathSeen reports whether a file was already reached through another
-// scan root. Files are identified by canonical path only. Size, timestamps, and
-// os.SameFile are not used: on Windows, directory entries from volumes without
-// file IDs (exFAT, FAT32, many network shares) compare as the same file whenever
-// size and timestamps match, which silently dropped distinct small DLC files.
-// A hard link under a different name is therefore listed separately, matching
-// the behavior before overlapping roots were deduplicated.
-func scannedPathSeen(canonicalRoot, folder, path string, seenFiles map[string]struct{}) bool {
-	key := filepath.Clean(path)
+// scan root. Files are identified by canonical path. Size, timestamps, and
+// os.SameFile are not used for files with different names: on Windows,
+// directory entries from volumes without file IDs (exFAT, FAT32, many network
+// shares) compare as the same file whenever size and timestamps match, which
+// silently dropped distinct small DLC files. A hard link under a different
+// name is therefore listed separately, matching the behavior before
+// overlapping roots were deduplicated.
+//
+// Paths that differ only by letter case are the same file on a
+// case-insensitive volume but distinct files in a case-sensitive directory
+// (case-sensitive APFS, or NTFS with per-directory case sensitivity), so those
+// are compared by identity instead.
+func scannedPathSeen(canonicalRoot, folder, path string, seenFiles seenScanFiles) bool {
+	canonicalPath := filepath.Clean(path)
 	if rel, err := filepath.Rel(folder, path); err == nil {
-		key = filepath.Join(canonicalRoot, rel)
+		canonicalPath = filepath.Join(canonicalRoot, rel)
 	}
+	key := canonicalPath
 	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
 		key = strings.ToLower(key)
 	}
-	if _, ok := seenFiles[key]; ok {
-		return true
+	for _, seen := range seenFiles[key] {
+		if seen.canonicalPath == canonicalPath || sameFileByPath(seen.path, path) {
+			return true
+		}
 	}
-	seenFiles[key] = struct{}{}
+	seenFiles[key] = append(seenFiles[key], seenScanFile{canonicalPath: canonicalPath, path: path})
 	return false
+}
+
+// sameFileByPath compares two paths that differ only by letter case. Failing
+// to compare keeps both files: a listed duplicate is visible, a dropped file is
+// not.
+func sameFileByPath(left, right string) bool {
+	leftInfo, err := os.Stat(left)
+	if err != nil {
+		zap.S().Warnf("unable to compare scanned file %q: %v", left, err)
+		return false
+	}
+	rightInfo, err := os.Stat(right)
+	if err != nil {
+		zap.S().Warnf("unable to compare scanned file %q: %v", right, err)
+		return false
+	}
+	return os.SameFile(leftInfo, rightInfo)
 }
 
 func sameExtendedFilePath(left, right ExtendedFileInfo) bool {
@@ -359,16 +395,13 @@ func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,
 		// A file containing a base title and one of its updates is a package,
 		// not an independently removable update file. Record this per title
 		// before processing the map because its iteration order is unspecified.
+		// getGameMetadata returns non-nil records with lowercase title IDs.
 		fileBasePrefixes := map[string]struct{}{}
 		for _, contentMetadata := range contentMap {
-			if contentMetadata == nil {
+			if !strings.HasSuffix(contentMetadata.TitleId, "000") {
 				continue
 			}
-			contentID := strings.ToLower(contentMetadata.TitleId)
-			if !strings.HasSuffix(contentID, "000") {
-				continue
-			}
-			prefix, err := titleIDPrefix(contentID)
+			prefix, err := titleIDPrefix(contentMetadata.TitleId)
 			if err == nil {
 				fileBasePrefixes[prefix] = struct{}{}
 			}
@@ -376,13 +409,11 @@ func (ldb *LocalSwitchDBManager) processLocalFiles(files []ExtendedFileInfo,
 
 		for _, metadata := range contentMap {
 
-			id := strings.ToLower(metadata.TitleId)
-			idPrefix, prefixErr := titleIDPrefix(id)
+			idPrefix, prefixErr := titleIDPrefix(metadata.TitleId)
 			if prefixErr != nil {
 				skipped[file] = SkippedFile{ReasonText: "unable to determine title-Id / version - " + prefixErr.Error(), ReasonCode: REASON_UNRECOGNISED}
 				continue
 			}
-			metadata.TitleId = id
 
 			multiContent := len(contentMap) > 1
 			switchTitle := &SwitchGameFiles{
@@ -507,11 +538,31 @@ func buildCleanupCandidates(
 		if err != nil || titles[prefix] == nil {
 			continue
 		}
-		if replacement, ok := cleanupReplacement(titles[prefix], metadata, file); ok {
+		if replacement, ok := cleanupReplacement(titles[prefix], metadata, file); ok && !mayBeSamePhysicalFile(file, replacement) {
 			candidates = append(candidates, CleanupCandidate{File: file, Replacement: replacement, ReasonCode: reason.ReasonCode})
 		}
 	}
 	return candidates
+}
+
+// mayBeSamePhysicalFile reports whether removing file could also remove its
+// replacement. Distinct scan paths can still name one physical file through
+// aliases that path canonicalization cannot see, such as subst or mapped
+// drives, UNC paths, bind mounts, or hard links. os.SameFile can report false
+// matches on volumes without file IDs, which only withholds a cleanup offer, so
+// any uncertainty is treated as the same file.
+func mayBeSamePhysicalFile(file, replacement ExtendedFileInfo) bool {
+	fileInfo, err := os.Stat(filepath.Join(file.BaseFolder, file.FileName))
+	if err != nil {
+		zap.S().Warnf("unable to verify cleanup candidate %q: %v", file.FileName, err)
+		return true
+	}
+	replacementInfo, err := os.Stat(filepath.Join(replacement.BaseFolder, replacement.FileName))
+	if err != nil {
+		zap.S().Warnf("unable to verify cleanup replacement %q: %v", replacement.FileName, err)
+		return true
+	}
+	return os.SameFile(fileInfo, replacementInfo)
 }
 
 func isSplitFilePart(fileName string) bool {
@@ -566,6 +617,13 @@ func (ldb *LocalSwitchDBManager) getGameMetadata(file ExtendedFileInfo,
 		if cached, dropped := validContentMetadata(metadata); len(cached) > 0 && dropped == 0 {
 			return cached, nil
 		}
+		if len(metadata) > 0 {
+			// Remove the untrusted entry so a file that still yields no valid
+			// record does not keep it; a valid re-read replaces it below.
+			if err := ldb.db.DeleteEntry(DB_TABLE_FILE_SCAN_METADATA, fileKey); err != nil {
+				zap.S().Warnf("[file:%v] failed to remove invalid cached metadata: %v", file.FileName, err)
+			}
+		}
 		metadata = nil
 
 		fileName := strings.ToLower(file.FileName)
@@ -592,21 +650,8 @@ func (ldb *LocalSwitchDBManager) getGameMetadata(file ExtendedFileInfo,
 		}
 	}
 
-	valid, dropped := validContentMetadata(metadata)
-	if dropped > 0 {
-		skipped[file] = SkippedFile{ReasonCode: REASON_MALFORMED_FILE, ReasonText: fmt.Sprintf("ignored %d content metadata record(s) without a valid title ID", dropped)}
-	}
-	if len(valid) > 0 {
-		if dropped == 0 {
-			err = ldb.db.AddEntry(DB_TABLE_FILE_SCAN_METADATA, fileKey, valid)
-			if err != nil {
-				zap.S().Warnf("%v", err)
-			}
-		}
+	if valid := ldb.acceptReadMetadata(file, fileKey, metadata, skipped); len(valid) > 0 {
 		return valid, nil
-	}
-	if metadata != nil && dropped == 0 {
-		skipped[file] = SkippedFile{ReasonCode: REASON_MALFORMED_FILE, ReasonText: "no content metadata found in file; trying title ID and version from filename"}
 	}
 
 	//fallback to parse data from filename
@@ -622,6 +667,33 @@ func (ldb *LocalSwitchDBManager) getGameMetadata(file ExtendedFileInfo,
 	metadata[*titleId] = &switchfs.ContentMetaAttributes{TitleId: *titleId, Version: *version}
 
 	return metadata, nil
+}
+
+// acceptReadMetadata keeps the records read from a container that have a valid
+// title ID and caches them. Records without one are logged rather than
+// recorded in skipped, because the file's valid content is still in the
+// library and must remain eligible for duplicate cleanup. When nothing valid
+// remains, a malformed-file diagnostic is recorded unless reading the file
+// already recorded a more specific one.
+func (ldb *LocalSwitchDBManager) acceptReadMetadata(file ExtendedFileInfo, fileKey string, metadata map[string]*switchfs.ContentMetaAttributes, skipped map[ExtendedFileInfo]SkippedFile) map[string]*switchfs.ContentMetaAttributes {
+	valid, dropped := validContentMetadata(metadata)
+	if dropped > 0 {
+		zap.S().Warnf("[file:%v] ignored %d content metadata record(s) without a valid title ID", file.FileName, dropped)
+	}
+	if len(valid) > 0 {
+		if err := ldb.db.AddEntry(DB_TABLE_FILE_SCAN_METADATA, fileKey, valid); err != nil {
+			zap.S().Warnf("[file:%v] failed to cache content metadata: %v", file.FileName, err)
+		}
+		return valid
+	}
+	if _, exists := skipped[file]; metadata != nil && !exists {
+		reason := "no content metadata found in file; trying title ID and version from filename"
+		if dropped > 0 {
+			reason = fmt.Sprintf("no content metadata with a valid title ID found in file (ignored %d record(s)); trying title ID and version from filename", dropped)
+		}
+		skipped[file] = SkippedFile{ReasonCode: REASON_MALFORMED_FILE, ReasonText: reason}
+	}
+	return nil
 }
 
 // validContentMetadata returns the records with a usable title ID, keyed by

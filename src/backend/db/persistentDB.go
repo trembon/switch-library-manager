@@ -86,6 +86,19 @@ func (pd *PersistentDB) AddEntry(tableName string, key string, value interface{}
 	return err
 }
 
+func (pd *PersistentDB) DeleteEntry(tableName string, key string) error {
+	return pd.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(tableName))
+		if b == nil {
+			return nil
+		}
+		if err := b.Delete([]byte(key)); err != nil {
+			return fmt.Errorf("delete %s entry %q: %w", tableName, key, err)
+		}
+		return nil
+	})
+}
+
 func (pd *PersistentDB) addEntries(tableName string, entries map[string]interface{}) error {
 	encoded := make(map[string][]byte, len(entries))
 	for key, value := range entries {

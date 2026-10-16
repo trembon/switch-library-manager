@@ -142,7 +142,7 @@ func TestScanKeepsDistinctFilesWithSameSizeAndTime(t *testing.T) {
 	}
 
 	files := []ExtendedFileInfo{}
-	if err := scanFolder(library, false, &files, nil, map[string]struct{}{}); err != nil {
+	if err := scanFolder(library, false, &files, nil, seenScanFiles{}); err != nil {
 		t.Fatal(err)
 	}
 	if len(files) != len(names) {
@@ -186,32 +186,23 @@ func TestScanDeduplicatesSameFileThroughEquivalentRoots(t *testing.T) {
 		}
 	}
 
-	tests := []struct {
+	type scanCase struct {
 		name      string
 		roots     []string
 		recursive bool
 		want      int
-	}{
+	}
+	tests := []scanCase{
 		{name: "same folder twice", roots: []string{library, library}, want: 1},
 		{name: "trailing separator", roots: []string{library, library + string(os.PathSeparator)}, want: 1},
 		{name: "nested root inside recursive root", roots: []string{library, nested}, recursive: true, want: 2},
 	}
 	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
-		tests = append(tests, struct {
-			name      string
-			roots     []string
-			recursive bool
-			want      int
-		}{name: "different letter case", roots: []string{library, strings.ToUpper(library)}, want: 1})
+		tests = append(tests, scanCase{name: "different letter case", roots: []string{library, strings.ToUpper(library)}, want: 1})
 	}
 	link := filepath.Join(base, "link")
 	if err := os.Symlink(library, link); err == nil {
-		tests = append(tests, struct {
-			name      string
-			roots     []string
-			recursive bool
-			want      int
-		}{name: "symlinked root", roots: []string{library, link}, recursive: true, want: 2})
+		tests = append(tests, scanCase{name: "symlinked root", roots: []string{library, link}, recursive: true, want: 2})
 	} else {
 		t.Logf("symlink root case skipped: %v", err)
 	}
@@ -219,7 +210,7 @@ func TestScanDeduplicatesSameFileThroughEquivalentRoots(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			files := []ExtendedFileInfo{}
-			seen := map[string]struct{}{}
+			seen := seenScanFiles{}
 			for _, root := range test.roots {
 				if err := scanFolder(root, test.recursive, &files, nil, seen); err != nil {
 					t.Fatal(err)
@@ -278,8 +269,8 @@ func TestScanFallsBackToFilenameWhenCachedTitleIDIsInvalid(t *testing.T) {
 	if err := manager.db.GetEntry(DB_TABLE_FILE_SCAN_METADATA, key, &stored); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := stored["bad"]; !ok || len(stored) != 1 {
-		t.Fatalf("invalid metadata must not be replaced by filename data in the cache: %#v", stored)
+	if len(stored) != 0 {
+		t.Fatalf("invalid cached metadata was kept or replaced by filename data: %#v", stored)
 	}
 }
 
@@ -292,5 +283,122 @@ func TestValidContentMetadataDropsNilAndInvalidRecords(t *testing.T) {
 	})
 	if dropped != 3 || len(valid) != 1 || valid["01003da0254a5015"] == nil || valid["01003da0254a5015"].TitleId != "01003da0254a5015" {
 		t.Fatalf("valid=%#v dropped=%d", valid, dropped)
+	}
+}
+
+func TestAcceptReadMetadataKeepsAndCachesPartiallyValidFiles(t *testing.T) {
+	base := t.TempDir()
+	resetDBSettings(t, base, func(*settings.AppSettings) {})
+	manager, err := NewLocalSwitchDBManager(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	file := ExtendedFileInfo{FileName: "package.xci", BaseFolder: base, Size: 1}
+	key := "package-key"
+	skipped := map[ExtendedFileInfo]SkippedFile{}
+	valid := manager.acceptReadMetadata(file, key, map[string]*switchfs.ContentMetaAttributes{
+		"0100000000010000": {TitleId: "0100000000010000"},
+		"bad":              {TitleId: "bad"},
+	}, skipped)
+	if len(valid) != 1 || valid["0100000000010000"] == nil {
+		t.Fatalf("valid records = %#v", valid)
+	}
+	if diagnostic, ok := skipped[file]; ok {
+		t.Fatalf("partially valid file recorded as skipped: %#v", diagnostic)
+	}
+	var stored map[string]*switchfs.ContentMetaAttributes
+	if err := manager.db.GetEntry(DB_TABLE_FILE_SCAN_METADATA, key, &stored); err != nil {
+		t.Fatal(err)
+	}
+	if len(stored) != 1 || stored["0100000000010000"] == nil {
+		t.Fatalf("valid subset was not cached: %#v", stored)
+	}
+
+	readFailure := SkippedFile{ReasonCode: REASON_MALFORMED_FILE, ReasonText: "failed to read NSP [reason: synthetic]"}
+	skipped[file] = readFailure
+	if got := manager.acceptReadMetadata(file, "other-key", map[string]*switchfs.ContentMetaAttributes{"bad": {TitleId: "bad"}}, skipped); got != nil {
+		t.Fatalf("invalid-only records accepted: %#v", got)
+	}
+	if skipped[file] != readFailure {
+		t.Fatalf("read failure diagnostic was overwritten: %#v", skipped[file])
+	}
+
+	delete(skipped, file)
+	manager.acceptReadMetadata(file, "other-key", map[string]*switchfs.ContentMetaAttributes{"bad": {TitleId: "bad"}}, skipped)
+	if diagnostic := skipped[file]; diagnostic.ReasonCode != REASON_MALFORMED_FILE || !strings.Contains(diagnostic.ReasonText, "ignored 1 record") {
+		t.Fatalf("missing malformed diagnostic: %#v", diagnostic)
+	}
+}
+
+func TestScannedPathSeenKeepsDistinctFilesDifferingOnlyByCase(t *testing.T) {
+	// Two roots resolving to the same canonical folder name but holding
+	// distinct files whose names differ only by case model a case-sensitive
+	// directory: the folded keys collide, but the files are not the same.
+	base := t.TempDir()
+	first := filepath.Join(base, "first")
+	second := filepath.Join(base, "second")
+	for _, dir := range []string{first, second} {
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	upper := filepath.Join(first, "Game.nsp")
+	lower := filepath.Join(second, "game.nsp")
+	for _, path := range []string{upper, lower} {
+		if err := os.WriteFile(path, []byte("synthetic"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	canonical := filepath.Join(base, "library")
+	seen := seenScanFiles{}
+	if scannedPathSeen(canonical, first, upper, seen) {
+		t.Fatal("first file reported as seen")
+	}
+	if scannedPathSeen(canonical, second, lower, seen) {
+		t.Fatal("distinct file differing only by case was dropped")
+	}
+	if !scannedPathSeen(canonical, first, upper, seen) {
+		t.Fatal("same canonical path was not deduplicated")
+	}
+	if scannedPathSeen(canonical, second, filepath.Join(second, "missing.nsp"), seen) {
+		t.Fatal("new file reported as seen")
+	}
+}
+
+func TestBuildCleanupCandidatesSkipsAliasOfReplacement(t *testing.T) {
+	base := t.TempDir()
+	keeperPath := filepath.Join(base, "DLC New [0100000000011001][v3].nsp")
+	if err := os.WriteFile(keeperPath, []byte("synthetic"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	aliasPath := filepath.Join(base, "DLC Alias [0100000000011001][v3].nsp")
+	if err := os.Link(keeperPath, aliasPath); err != nil {
+		t.Skipf("hard links unavailable: %v", err)
+	}
+	copyPath := filepath.Join(base, "DLC Copy [0100000000011001][v3].nsp")
+	if err := os.WriteFile(copyPath, []byte("synthetic"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	id := "0100000000011001"
+	keeper := ExtendedFileInfo{BaseFolder: base, FileName: filepath.Base(keeperPath)}
+	alias := ExtendedFileInfo{BaseFolder: base, FileName: filepath.Base(aliasPath)}
+	duplicate := ExtendedFileInfo{BaseFolder: base, FileName: filepath.Base(copyPath)}
+	titles := map[string]*SwitchGameFiles{"0100000000010": {
+		Dlc: map[string]SwitchFileInfo{id: {ExtendedInfo: keeper, Metadata: &switchfs.ContentMetaAttributes{TitleId: id, Version: 3}}},
+	}}
+	contents := map[ExtendedFileInfo]map[string]*switchfs.ContentMetaAttributes{
+		alias:     {id: {TitleId: id, Version: 3}},
+		duplicate: {id: {TitleId: id, Version: 3}},
+	}
+	skipped := map[ExtendedFileInfo]SkippedFile{
+		alias:     {ReasonCode: REASON_DUPLICATE},
+		duplicate: {ReasonCode: REASON_DUPLICATE},
+	}
+	candidates := buildCleanupCandidates([]ExtendedFileInfo{keeper, alias, duplicate}, contents, titles, skipped)
+	if len(candidates) != 1 || candidates[0].File != duplicate {
+		t.Fatalf("cleanup candidates = %#v, want only the distinct copy", candidates)
 	}
 }
