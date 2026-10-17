@@ -61,13 +61,19 @@ The application creates a current `settings.json` on first launch. You can custo
 
 ### macOS
 
-- Extract the zip file
+- Download the `darwin-arm64` zip for Apple Silicon (M1 or newer) or the `darwin-amd64` zip for Intel Macs
+- Extract the zip file and move `switch-library-manager.app` to a folder of your choice, for example `Applications`
+- The app is not signed or notarized by Apple, so macOS blocks it the first time it is opened. To allow it, either:
+  - Try to open the app, then go to System Settings > Privacy & Security and click "Open Anyway", or
+  - Open Terminal and run `xattr -dr com.apple.quarantine /path/to/switch-library-manager.app`
+- If macOS reports that the app "is damaged", use the `xattr` command above
+- If macOS reports that the app "can't be opened" on releases before beta10, run `chmod +x /path/to/switch-library-manager.app/Contents/MacOS/switch-library-manager`
 - Double click the App file
+- On macOS, `settings.json`, the database, and `slm.log` are stored in `~/Library/Application Support/Switch Library Manager`
 - If you want to use command line mode, update `settings.json` with `"gui": {"enabled": false}`, or pass `-m console`
   - Open your Terminal
-  - `cd` to the folder containing `switch-library-manager`
-  - `chmod +x switch-library-manager` to make it executable
-  - Run `./switch-library-manager`
+  - `cd` into the app bundle: `cd /path/to/switch-library-manager.app/Contents/MacOS`
+  - Run `./switch-library-manager -m console`
 
 ### Linux
 
