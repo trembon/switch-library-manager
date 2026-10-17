@@ -186,7 +186,7 @@ func (c *Console) Start() {
 	var organizationConflicts []process.OrganizationConflict
 	var organizationPlan process.OrganizationPlan
 	if organizationEnabled {
-		organizationPlan, err = process.BuildOrganizationPlan(folderToScan, localDB, titlesDB, settingsObj.Organization)
+		organizationPlan, err = process.BuildOrganizationPlan(folderToScan, localDB, titlesDB, settingsObj.Organization, settingsObj.Paths.ScanFolders...)
 		if err != nil {
 			fmt.Printf("\nFailed to preflight library organization: %v\n", err)
 			canMutate = false
@@ -214,7 +214,7 @@ func (c *Console) Start() {
 		if operationErr == nil && organizationEnabled {
 			progressBar = progressbar.New(2000)
 			fmt.Printf("\nStarting library organization\n")
-			operationErr = process.ExecuteOrganizationPlan(organizationPlan, localDB, folderToScan, settingsObj.Organization, c)
+			operationErr = process.ExecuteOrganizationPlan(organizationPlan, localDB, folderToScan, settingsObj.Organization, c, settingsObj.Paths.ScanFolders...)
 			progressBar.Finish()
 		}
 		if operationErr != nil {

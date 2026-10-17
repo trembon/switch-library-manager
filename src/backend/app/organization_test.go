@@ -195,6 +195,69 @@ func TestOrganizeLibraryImportsScanFolderWithNoOtherOrganizationOptions(t *testi
 	}
 }
 
+func TestOrganizeLibraryUsesScanRootWhenImportDisabled(t *testing.T) {
+	base := t.TempDir()
+	library := filepath.Join(base, "library")
+	scan := filepath.Join(base, "scan")
+	sourceFolder := filepath.Join(scan, "incoming")
+	for _, directory := range []string{library, sourceFolder} {
+		if err := os.MkdirAll(directory, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const baseID = "0100000000010000"
+	source := filepath.Join(sourceFolder, "Original Name ["+baseID+"][v0].nsp")
+	if err := os.WriteFile(source, []byte("synthetic Switch file"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := settings.SaveSettingsWithError(&settings.AppSettings{
+		Paths: settings.PathSettings{LibraryFolder: library, ScanFolders: []string{scan}},
+		Scan:  settings.ScanSettings{Recursive: true, IgnoreFileTypes: []string{}},
+		Organization: settings.OrganizeOptions{
+			CreateFolderPerGame: true, FolderNameTemplate: "{TITLE_NAME}", RenameFiles: true, FileNameTemplate: "[{TITLE_ID}][v{VERSION}]", DeleteEmptyFolders: true,
+		},
+	}, base); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := db.NewLocalSwitchDBManager(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	application := &App{
+		baseFolder: base, localDbManager: manager, sugarLogger: zap.NewNop().Sugar(),
+		state: State{switchDB: &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{
+			"0100000000010": {Attributes: db.TitleAttributes{Id: baseID, Name: "Original Name"}},
+		}}},
+	}
+	if _, err := application.buildLocalDB(true); err != nil {
+		t.Fatal(err)
+	}
+	destination := filepath.Join(scan, "Original Name", "["+baseID+"][v0].nsp")
+	preview, err := application.GetOrganizationPreview()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(preview.Entries) == 0 || filepath.Join(library, preview.Entries[0].Path) != destination {
+		t.Fatalf("preview = %#v, want scan-root destination %q", preview, destination)
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		result, err := application.OrganizeLibrary()
+		if err != nil || result.Status != "completed" || len(result.Library.LibraryData) != 1 {
+			t.Fatalf("organize attempt %d: result = %#v, err = %v", attempt, result, err)
+		}
+	}
+	if got, err := os.ReadFile(destination); err != nil || string(got) != "synthetic Switch file" {
+		t.Fatalf("organized file content = %q, err = %v", got, err)
+	}
+	if _, err := os.Stat(sourceFolder); !os.IsNotExist(err) {
+		t.Fatalf("empty incoming directory was not removed: %v", err)
+	}
+	if entries, err := os.ReadDir(library); err != nil || len(entries) != 0 {
+		t.Fatalf("main library changed: entries = %#v, err = %v", entries, err)
+	}
+}
+
 func TestOrganizeLibraryInvalidOptionsRemainErrors(t *testing.T) {
 	base := t.TempDir()
 	settingsObj := &settings.AppSettings{

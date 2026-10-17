@@ -30,7 +30,7 @@ func DeleteOldUpdates(baseFolder string, localDB *db.LocalSwitchFilesDB, updateP
 }
 
 // DeleteOldUpdatesAt removes only scan-verified redundant files and limits
-// empty-folder cleanup to the supplied library root.
+// empty-folder cleanup to the supplied library root and configured scan roots.
 func DeleteOldUpdatesAt(baseFolder, cleanupRoot string, localDB *db.LocalSwitchFilesDB, updateProgress db.ProgressUpdater) error {
 	if localDB == nil {
 		return fmt.Errorf("local library has not been scanned")
@@ -81,7 +81,7 @@ func DeleteOldUpdatesAt(baseFolder, cleanupRoot string, localDB *db.LocalSwitchF
 	}
 	localDB.CleanupCandidates = nil
 	if removed > 0 && settingsObj.Organization.DeleteEmptyFolders && cleanupRoot != "" {
-		if err := deleteEmptyFolders(cleanupRoot); err != nil {
+		if err := deleteEmptyOrganizationFolders(cleanupRoot, settingsObj.Paths.ScanFolders); err != nil {
 			return fmt.Errorf("delete empty folders: %w", err)
 		}
 	}
@@ -273,25 +273,62 @@ func samePhysicalFilePath(left, right db.ExtendedFileInfo) bool {
 	return leftPath == rightPath
 }
 
-func organizationDestinationFolder(libraryRoot, destinationPath, sourceFolder string, options settings.OrganizeOptions) (string, bool, error) {
-	importing := false
-	if options.MoveScanFilesToLibrary {
-		insideLibrary, err := organizationPathWithin(libraryRoot, sourceFolder)
+// organizationSourceRoot keeps each scan folder independent unless importing
+// is enabled. The main library takes precedence over overlapping scan folders;
+// otherwise the most specific configured scan root owns the source.
+func organizationSourceRoot(libraryRoot, sourceFolder string, options settings.OrganizeOptions, scanFolders []string) (string, bool, error) {
+	insideLibrary, err := organizationPathWithin(libraryRoot, sourceFolder)
+	if err != nil {
+		return "", false, err
+	}
+	if insideLibrary || options.MoveScanFilesToLibrary {
+		return libraryRoot, !insideLibrary, nil
+	}
+	root := ""
+	for _, folder := range scanFolders {
+		if folder == "" {
+			continue
+		}
+		inside, err := organizationPathWithin(folder, sourceFolder)
 		if err != nil {
 			return "", false, err
 		}
-		importing = !insideLibrary
+		if !inside {
+			continue
+		}
+		if root != "" {
+			moreSpecific, err := organizationPathWithin(root, folder)
+			if err != nil {
+				return "", false, err
+			}
+			if !moreSpecific {
+				continue
+			}
+		}
+		root = folder
 	}
-	if importing && !options.CreateFolderPerGame {
-		destinationPath = libraryRoot
+	if root == "" {
+		return "", false, fmt.Errorf("source folder %q is outside the library and configured scan folders", sourceFolder)
 	}
-	return destinationPath, importing, nil
+	return root, false, nil
 }
 
-func organizationTargetPath(libraryRoot, destinationPath, sourceFolder, originalName string, options settings.OrganizeOptions, contentKind string, templateData map[string]string, nameTry int) (string, error) {
-	var importing bool
-	var err error
-	destinationPath, importing, err = organizationDestinationFolder(libraryRoot, destinationPath, sourceFolder, options)
+func organizationDestinationFolder(libraryRoot, gameFolder, sourceFolder string, options settings.OrganizeOptions, scanFolders []string) (string, string, error) {
+	root, importing, err := organizationSourceRoot(libraryRoot, sourceFolder, options, scanFolders)
+	if err != nil {
+		return "", "", err
+	}
+	if options.CreateFolderPerGame {
+		return filepath.Join(root, gameFolder), root, nil
+	}
+	if importing {
+		return root, root, nil
+	}
+	return sourceFolder, root, nil
+}
+
+func organizationTargetPath(libraryRoot, gameFolder, sourceFolder, originalName string, options settings.OrganizeOptions, contentKind string, templateData map[string]string, nameTry int, scanFolders []string) (string, error) {
+	destinationPath, root, err := organizationDestinationFolder(libraryRoot, gameFolder, sourceFolder, options, scanFolders)
 	if err != nil {
 		return "", err
 	}
@@ -304,26 +341,21 @@ func organizationTargetPath(libraryRoot, destinationPath, sourceFolder, original
 		configuredFolder = options.DlcFolder
 	}
 	if configuredFolder == "" {
-		if !options.CreateFolderPerGame && !importing {
-			return filepath.Join(sourceFolder, fileName), nil
-		}
 		return filepath.Join(destinationPath, fileName), nil
 	}
-	if importing && filepath.IsAbs(configuredFolder) {
+	if filepath.IsAbs(configuredFolder) {
 		return filepath.Join(configuredFolder, fileName), nil
 	}
-	if !options.CreateFolderPerGame && !importing {
-		return filepath.Join(configuredFolder, fileName), nil
+	if !options.CreateFolderPerGame {
+		destinationPath = root
 	}
 	target := filepath.Join(destinationPath, configuredFolder, fileName)
-	if importing {
-		insideLibrary, err := organizationPathWithin(libraryRoot, target)
-		if err != nil {
-			return "", err
-		}
-		if !insideLibrary {
-			return "", fmt.Errorf("relative organization folder %q escapes the library folder", configuredFolder)
-		}
+	insideRoot, err := organizationPathWithin(root, target)
+	if err != nil {
+		return "", err
+	}
+	if !insideRoot {
+		return "", fmt.Errorf("relative organization folder %q escapes the organization root %q", configuredFolder, root)
 	}
 	return target, nil
 }
@@ -404,7 +436,20 @@ func createFolder(path string, logger *zap.SugaredLogger) error {
 	return nil
 }
 
-func deleteEmptyFolders(path string) error {
+func deleteEmptyOrganizationFolders(libraryRoot string, scanFolders []string) error {
+	roots := append([]string{libraryRoot}, scanFolders...)
+	for _, root := range roots {
+		if root == "" {
+			continue
+		}
+		if err := deleteEmptyFolders(root, roots...); err != nil {
+			return fmt.Errorf("clean organization root %q: %w", root, err)
+		}
+	}
+	return nil
+}
+
+func deleteEmptyFolders(path string, protectedRoots ...string) error {
 	root, err := filepath.Abs(path)
 	if err != nil {
 		return fmt.Errorf("resolve cleanup root %q: %w", path, err)
@@ -430,6 +475,16 @@ func deleteEmptyFolders(path string) error {
 	})
 	for _, directory := range directories {
 		if filepath.Clean(directory) == filepath.Clean(root) {
+			continue
+		}
+		protected := false
+		for _, configuredRoot := range protectedRoots {
+			if configuredRoot != "" && sameOrganizationPath(directory, configuredRoot) {
+				protected = true
+				break
+			}
+		}
+		if protected {
 			continue
 		}
 		if err := deleteEmptyFolder(directory); err != nil {

@@ -106,7 +106,9 @@ On macOS, runtime files are stored in `~/Library/Application Support/Switch Libr
 
 Folder and file templates use brace-delimited tokens. The [naming template guide](naming.md) lists all tokens, describes which template accepts each one, and gives examples. When `rename_files` is enabled, `file_name_template` must contain `{TITLE_NAME}` or `{TITLE_ID}`. When `create_folder_per_game` is enabled, `folder_name_template` must contain `{TITLE_NAME}` or `{TITLE_ID}`.
 
-When `move_scan_files_to_library` is enabled, Organize imports recognized Switch files scanned from folders outside `paths.library_folder`. Existing files inside the library keep their current placement unless another organization option changes it. Relative Updates and DLC folders for imported files are resolved inside the library (or their per-game folder); absolute folder paths remain explicit destinations. The setting is off by default.
+With `move_scan_files_to_library` off (the default), each folder in `paths.scan_folders` is organized like a separate library: per-game folders are created under that scan root, files are renamed there, and relative Updates/DLC folders are resolved under that root or its per-game folder. Files already inside the main library use the main library root. For overlapping external scan roots, the most specific root containing the file is used. Empty-folder cleanup preserves all configured roots.
+
+When `move_scan_files_to_library` is enabled, Organize instead imports recognized Switch files from outside `paths.library_folder` into the main library. Existing files inside the library keep their current placement unless another organization option changes it. Absolute Updates/DLC folder paths remain explicit destinations in both modes.
 
 ## Internal cache
 

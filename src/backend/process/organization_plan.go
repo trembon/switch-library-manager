@@ -49,12 +49,14 @@ func (e *OrganizationConflictsError) Error() string {
 }
 
 // BuildOrganizationPlan computes and validates all destinations without
-// creating directories or changing library files.
+// creating directories or changing library files. Additional scan folders act
+// as separate organization roots unless MoveScanFilesToLibrary is enabled.
 func BuildOrganizationPlan(
 	baseFolder string,
 	localDB *db.LocalSwitchFilesDB,
 	titlesDB *db.SwitchTitlesDB,
 	options settings.OrganizeOptions,
+	scanFolders ...string,
 ) (OrganizationPlan, error) {
 	if localDB == nil {
 		return OrganizationPlan{}, fmt.Errorf("local library has not been scanned")
@@ -93,13 +95,13 @@ func BuildOrganizationPlan(
 		}
 		setBaseFileVersionTemplateData(templateData, game)
 
-		destinationPath := game.File.ExtendedInfo.BaseFolder
+		gameFolder := ""
 		if options.CreateFolderPerGame {
-			destinationPath = filepath.Join(baseFolder, getFolderName(options, templateData))
+			gameFolder = getFolderName(options, templateData)
 		}
 
 		if game.IsSplit && game.BaseExist {
-			fileDestination, _, err := organizationDestinationFolder(baseFolder, destinationPath, game.File.ExtendedInfo.BaseFolder, options)
+			fileDestination, _, err := organizationDestinationFolder(baseFolder, gameFolder, game.File.ExtendedInfo.BaseFolder, options, scanFolders)
 			if err != nil {
 				return OrganizationPlan{}, fmt.Errorf("resolve split destination for %q: %w", key, err)
 			}
@@ -113,7 +115,7 @@ func BuildOrganizationPlan(
 			templateData[settings.TEMPLATE_TYPE] = "BASE"
 			templateData[settings.TEMPLATE_PACKAGE_CONTENTS] = packageContents(game)
 			setFileSizeTemplateData(templateData, game.File.ExtendedInfo.Size)
-			target, err := organizationTargetPath(baseFolder, destinationPath, game.File.ExtendedInfo.BaseFolder, game.File.ExtendedInfo.FileName, options, "base", templateData, 0)
+			target, err := organizationTargetPath(baseFolder, gameFolder, game.File.ExtendedInfo.BaseFolder, game.File.ExtendedInfo.FileName, options, "base", templateData, 0, scanFolders)
 			if err != nil {
 				return OrganizationPlan{}, fmt.Errorf("resolve base destination for %q: %w", key, err)
 			}
@@ -142,7 +144,7 @@ func BuildOrganizationPlan(
 			templateData[settings.TEMPLATE_VERSION] = strconv.Itoa(version)
 			templateData[settings.TEMPLATE_TYPE] = "UPD"
 			setFileSizeTemplateData(templateData, update.ExtendedInfo.Size)
-			target, err := organizationTargetPath(baseFolder, destinationPath, update.ExtendedInfo.BaseFolder, update.ExtendedInfo.FileName, options, "update", templateData, 0)
+			target, err := organizationTargetPath(baseFolder, gameFolder, update.ExtendedInfo.BaseFolder, update.ExtendedInfo.FileName, options, "update", templateData, 0, scanFolders)
 			if err != nil {
 				return OrganizationPlan{}, fmt.Errorf("resolve update destination for %q: %w", key, err)
 			}
@@ -166,7 +168,7 @@ func BuildOrganizationPlan(
 			templateData[settings.TEMPLATE_TITLE_ID] = id
 			templateData[settings.TEMPLATE_DLC_NAME] = getDlcName(title, dlc)
 			setFileSizeTemplateData(templateData, dlc.ExtendedInfo.Size)
-			target, err := organizationTargetPath(baseFolder, destinationPath, dlc.ExtendedInfo.BaseFolder, dlc.ExtendedInfo.FileName, options, "dlc", templateData, 0)
+			target, err := organizationTargetPath(baseFolder, gameFolder, dlc.ExtendedInfo.BaseFolder, dlc.ExtendedInfo.FileName, options, "dlc", templateData, 0, scanFolders)
 			if err != nil {
 				return OrganizationPlan{}, fmt.Errorf("resolve DLC destination for %q: %w", key, err)
 			}
@@ -450,7 +452,7 @@ func resolveOrganizationPath(path string) (string, error) {
 
 // ExecuteOrganizationPlan applies a previously validated plan and refuses to
 // replace destinations that appear after preflight.
-func ExecuteOrganizationPlan(plan OrganizationPlan, localDB *db.LocalSwitchFilesDB, baseFolder string, options settings.OrganizeOptions, progress db.ProgressUpdater) error {
+func ExecuteOrganizationPlan(plan OrganizationPlan, localDB *db.LocalSwitchFilesDB, baseFolder string, options settings.OrganizeOptions, progress db.ProgressUpdater, scanFolders ...string) error {
 	if len(plan.Conflicts) > 0 {
 		return &OrganizationConflictsError{Conflicts: plan.Conflicts}
 	}
@@ -480,7 +482,7 @@ func ExecuteOrganizationPlan(plan OrganizationPlan, localDB *db.LocalSwitchFiles
 		zap.S().Infof("Moved file: %s -> %s", move.Source, move.Destination)
 	}
 	if options.DeleteEmptyFolders {
-		if err := deleteEmptyFolders(baseFolder); err != nil {
+		if err := deleteEmptyOrganizationFolders(baseFolder, scanFolders); err != nil {
 			return fmt.Errorf("delete empty folders: %w", err)
 		}
 	}
@@ -527,9 +529,13 @@ func OrganizeByFolders(baseFolder string, localDB *db.LocalSwitchFilesDB, titles
 	if err != nil {
 		return fmt.Errorf("read settings before organizing files: %w", err)
 	}
-	plan, err := BuildOrganizationPlan(baseFolder, localDB, titlesDB, settingsObj.Organization)
+	libraryRoot := settingsObj.Paths.LibraryFolder
+	if libraryRoot == "" {
+		libraryRoot = baseFolder
+	}
+	plan, err := BuildOrganizationPlan(libraryRoot, localDB, titlesDB, settingsObj.Organization, settingsObj.Paths.ScanFolders...)
 	if err != nil {
 		return err
 	}
-	return ExecuteOrganizationPlan(plan, localDB, baseFolder, settingsObj.Organization, progress)
+	return ExecuteOrganizationPlan(plan, localDB, libraryRoot, settingsObj.Organization, progress, settingsObj.Paths.ScanFolders...)
 }
