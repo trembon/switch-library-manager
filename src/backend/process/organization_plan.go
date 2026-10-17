@@ -49,14 +49,14 @@ func (e *OrganizationConflictsError) Error() string {
 }
 
 // BuildOrganizationPlan computes and validates all destinations without
-// creating directories or changing library files. Additional scan folders act
-// as separate organization roots unless MoveScanFilesToLibrary is enabled.
+// creating directories or changing library files. Files outside baseFolder,
+// such as those in scan folders, are left untouched unless
+// MoveScanFilesToLibrary imports them into baseFolder.
 func BuildOrganizationPlan(
 	baseFolder string,
 	localDB *db.LocalSwitchFilesDB,
 	titlesDB *db.SwitchTitlesDB,
 	options settings.OrganizeOptions,
-	scanFolders ...string,
 ) (OrganizationPlan, error) {
 	if localDB == nil {
 		return OrganizationPlan{}, fmt.Errorf("local library has not been scanned")
@@ -101,9 +101,12 @@ func BuildOrganizationPlan(
 		}
 
 		if game.IsSplit && game.BaseExist {
-			fileDestination, _, err := organizationDestinationFolder(baseFolder, gameFolder, game.File.ExtendedInfo.BaseFolder, options, scanFolders)
+			fileDestination, included, err := organizationDestinationFolder(baseFolder, gameFolder, game.File.ExtendedInfo.BaseFolder, options)
 			if err != nil {
 				return OrganizationPlan{}, fmt.Errorf("resolve split destination for %q: %w", key, err)
+			}
+			if !included {
+				continue
 			}
 			if err := addSplitMoves(&plan, seenSources, game.File.ExtendedInfo.FileName, game.File.ExtendedInfo.BaseFolder, fileDestination); err != nil {
 				return OrganizationPlan{}, err
@@ -115,12 +118,14 @@ func BuildOrganizationPlan(
 			templateData[settings.TEMPLATE_TYPE] = "BASE"
 			templateData[settings.TEMPLATE_PACKAGE_CONTENTS] = packageContents(game)
 			setFileSizeTemplateData(templateData, game.File.ExtendedInfo.Size)
-			target, err := organizationTargetPath(baseFolder, gameFolder, game.File.ExtendedInfo.BaseFolder, game.File.ExtendedInfo.FileName, options, "base", templateData, 0, scanFolders)
+			target, included, err := organizationTargetPath(baseFolder, gameFolder, game.File.ExtendedInfo.BaseFolder, game.File.ExtendedInfo.FileName, options, "base", templateData, 0)
 			if err != nil {
 				return OrganizationPlan{}, fmt.Errorf("resolve base destination for %q: %w", key, err)
 			}
-			if err := addOrganizationMove(&plan, seenSources, filepath.Join(game.File.ExtendedInfo.BaseFolder, game.File.ExtendedInfo.FileName), target); err != nil {
-				return OrganizationPlan{}, fmt.Errorf("plan base file for %q: %w", key, err)
+			if included {
+				if err := addOrganizationMove(&plan, seenSources, filepath.Join(game.File.ExtendedInfo.BaseFolder, game.File.ExtendedInfo.FileName), target); err != nil {
+					return OrganizationPlan{}, fmt.Errorf("plan base file for %q: %w", key, err)
+				}
 			}
 		}
 		templateData[settings.TEMPLATE_PACKAGE_CONTENTS] = ""
@@ -144,9 +149,12 @@ func BuildOrganizationPlan(
 			templateData[settings.TEMPLATE_VERSION] = strconv.Itoa(version)
 			templateData[settings.TEMPLATE_TYPE] = "UPD"
 			setFileSizeTemplateData(templateData, update.ExtendedInfo.Size)
-			target, err := organizationTargetPath(baseFolder, gameFolder, update.ExtendedInfo.BaseFolder, update.ExtendedInfo.FileName, options, "update", templateData, 0, scanFolders)
+			target, included, err := organizationTargetPath(baseFolder, gameFolder, update.ExtendedInfo.BaseFolder, update.ExtendedInfo.FileName, options, "update", templateData, 0)
 			if err != nil {
 				return OrganizationPlan{}, fmt.Errorf("resolve update destination for %q: %w", key, err)
+			}
+			if !included {
+				continue
 			}
 			if err := addOrganizationMove(&plan, seenSources, filepath.Join(update.ExtendedInfo.BaseFolder, update.ExtendedInfo.FileName), target); err != nil {
 				return OrganizationPlan{}, fmt.Errorf("plan update file for %q: %w", key, err)
@@ -168,9 +176,12 @@ func BuildOrganizationPlan(
 			templateData[settings.TEMPLATE_TITLE_ID] = id
 			templateData[settings.TEMPLATE_DLC_NAME] = getDlcName(title, dlc)
 			setFileSizeTemplateData(templateData, dlc.ExtendedInfo.Size)
-			target, err := organizationTargetPath(baseFolder, gameFolder, dlc.ExtendedInfo.BaseFolder, dlc.ExtendedInfo.FileName, options, "dlc", templateData, 0, scanFolders)
+			target, included, err := organizationTargetPath(baseFolder, gameFolder, dlc.ExtendedInfo.BaseFolder, dlc.ExtendedInfo.FileName, options, "dlc", templateData, 0)
 			if err != nil {
 				return OrganizationPlan{}, fmt.Errorf("resolve DLC destination for %q: %w", key, err)
+			}
+			if !included {
+				continue
 			}
 			if err := addOrganizationMove(&plan, seenSources, filepath.Join(dlc.ExtendedInfo.BaseFolder, dlc.ExtendedInfo.FileName), target); err != nil {
 				return OrganizationPlan{}, fmt.Errorf("plan DLC file for %q: %w", key, err)
@@ -451,7 +462,8 @@ func resolveOrganizationPath(path string) (string, error) {
 }
 
 // ExecuteOrganizationPlan applies a previously validated plan and refuses to
-// replace destinations that appear after preflight.
+// replace destinations that appear after preflight. Empty-folder cleanup runs
+// inside baseFolder only; scanFolders nested inside it are kept.
 func ExecuteOrganizationPlan(plan OrganizationPlan, localDB *db.LocalSwitchFilesDB, baseFolder string, options settings.OrganizeOptions, progress db.ProgressUpdater, scanFolders ...string) error {
 	if len(plan.Conflicts) > 0 {
 		return &OrganizationConflictsError{Conflicts: plan.Conflicts}
@@ -533,7 +545,7 @@ func OrganizeByFolders(baseFolder string, localDB *db.LocalSwitchFilesDB, titles
 	if libraryRoot == "" {
 		libraryRoot = baseFolder
 	}
-	plan, err := BuildOrganizationPlan(libraryRoot, localDB, titlesDB, settingsObj.Organization, settingsObj.Paths.ScanFolders...)
+	plan, err := BuildOrganizationPlan(libraryRoot, localDB, titlesDB, settingsObj.Organization)
 	if err != nil {
 		return err
 	}

@@ -22,7 +22,7 @@ type OrganizationPreviewEntry struct {
 // BuildOrganizationPreview returns one example for each supported content
 // kind. Entries from the scanned library are preferred, with deterministic
 // examples filling any missing kinds.
-func BuildOrganizationPreview(baseFolder string, options settings.OrganizeOptions, localDB *db.LocalSwitchFilesDB, titlesDB *db.SwitchTitlesDB, scanFolders ...string) ([]OrganizationPreviewEntry, error) {
+func BuildOrganizationPreview(baseFolder string, options settings.OrganizeOptions, localDB *db.LocalSwitchFilesDB, titlesDB *db.SwitchTitlesDB) ([]OrganizationPreviewEntry, error) {
 	byKind := map[string]OrganizationPreviewEntry{}
 
 	if localDB != nil {
@@ -41,7 +41,7 @@ func BuildOrganizationPreview(baseFolder string, options settings.OrganizeOption
 			if titlesDB != nil {
 				title = titlesDB.TitlesMap[key]
 			}
-			entries, err := organizationPreviewForGame(baseFolder, options, game, title, scanFolders...)
+			entries, err := organizationPreviewForGame(baseFolder, options, game, title)
 			if err != nil {
 				return nil, err
 			}
@@ -77,7 +77,7 @@ func BuildOrganizationPreview(baseFolder string, options settings.OrganizeOption
 	return result, nil
 }
 
-func organizationPreviewForGame(baseFolder string, options settings.OrganizeOptions, game *db.SwitchGameFiles, title *db.SwitchTitle, scanFolders ...string) ([]OrganizationPreviewEntry, error) {
+func organizationPreviewForGame(baseFolder string, options settings.OrganizeOptions, game *db.SwitchGameFiles, title *db.SwitchTitle) ([]OrganizationPreviewEntry, error) {
 	if !game.BaseExist && !options.ProcessWhenMissingBaseGame {
 		return nil, nil
 	}
@@ -107,11 +107,13 @@ func organizationPreviewForGame(baseFolder string, options settings.OrganizeOpti
 		templateData[settings.TEMPLATE_PACKAGE_CONTENTS] = packageContents(game)
 		setBaseFileVersionTemplateData(templateData, game)
 		setFileSizeTemplateData(templateData, game.File.ExtendedInfo.Size)
-		target, err := organizationTargetPath(baseFolder, gameFolder, game.File.ExtendedInfo.BaseFolder, game.File.ExtendedInfo.FileName, options, "base", templateData, 0, scanFolders)
+		target, included, err := organizationTargetPath(baseFolder, gameFolder, game.File.ExtendedInfo.BaseFolder, game.File.ExtendedInfo.FileName, options, "base", templateData, 0)
 		if err != nil {
 			return nil, fmt.Errorf("resolve base preview path: %w", err)
 		}
-		result = append(result, OrganizationPreviewEntry{Kind: "game", Path: organizationPreviewPath(baseFolder, target)})
+		if included {
+			result = append(result, OrganizationPreviewEntry{Kind: "game", Path: organizationPreviewPath(baseFolder, target)})
+		}
 	}
 	templateData[settings.TEMPLATE_PACKAGE_CONTENTS] = ""
 
@@ -136,9 +138,12 @@ func organizationPreviewForGame(baseFolder string, options settings.OrganizeOpti
 			templateData[settings.TEMPLATE_VERSION_TXT] = update.Metadata.Ncap.DisplayVersion
 		}
 		templateData[settings.TEMPLATE_TYPE] = "UPD"
-		target, err := organizationTargetPath(baseFolder, gameFolder, update.ExtendedInfo.BaseFolder, update.ExtendedInfo.FileName, options, "update", templateData, 0, scanFolders)
+		target, included, err := organizationTargetPath(baseFolder, gameFolder, update.ExtendedInfo.BaseFolder, update.ExtendedInfo.FileName, options, "update", templateData, 0)
 		if err != nil {
 			return nil, fmt.Errorf("resolve update preview path: %w", err)
+		}
+		if !included {
+			continue
 		}
 		result = append(result, OrganizationPreviewEntry{Kind: "update", Path: organizationPreviewPath(baseFolder, target)})
 		break
@@ -149,20 +154,25 @@ func organizationPreviewForGame(baseFolder string, options settings.OrganizeOpti
 		dlcIDs = append(dlcIDs, id)
 	}
 	sort.Strings(dlcIDs)
-	if len(dlcIDs) > 0 {
-		dlc := game.Dlc[dlcIDs[0]]
-		if !(game.BaseExist && samePhysicalFilePath(game.File.ExtendedInfo, dlc.ExtendedInfo)) {
-			setDlcVersionTemplateData(templateData, dlc)
-			templateData[settings.TEMPLATE_TITLE_ID] = dlcIDs[0]
-			templateData[settings.TEMPLATE_TYPE] = "DLC"
-			templateData[settings.TEMPLATE_DLC_NAME] = getDlcName(title, dlc)
-			setFileSizeTemplateData(templateData, dlc.ExtendedInfo.Size)
-			target, err := organizationTargetPath(baseFolder, gameFolder, dlc.ExtendedInfo.BaseFolder, dlc.ExtendedInfo.FileName, options, "dlc", templateData, 0, scanFolders)
-			if err != nil {
-				return nil, fmt.Errorf("resolve DLC preview path: %w", err)
-			}
-			result = append(result, OrganizationPreviewEntry{Kind: "dlc", Path: organizationPreviewPath(baseFolder, target)})
+	for _, id := range dlcIDs {
+		dlc := game.Dlc[id]
+		if game.BaseExist && samePhysicalFilePath(game.File.ExtendedInfo, dlc.ExtendedInfo) {
+			continue
 		}
+		setDlcVersionTemplateData(templateData, dlc)
+		templateData[settings.TEMPLATE_TITLE_ID] = id
+		templateData[settings.TEMPLATE_TYPE] = "DLC"
+		templateData[settings.TEMPLATE_DLC_NAME] = getDlcName(title, dlc)
+		setFileSizeTemplateData(templateData, dlc.ExtendedInfo.Size)
+		target, included, err := organizationTargetPath(baseFolder, gameFolder, dlc.ExtendedInfo.BaseFolder, dlc.ExtendedInfo.FileName, options, "dlc", templateData, 0)
+		if err != nil {
+			return nil, fmt.Errorf("resolve DLC preview path: %w", err)
+		}
+		if !included {
+			continue
+		}
+		result = append(result, OrganizationPreviewEntry{Kind: "dlc", Path: organizationPreviewPath(baseFolder, target)})
+		break
 	}
 
 	return result, nil

@@ -186,7 +186,7 @@ func (c *Console) Start() {
 	var organizationConflicts []process.OrganizationConflict
 	var organizationPlan process.OrganizationPlan
 	if organizationEnabled {
-		organizationPlan, err = process.BuildOrganizationPlan(folderToScan, localDB, titlesDB, settingsObj.Organization, settingsObj.Paths.ScanFolders...)
+		organizationPlan, err = process.BuildOrganizationPlan(folderToScan, localDB, titlesDB, settingsObj.Organization)
 		if err != nil {
 			fmt.Printf("\nFailed to preflight library organization: %v\n", err)
 			canMutate = false

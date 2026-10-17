@@ -10,7 +10,7 @@ import (
 	"github.com/trembon/switch-library-manager/backend/settings"
 )
 
-func TestOrganizationUsesEachScanRootUnlessImporting(t *testing.T) {
+func TestScanFoldersAreReadOnlyUnlessImporting(t *testing.T) {
 	for _, importing := range []bool{false, true} {
 		for _, perGame := range []bool{false, true} {
 			for _, baseInLibrary := range []bool{false, true} {
@@ -25,22 +25,27 @@ func TestOrganizationUsesEachScanRootUnlessImporting(t *testing.T) {
 					roots := map[string]string{"game": baseRoot, "update": scans[1], "dlc": library}
 					ids := map[string]string{"game": "0100E95004039000", "update": "0100E95004039800", "dlc": "0100E9500403A001"}
 					files := map[string]db.SwitchFileInfo{}
+					sources := map[string]string{}
 					want := map[string]string{}
+					wantMoves := 0
 					for kind, root := range roots {
 						sourceFolder := filepath.Join(root, "incoming", "nested")
 						mustMkdir(t, sourceFolder)
-						writeFixture(t, filepath.Join(sourceFolder, kind+".nsp"), "synthetic "+kind)
+						sources[kind] = filepath.Join(sourceFolder, kind+".nsp")
+						writeFixture(t, sources[kind], "synthetic "+kind)
 						files[kind] = db.SwitchFileInfo{
 							ExtendedInfo: db.ExtendedFileInfo{BaseFolder: sourceFolder, FileName: kind + ".nsp"},
 							Metadata:     metadataForID(ids[kind], 0),
 						}
-						if importing {
-							root = library
+						inLibrary := root == library
+						if !inLibrary && !importing {
+							want[kind] = sources[kind]
+							continue
 						}
-						targetFolder := root
+						targetFolder := library
 						if perGame {
-							targetFolder = filepath.Join(root, "Scan Game")
-						} else if kind == "game" && (!importing || baseInLibrary) {
+							targetFolder = filepath.Join(library, "Scan Game")
+						} else if kind == "game" && inLibrary {
 							targetFolder = sourceFolder
 						}
 						if kind == "update" {
@@ -49,6 +54,7 @@ func TestOrganizationUsesEachScanRootUnlessImporting(t *testing.T) {
 							targetFolder = filepath.Join(targetFolder, "DLC")
 						}
 						want[kind] = filepath.Join(targetFolder, ids[kind]+".nsp")
+						wantMoves++
 					}
 					for _, root := range append([]string{library}, scans...) {
 						mustMkdir(t, root)
@@ -63,19 +69,28 @@ func TestOrganizationUsesEachScanRootUnlessImporting(t *testing.T) {
 						MoveScanFilesToLibrary: importing, CreateFolderPerGame: perGame, FolderNameTemplate: "{TITLE_NAME}",
 						RenameFiles: true, FileNameTemplate: "{TITLE_ID}", UpdatesFolder: "Updates", DlcFolder: "DLC", DeleteEmptyFolders: true,
 					}
-					plan, err := BuildOrganizationPlan(library, local, remote, options, scans...)
+					plan, err := BuildOrganizationPlan(library, local, remote, options)
 					if err != nil {
 						t.Fatal(err)
 					}
-					if len(plan.Conflicts) != 0 || len(plan.Moves) != 3 {
-						t.Fatalf("plan = %#v, want three moves without conflicts", plan)
+					if len(plan.Conflicts) != 0 || len(plan.Moves) != wantMoves {
+						t.Fatalf("plan = %#v, want %d moves without conflicts", plan, wantMoves)
 					}
-					preview, err := BuildOrganizationPreview(library, options, local, remote, scans...)
+					preview, err := BuildOrganizationPreview(library, options, local, remote)
 					if err != nil {
 						t.Fatal(err)
 					}
 					for _, entry := range preview {
-						if filepath.Join(library, entry.Path) != want[entry.Kind] {
+						got := filepath.Join(library, entry.Path)
+						if want[entry.Kind] == sources[entry.Kind] {
+							// Read-only files are omitted, so the preview falls back
+							// to a synthetic example inside the library.
+							if got == sources[entry.Kind] {
+								t.Errorf("%s preview shows read-only scan file %q", entry.Kind, got)
+							}
+							continue
+						}
+						if got != want[entry.Kind] {
 							t.Errorf("%s preview = %q, want %q", entry.Kind, entry.Path, want[entry.Kind])
 						}
 					}
@@ -83,9 +98,18 @@ func TestOrganizationUsesEachScanRootUnlessImporting(t *testing.T) {
 						t.Fatal(err)
 					}
 					for kind, file := range files {
-						assertMoved(t, filepath.Join(file.ExtendedInfo.BaseFolder, file.ExtendedInfo.FileName), want[kind], kind)
+						if want[kind] == sources[kind] {
+							assertExists(t, sources[kind])
+						} else {
+							assertMoved(t, sources[kind], want[kind], kind)
+						}
 						if got, err := os.ReadFile(want[kind]); err != nil || string(got) != "synthetic "+kind {
 							t.Errorf("%s content = %q, err = %v", kind, got, err)
+						}
+						if roots[kind] != library {
+							// Empty-folder cleanup never touches scan folders.
+							assertExists(t, file.ExtendedInfo.BaseFolder)
+							continue
 						}
 						retained := false
 						for _, destination := range want {
@@ -98,7 +122,7 @@ func TestOrganizationUsesEachScanRootUnlessImporting(t *testing.T) {
 					for _, root := range append([]string{library}, scans...) {
 						assertExists(t, root)
 					}
-					repeat, err := BuildOrganizationPlan(library, local, remote, options, scans...)
+					repeat, err := BuildOrganizationPlan(library, local, remote, options)
 					if err != nil || len(repeat.Moves) != 0 || len(repeat.Conflicts) != 0 {
 						t.Fatalf("repeat plan = %#v, err = %v; want no changes", repeat, err)
 					}
@@ -108,7 +132,7 @@ func TestOrganizationUsesEachScanRootUnlessImporting(t *testing.T) {
 	}
 }
 
-func TestScanRootOrganizationHandlesMissingBaseAndSplitFiles(t *testing.T) {
+func TestReadOnlyScanFolderSkipsMissingBaseAndSplitFiles(t *testing.T) {
 	for _, importing := range []bool{false, true} {
 		for _, split := range []bool{false, true} {
 			t.Run(fmt.Sprintf("import=%v/split=%v", importing, split), func(t *testing.T) {
@@ -131,91 +155,165 @@ func TestScanRootOrganizationHandlesMissingBaseAndSplitFiles(t *testing.T) {
 				local := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{"0100e95004039": game}}
 				options := settings.OrganizeOptions{MoveScanFilesToLibrary: importing, CreateFolderPerGame: true, FolderNameTemplate: "{TITLE_NAME}", ProcessWhenMissingBaseGame: true}
 				remote := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{"0100e95004039": {Attributes: db.TitleAttributes{Id: "0100E95004039000", Name: "Scan Game"}}}}
-				plan, err := BuildOrganizationPlan(library, local, remote, options, scan)
-				if err != nil || len(plan.Moves) != 2 || len(plan.Conflicts) != 0 {
-					t.Fatalf("plan = %#v, err = %v; want two moves", plan, err)
+				plan, err := BuildOrganizationPlan(library, local, remote, options)
+				wantMoves := 0
+				if importing {
+					wantMoves = 2
+				}
+				if err != nil || len(plan.Moves) != wantMoves || len(plan.Conflicts) != 0 {
+					t.Fatalf("plan = %#v, err = %v; want %d moves", plan, err, wantMoves)
 				}
 				if err := ExecuteOrganizationPlan(plan, local, library, options, nil, scan); err != nil {
 					t.Fatal(err)
 				}
-				root := scan
-				if importing {
-					root = library
-				}
 				for _, name := range names {
-					assertMoved(t, filepath.Join(sourceFolder, name), filepath.Join(root, "Scan Game", name), name)
+					if importing {
+						assertMoved(t, filepath.Join(sourceFolder, name), filepath.Join(library, "Scan Game", name), name)
+					} else {
+						assertExists(t, filepath.Join(sourceFolder, name))
+						assertNotExists(t, filepath.Join(scan, "Scan Game"))
+					}
 				}
 			})
 		}
 	}
 }
 
-func TestOrganizationSourceRootHandlesOverlapsAndAliases(t *testing.T) {
+func TestOrganizationSourceScope(t *testing.T) {
 	parent := t.TempDir()
 	library := filepath.Join(parent, "library")
-	scan := filepath.Join(parent, "scan")
-	nested := filepath.Join(scan, "nested")
-	for _, root := range []string{library, nested} {
-		mustMkdir(t, root)
+	nestedScan := filepath.Join(library, "nested-scan")
+	sibling := filepath.Join(parent, "library-backup")
+	for _, folder := range []string{nestedScan, sibling} {
+		mustMkdir(t, folder)
 	}
-	for _, roots := range [][]string{{scan, nested}, {nested, scan}} {
-		root, importing, err := organizationSourceRoot(library, filepath.Join(nested, "incoming"), settings.OrganizeOptions{}, roots)
-		if err != nil || importing || root != nested {
-			t.Errorf("root = %q, importing = %v, err = %v; want nested scan root", root, importing, err)
+	cases := []struct {
+		name          string
+		source        string
+		importing     bool
+		wantIncluded  bool
+		wantImporting bool
+	}{
+		{"library file", filepath.Join(library, "incoming"), false, true, false},
+		{"scan folder nested in library", filepath.Join(nestedScan, "incoming"), false, true, false},
+		{"external scan file is read-only", filepath.Join(sibling, "incoming"), false, false, false},
+		{"external scan file is imported", filepath.Join(sibling, "incoming"), true, true, true},
+		{"library file is not imported", filepath.Join(library, "incoming"), true, true, false},
+	}
+	for _, tc := range cases {
+		included, importing, err := organizationSourceScope(library, tc.source, settings.OrganizeOptions{MoveScanFilesToLibrary: tc.importing})
+		if err != nil || included != tc.wantIncluded || importing != tc.wantImporting {
+			t.Errorf("%s: included = %v, importing = %v, err = %v; want %v, %v", tc.name, included, importing, err, tc.wantIncluded, tc.wantImporting)
 		}
 	}
-	root, _, err := organizationSourceRoot(library, filepath.Join(library, "incoming"), settings.OrganizeOptions{}, []string{parent, filepath.Join(library, "incoming")})
-	if err != nil || root != library {
-		t.Fatalf("main library precedence: root = %q, err = %v", root, err)
-	}
-	if _, _, err := organizationSourceRoot(library, filepath.Join(parent, "unknown"), settings.OrganizeOptions{}, []string{scan}); err == nil {
-		t.Fatal("accepted a source outside configured roots")
-	}
 	alias := filepath.Join(parent, "alias")
-	if err := os.Symlink(nested, alias); err != nil {
+	if err := os.Symlink(nestedScan, alias); err != nil {
 		t.Skipf("directory symlinks are unavailable: %v", err)
 	}
-	root, _, err = organizationSourceRoot(library, alias, settings.OrganizeOptions{}, []string{scan})
-	if err != nil || root != scan {
-		t.Fatalf("alias root = %q, err = %v; want %q", root, err, scan)
+	included, importing, err := organizationSourceScope(library, alias, settings.OrganizeOptions{})
+	if err != nil || !included || importing {
+		t.Fatalf("alias into library: included = %v, importing = %v, err = %v", included, importing, err)
 	}
 }
 
-func TestEmptyFolderCleanupPreservesOverlappingRoots(t *testing.T) {
-	root := t.TempDir()
-	nested := filepath.Join(root, "nested-scan")
-	empty := filepath.Join(nested, "empty")
-	mustMkdir(t, empty)
-	if err := deleteEmptyOrganizationFolders(root, []string{nested, root, ""}); err != nil {
+func TestEmptyFolderCleanupIsLibraryOnly(t *testing.T) {
+	parent := t.TempDir()
+	library := filepath.Join(parent, "library")
+	nested := filepath.Join(library, "nested-scan")
+	libraryEmpty := filepath.Join(library, "empty", "deeper")
+	nestedEmpty := filepath.Join(nested, "empty")
+	external := filepath.Join(parent, "scan")
+	externalEmpty := filepath.Join(external, "empty")
+	for _, folder := range []string{libraryEmpty, nestedEmpty, externalEmpty} {
+		mustMkdir(t, folder)
+	}
+	if err := deleteEmptyOrganizationFolders(library, []string{nested, external, ""}); err != nil {
 		t.Fatal(err)
 	}
-	assertNotExists(t, empty)
+	assertNotExists(t, filepath.Join(library, "empty"))
+	assertNotExists(t, nestedEmpty)
 	assertExists(t, nested)
-	assertExists(t, root)
+	assertExists(t, library)
+	assertExists(t, externalEmpty)
+	if err := deleteEmptyOrganizationFolders("", []string{external}); err != nil {
+		t.Fatalf("empty library root: %v", err)
+	}
+	assertExists(t, externalEmpty)
 }
 
-func TestOldUpdateCleanupIncludesScanRoots(t *testing.T) {
-	base := t.TempDir()
-	library, scan := filepath.Join(base, "library"), filepath.Join(base, "scan")
-	oldFolder := filepath.Join(scan, "old")
-	mustMkdir(t, library)
-	mustMkdir(t, oldFolder)
-	oldPath, newPath := filepath.Join(oldFolder, "old.nsp"), filepath.Join(scan, "new.nsp")
-	writeFixture(t, oldPath, "old update")
-	writeFixture(t, newPath, "new update")
-	if err := settings.SaveSettingsWithError(&settings.AppSettings{
-		Paths:        settings.PathSettings{LibraryFolder: library, ScanFolders: []string{scan}},
-		Organization: settings.OrganizeOptions{DeleteOldUpdateFiles: true, DeleteEmptyFolders: true},
-	}, base); err != nil {
-		t.Fatal(err)
+func TestCleanupCandidateScopeWithoutLibraryFolder(t *testing.T) {
+	candidate := db.CleanupCandidate{
+		File:        db.ExtendedFileInfo{BaseFolder: t.TempDir(), FileName: "old.nsp"},
+		Replacement: db.ExtendedFileInfo{BaseFolder: t.TempDir(), FileName: "new.nsp"},
 	}
-	local := &db.LocalSwitchFilesDB{CleanupCandidates: []db.CleanupCandidate{{File: extendedInfoForPath(t, oldPath), Replacement: extendedInfoForPath(t, newPath)}}}
-	if err := DeleteOldUpdatesAt(base, library, local, nil); err != nil {
-		t.Fatal(err)
+	if allowed, err := cleanupCandidateInScope("", candidate, false); err != nil || allowed {
+		t.Fatalf("without library folder: allowed = %v, err = %v; want false", allowed, err)
 	}
-	assertNotExists(t, oldPath)
-	assertNotExists(t, oldFolder)
-	assertExists(t, newPath)
-	assertExists(t, scan)
-	assertExists(t, library)
+	if allowed, err := cleanupCandidateInScope("", candidate, true); err != nil || !allowed {
+		t.Fatalf("importing without library folder: allowed = %v, err = %v; want true", allowed, err)
+	}
+}
+
+func TestOldUpdateCleanupLeavesScanFoldersUnlessImporting(t *testing.T) {
+	cases := []struct {
+		name              string
+		candidateInScan   bool
+		replacementInScan bool
+		importing         bool
+		wantDeleted       bool
+	}{
+		{"library candidate and replacement", false, false, false, true},
+		{"scan candidate is read-only", true, true, false, false},
+		{"library candidate kept when replacement is in scan folder", false, true, false, false},
+		{"scan candidate deleted when importing", true, false, true, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			base := t.TempDir()
+			library, scan := filepath.Join(base, "library"), filepath.Join(base, "scan")
+			folderFor := func(inScan bool) string {
+				if inScan {
+					return filepath.Join(scan, "old")
+				}
+				return filepath.Join(library, "old")
+			}
+			oldFolder := folderFor(tc.candidateInScan)
+			newFolder := filepath.Join(library, "current")
+			if tc.replacementInScan {
+				newFolder = filepath.Join(scan, "current")
+			}
+			for _, folder := range []string{library, scan, oldFolder, newFolder} {
+				mustMkdir(t, folder)
+			}
+			oldPath, newPath := filepath.Join(oldFolder, "old.nsp"), filepath.Join(newFolder, "new.nsp")
+			writeFixture(t, oldPath, "old update")
+			writeFixture(t, newPath, "new update")
+			if err := settings.SaveSettingsWithError(&settings.AppSettings{
+				Paths: settings.PathSettings{LibraryFolder: library, ScanFolders: []string{scan}},
+				Organization: settings.OrganizeOptions{
+					DeleteOldUpdateFiles: true, DeleteEmptyFolders: true, MoveScanFilesToLibrary: tc.importing,
+				},
+			}, base); err != nil {
+				t.Fatal(err)
+			}
+			local := &db.LocalSwitchFilesDB{CleanupCandidates: []db.CleanupCandidate{{File: extendedInfoForPath(t, oldPath), Replacement: extendedInfoForPath(t, newPath)}}}
+			if err := DeleteOldUpdatesAt(base, library, local, nil); err != nil {
+				t.Fatal(err)
+			}
+			assertExists(t, newPath)
+			if !tc.wantDeleted {
+				assertExists(t, oldPath)
+				return
+			}
+			assertNotExists(t, oldPath)
+			if tc.candidateInScan {
+				// Empty-folder cleanup is limited to the library.
+				assertExists(t, oldFolder)
+			} else {
+				assertNotExists(t, oldFolder)
+			}
+			assertExists(t, scan)
+			assertExists(t, library)
+		})
+	}
 }

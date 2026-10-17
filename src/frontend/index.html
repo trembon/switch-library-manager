@@ -187,7 +187,7 @@
           <div class="form-check">
             <input class="form-check-input" type="checkbox" name="organization_move_scan_files_to_library" id="settings-org-move-scan-files" {{if organization.move_scan_files_to_library}}checked{{/if}}>
             <label class="form-check-label" for="settings-org-move-scan-files">Move files from scan folders into the library</label>
-            <div class="form-text">Imports recognized Switch files from folders outside the library when you organize. When off, each scan folder is organized within its own root.</div>
+            <div class="form-text">Imports recognized Switch files from scan folders into the library when you organize, using the folder and naming settings above. When off, scan folders are read-only: organizing never moves, renames, or deletes files in them.</div>
           </div>
           <div class="form-check">
             <input class="form-check-input" type="checkbox" name="organization_switch_safe_file_names" id="settings-org-safe-names" {{if organization.switch_safe_file_names}}checked{{/if}}>

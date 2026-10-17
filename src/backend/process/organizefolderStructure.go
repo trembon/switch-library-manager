@@ -29,8 +29,9 @@ func DeleteOldUpdates(baseFolder string, localDB *db.LocalSwitchFilesDB, updateP
 	return DeleteOldUpdatesAt(baseFolder, "", localDB, updateProgress)
 }
 
-// DeleteOldUpdatesAt removes only scan-verified redundant files and limits
-// empty-folder cleanup to the supplied library root and configured scan roots.
+// DeleteOldUpdatesAt removes only scan-verified redundant files. Files in scan
+// folders are deleted only when MoveScanFilesToLibrary is enabled, and
+// empty-folder cleanup is limited to the supplied library root.
 func DeleteOldUpdatesAt(baseFolder, cleanupRoot string, localDB *db.LocalSwitchFilesDB, updateProgress db.ProgressUpdater) error {
 	if localDB == nil {
 		return fmt.Errorf("local library has not been scanned")
@@ -42,7 +43,17 @@ func DeleteOldUpdatesAt(baseFolder, cleanupRoot string, localDB *db.LocalSwitchF
 	if cleanupRoot == "" {
 		cleanupRoot = settingsObj.Paths.LibraryFolder
 	}
-	candidates := append([]db.CleanupCandidate(nil), localDB.CleanupCandidates...)
+	importing := settingsObj.Organization.MoveScanFilesToLibrary
+	candidates := make([]db.CleanupCandidate, 0, len(localDB.CleanupCandidates))
+	for _, candidate := range localDB.CleanupCandidates {
+		allowed, err := cleanupCandidateInScope(cleanupRoot, candidate, importing)
+		if err != nil {
+			return err
+		}
+		if allowed {
+			candidates = append(candidates, candidate)
+		}
+	}
 	sort.Slice(candidates, func(i, j int) bool {
 		left := filepath.Join(candidates[i].File.BaseFolder, candidates[i].File.FileName)
 		right := filepath.Join(candidates[j].File.BaseFolder, candidates[j].File.FileName)
@@ -86,6 +97,28 @@ func DeleteOldUpdatesAt(baseFolder, cleanupRoot string, localDB *db.LocalSwitchF
 		}
 	}
 	return nil
+}
+
+// cleanupCandidateInScope keeps scan folders read-only. Unless scan files are
+// being imported, a candidate is deleted only when both it and its replacement
+// are inside the library, so the library never relies on a scan-folder copy.
+func cleanupCandidateInScope(libraryRoot string, candidate db.CleanupCandidate, importing bool) (bool, error) {
+	if importing {
+		return true, nil
+	}
+	if libraryRoot == "" {
+		return false, nil
+	}
+	for _, folder := range []string{candidate.File.BaseFolder, candidate.Replacement.BaseFolder} {
+		inside, err := organizationPathWithin(libraryRoot, folder)
+		if err != nil {
+			return false, fmt.Errorf("check cleanup candidate scope: %w", err)
+		}
+		if !inside {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func deleteSkippedPath(localDB *db.LocalSwitchFilesDB, file db.ExtendedFileInfo) {
@@ -273,64 +306,40 @@ func samePhysicalFilePath(left, right db.ExtendedFileInfo) bool {
 	return leftPath == rightPath
 }
 
-// organizationSourceRoot keeps each scan folder independent unless importing
-// is enabled. The main library takes precedence over overlapping scan folders;
-// otherwise the most specific configured scan root owns the source.
-func organizationSourceRoot(libraryRoot, sourceFolder string, options settings.OrganizeOptions, scanFolders []string) (string, bool, error) {
+// organizationSourceScope reports whether organization may move files from
+// sourceFolder. Files outside the library, such as those in scan folders, are
+// read-only unless MoveScanFilesToLibrary imports them into the library.
+func organizationSourceScope(libraryRoot, sourceFolder string, options settings.OrganizeOptions) (included bool, importing bool, err error) {
 	insideLibrary, err := organizationPathWithin(libraryRoot, sourceFolder)
 	if err != nil {
+		return false, false, err
+	}
+	if insideLibrary {
+		return true, false, nil
+	}
+	return options.MoveScanFilesToLibrary, options.MoveScanFilesToLibrary, nil
+}
+
+// organizationDestinationFolder returns the folder a file from sourceFolder is
+// organized into, or included=false when the file must be left untouched.
+func organizationDestinationFolder(libraryRoot, gameFolder, sourceFolder string, options settings.OrganizeOptions) (destination string, included bool, err error) {
+	included, importing, err := organizationSourceScope(libraryRoot, sourceFolder, options)
+	if err != nil || !included {
 		return "", false, err
 	}
-	if insideLibrary || options.MoveScanFilesToLibrary {
-		return libraryRoot, !insideLibrary, nil
-	}
-	root := ""
-	for _, folder := range scanFolders {
-		if folder == "" {
-			continue
-		}
-		inside, err := organizationPathWithin(folder, sourceFolder)
-		if err != nil {
-			return "", false, err
-		}
-		if !inside {
-			continue
-		}
-		if root != "" {
-			moreSpecific, err := organizationPathWithin(root, folder)
-			if err != nil {
-				return "", false, err
-			}
-			if !moreSpecific {
-				continue
-			}
-		}
-		root = folder
-	}
-	if root == "" {
-		return "", false, fmt.Errorf("source folder %q is outside the library and configured scan folders", sourceFolder)
-	}
-	return root, false, nil
-}
-
-func organizationDestinationFolder(libraryRoot, gameFolder, sourceFolder string, options settings.OrganizeOptions, scanFolders []string) (string, string, error) {
-	root, importing, err := organizationSourceRoot(libraryRoot, sourceFolder, options, scanFolders)
-	if err != nil {
-		return "", "", err
-	}
 	if options.CreateFolderPerGame {
-		return filepath.Join(root, gameFolder), root, nil
+		return filepath.Join(libraryRoot, gameFolder), true, nil
 	}
 	if importing {
-		return root, root, nil
+		return libraryRoot, true, nil
 	}
-	return sourceFolder, root, nil
+	return sourceFolder, true, nil
 }
 
-func organizationTargetPath(libraryRoot, gameFolder, sourceFolder, originalName string, options settings.OrganizeOptions, contentKind string, templateData map[string]string, nameTry int, scanFolders []string) (string, error) {
-	destinationPath, root, err := organizationDestinationFolder(libraryRoot, gameFolder, sourceFolder, options, scanFolders)
-	if err != nil {
-		return "", err
+func organizationTargetPath(libraryRoot, gameFolder, sourceFolder, originalName string, options settings.OrganizeOptions, contentKind string, templateData map[string]string, nameTry int) (target string, included bool, err error) {
+	destinationPath, included, err := organizationDestinationFolder(libraryRoot, gameFolder, sourceFolder, options)
+	if err != nil || !included {
+		return "", false, err
 	}
 	fileName := getFileName(options, originalName, templateData, nameTry)
 	configuredFolder := ""
@@ -341,23 +350,23 @@ func organizationTargetPath(libraryRoot, gameFolder, sourceFolder, originalName 
 		configuredFolder = options.DlcFolder
 	}
 	if configuredFolder == "" {
-		return filepath.Join(destinationPath, fileName), nil
+		return filepath.Join(destinationPath, fileName), true, nil
 	}
 	if filepath.IsAbs(configuredFolder) {
-		return filepath.Join(configuredFolder, fileName), nil
+		return filepath.Join(configuredFolder, fileName), true, nil
 	}
 	if !options.CreateFolderPerGame {
-		destinationPath = root
+		destinationPath = libraryRoot
 	}
-	target := filepath.Join(destinationPath, configuredFolder, fileName)
-	insideRoot, err := organizationPathWithin(root, target)
+	target = filepath.Join(destinationPath, configuredFolder, fileName)
+	insideRoot, err := organizationPathWithin(libraryRoot, target)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	if !insideRoot {
-		return "", fmt.Errorf("relative organization folder %q escapes the organization root %q", configuredFolder, root)
+		return "", false, fmt.Errorf("relative organization folder %q escapes the library folder %q", configuredFolder, libraryRoot)
 	}
-	return target, nil
+	return target, true, nil
 }
 
 func applyTemplate(templateData map[string]string, useSafeNames bool, template string, nameTry int) string {
@@ -436,15 +445,16 @@ func createFolder(path string, logger *zap.SugaredLogger) error {
 	return nil
 }
 
+// deleteEmptyOrganizationFolders removes empty folders inside the library
+// only. Scan folders are never cleaned; any configured scan folder nested in
+// the library is kept even when empty.
 func deleteEmptyOrganizationFolders(libraryRoot string, scanFolders []string) error {
-	roots := append([]string{libraryRoot}, scanFolders...)
-	for _, root := range roots {
-		if root == "" {
-			continue
-		}
-		if err := deleteEmptyFolders(root, roots...); err != nil {
-			return fmt.Errorf("clean organization root %q: %w", root, err)
-		}
+	if libraryRoot == "" {
+		return nil
+	}
+	protectedRoots := append([]string{libraryRoot}, scanFolders...)
+	if err := deleteEmptyFolders(libraryRoot, protectedRoots...); err != nil {
+		return fmt.Errorf("clean library folder %q: %w", libraryRoot, err)
 	}
 	return nil
 }

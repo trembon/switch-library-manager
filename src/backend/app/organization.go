@@ -25,7 +25,6 @@ func (a *App) GetOrganizationPreview() (OrganizationPreview, error) {
 		settingsObj.Organization,
 		a.state.localDB,
 		a.state.switchDB,
-		settingsObj.Paths.ScanFolders...,
 	)
 	if err != nil {
 		return OrganizationPreview{}, err
@@ -60,7 +59,7 @@ func (a *App) OrganizeLibrary() (OrganizationResult, error) {
 	var plan process.OrganizationPlan
 	organizationEnabled := settingsObj.Organization.RenameFiles || settingsObj.Organization.CreateFolderPerGame || settingsObj.Organization.MoveScanFilesToLibrary
 	if organizationEnabled {
-		plan, err = process.BuildOrganizationPlan(settingsObj.Paths.LibraryFolder, localDB, a.state.switchDB, settingsObj.Organization, settingsObj.Paths.ScanFolders...)
+		plan, err = process.BuildOrganizationPlan(settingsObj.Paths.LibraryFolder, localDB, a.state.switchDB, settingsObj.Organization)
 		if err != nil {
 			return OrganizationResult{}, err
 		}

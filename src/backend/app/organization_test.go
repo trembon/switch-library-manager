@@ -195,7 +195,7 @@ func TestOrganizeLibraryImportsScanFolderWithNoOtherOrganizationOptions(t *testi
 	}
 }
 
-func TestOrganizeLibraryUsesScanRootWhenImportDisabled(t *testing.T) {
+func TestOrganizeLibraryLeavesScanFoldersReadOnlyWhenImportDisabled(t *testing.T) {
 	base := t.TempDir()
 	library := filepath.Join(base, "library")
 	scan := filepath.Join(base, "scan")
@@ -233,13 +233,14 @@ func TestOrganizeLibraryUsesScanRootWhenImportDisabled(t *testing.T) {
 	if _, err := application.buildLocalDB(true); err != nil {
 		t.Fatal(err)
 	}
-	destination := filepath.Join(scan, "Original Name", "["+baseID+"][v0].nsp")
 	preview, err := application.GetOrganizationPreview()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(preview.Entries) == 0 || filepath.Join(library, preview.Entries[0].Path) != destination {
-		t.Fatalf("preview = %#v, want scan-root destination %q", preview, destination)
+	for _, entry := range preview.Entries {
+		if filepath.IsAbs(entry.Path) || strings.HasPrefix(entry.Path, "..") {
+			t.Fatalf("preview entry %#v points outside the library", entry)
+		}
 	}
 	for attempt := 0; attempt < 2; attempt++ {
 		result, err := application.OrganizeLibrary()
@@ -247,11 +248,11 @@ func TestOrganizeLibraryUsesScanRootWhenImportDisabled(t *testing.T) {
 			t.Fatalf("organize attempt %d: result = %#v, err = %v", attempt, result, err)
 		}
 	}
-	if got, err := os.ReadFile(destination); err != nil || string(got) != "synthetic Switch file" {
-		t.Fatalf("organized file content = %q, err = %v", got, err)
+	if got, err := os.ReadFile(source); err != nil || string(got) != "synthetic Switch file" {
+		t.Fatalf("read-only scan file content = %q, err = %v", got, err)
 	}
-	if _, err := os.Stat(sourceFolder); !os.IsNotExist(err) {
-		t.Fatalf("empty incoming directory was not removed: %v", err)
+	if entries, err := os.ReadDir(scan); err != nil || len(entries) != 1 || entries[0].Name() != "incoming" {
+		t.Fatalf("scan folder changed: entries = %#v, err = %v", entries, err)
 	}
 	if entries, err := os.ReadDir(library); err != nil || len(entries) != 0 {
 		t.Fatalf("main library changed: entries = %#v, err = %v", entries, err)
