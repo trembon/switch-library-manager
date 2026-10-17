@@ -316,6 +316,7 @@ func TestOrganizeByFoldersExpandsPackageContentsOnlyForBundledPackage(t *testing
 	setProcessSettings(t, baseFolder, settings.OrganizeOptions{
 		RenameFiles:         true,
 		FileNameTemplate:    "{TITLE_NAME}_{TYPE} ({PACKAGE_CONTENTS})",
+		IncludeBaseType:     true,
 		SwitchSafeFileNames: false,
 	})
 
@@ -439,6 +440,7 @@ func TestOrganizeByFoldersMovesBaseUpdateAndDLC(t *testing.T) {
 		FolderNameTemplate:  "{TITLE_NAME}",
 		RenameFiles:         true,
 		FileNameTemplate:    "{TITLE_ID}_{TYPE}_{VERSION}_{VERSION_TXT}_{SIZE_GB}_{SIZE_MB}",
+		IncludeBaseType:     true,
 		UpdatesFolder:       "updates",
 		DlcFolder:           "dlc",
 		SwitchSafeFileNames: false,
@@ -527,6 +529,7 @@ func TestOrganizeByFoldersUsesHighestBundledUpdateVersion(t *testing.T) {
 	setProcessSettings(t, baseFolder, settings.OrganizeOptions{
 		RenameFiles:         true,
 		FileNameTemplate:    "{TITLE_NAME} [{TITLE_ID}][{TYPE}][v{VERSION}][{VERSION_TXT}]",
+		IncludeBaseType:     true,
 		SwitchSafeFileNames: false,
 	})
 	local := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{

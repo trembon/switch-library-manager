@@ -17,6 +17,7 @@ func TestBuildOrganizationPreviewUsesActualBaseUpdateAndDLC(t *testing.T) {
 		FolderNameTemplate:  "{TITLE_NAME}",
 		RenameFiles:         true,
 		FileNameTemplate:    "{TITLE_ID}_{TYPE}_{VERSION}_{SIZE_GB}_{SIZE_MB}",
+		IncludeBaseType:     true,
 		UpdatesFolder:       "updates",
 		DlcFolder:           "dlc",
 	}
@@ -117,6 +118,7 @@ func TestBuildOrganizationPreviewUsesBundledVersionForBaseFile(t *testing.T) {
 	options := settings.OrganizeOptions{
 		RenameFiles:         true,
 		FileNameTemplate:    "{TITLE_NAME} [{TITLE_ID}][{TYPE}][v{VERSION}][{VERSION_TXT}]",
+		IncludeBaseType:     true,
 		SwitchSafeFileNames: false,
 	}
 	local := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{
@@ -171,6 +173,7 @@ func TestBuildOrganizationPreviewExpandsPackageContentsForBundledBase(t *testing
 	options := settings.OrganizeOptions{
 		RenameFiles:         true,
 		FileNameTemplate:    "{TITLE_NAME} ({PACKAGE_CONTENTS})[{TYPE}][v{VERSION}]",
+		IncludeBaseType:     true,
 		SwitchSafeFileNames: false,
 	}
 	local := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{

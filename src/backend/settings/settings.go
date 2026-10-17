@@ -103,6 +103,7 @@ type OrganizationSettings struct {
 	FolderNameTemplate         string `json:"folder_name_template"`
 	SwitchSafeFileNames        bool   `json:"switch_safe_file_names"`
 	FileNameTemplate           string `json:"file_name_template"`
+	IncludeBaseType            bool   `json:"include_base_type"`
 	ProcessWhenMissingBaseGame bool   `json:"process_when_missing_base_game"`
 }
 
@@ -290,6 +291,7 @@ func defaultSettings() *AppSettings {
 			FolderNameTemplate:  fmt.Sprintf("{%v}", TEMPLATE_TITLE_NAME),
 			FileNameTemplate:    fmt.Sprintf("{%v} ({%v})[{%v}][v{%v}]", TEMPLATE_TITLE_NAME, TEMPLATE_DLC_NAME, TEMPLATE_TITLE_ID, TEMPLATE_VERSION),
 			SwitchSafeFileNames: true,
+			IncludeBaseType:     true,
 		},
 		MissingContent: MissingContentSettings{
 			CheckForUpdates:   true,

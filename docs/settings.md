@@ -44,6 +44,7 @@ On macOS, runtime files are stored in `~/Library/Application Support/Switch Libr
     "folder_name_template": "{TITLE_NAME}",
     "switch_safe_file_names": true,
     "file_name_template": "{TITLE_NAME} ({DLC_NAME})[{TITLE_ID}][v{VERSION}]",
+    "include_base_type": true,
     "process_when_missing_base_game": false
   },
   "missing_content": {
@@ -92,6 +93,7 @@ On macOS, runtime files are stored in `~/Library/Application Support/Switch Libr
 | `organization.folder_name_template`           | string       | `"{TITLE_NAME}"`                                      | Template used for game folder names.                                                                                                                   |
 | `organization.switch_safe_file_names`         | boolean      | `true`                                                | Replaces characters that are unsafe for Switch-compatible names.                                                                                       |
 | `organization.file_name_template`             | string       | `"{TITLE_NAME} ({DLC_NAME})[{TITLE_ID}][v{VERSION}]"` | Template used when renaming files. See the [naming template guide](naming.md) for available tokens and examples.                                        |
+| `organization.include_base_type`              | boolean      | `true`                                                | Includes `BASE` in the file template's `{TYPE}` token. When false, it is empty for base files; `UPD` and `DLC` are unchanged. Missing settings default to true. |
 | `organization.process_when_missing_base_game` | boolean      | `false`                                               | Allows updates and DLC to be organized even when the base game is absent.                                                                              |
 | `missing_content.check_for_updates`           | boolean      | `true`                                                | Runs the missing-updates check.                                                                                                                        |
 | `missing_content.check_for_dlc`               | boolean      | `true`                                                | Runs the missing-DLC check.                                                                                                                            |

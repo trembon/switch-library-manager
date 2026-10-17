@@ -222,6 +222,11 @@
               <label class="form-label" for="settings-org-file-template">File name template</label>
               <input class="form-control" type="text" name="organization_file_name_template" id="settings-org-file-template" value="{{:organization.file_name_template}}">
               <div class="form-text">Use {PACKAGE_CONTENTS} for bundled-content counts, such as 1G+1U+1D. Add parentheses in the template if desired.</div>
+              <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" name="organization_include_base_type" id="settings-org-include-base-type" {{if organization.include_base_type}}checked{{/if}}>
+                <label class="form-check-label" for="settings-org-include-base-type">Include BASE in {TYPE}</label>
+                <div class="form-text">When off, {TYPE} is empty for base files. UPD and DLC are always included.</div>
+              </div>
             </div>
           </div>
         </div>

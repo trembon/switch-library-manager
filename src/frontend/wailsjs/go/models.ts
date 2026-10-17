@@ -463,6 +463,7 @@ export namespace settings {
 	    folder_name_template: string;
 	    switch_safe_file_names: boolean;
 	    file_name_template: string;
+	    include_base_type: boolean;
 	    process_when_missing_base_game: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -481,6 +482,7 @@ export namespace settings {
 	        this.folder_name_template = source["folder_name_template"];
 	        this.switch_safe_file_names = source["switch_safe_file_names"];
 	        this.file_name_template = source["file_name_template"];
+	        this.include_base_type = source["include_base_type"];
 	        this.process_when_missing_base_game = source["process_when_missing_base_game"];
 	    }
 	}

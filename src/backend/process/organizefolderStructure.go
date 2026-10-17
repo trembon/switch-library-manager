@@ -179,7 +179,11 @@ func getFileName(options settings.OrganizeOptions, originalName string, template
 		return originalName
 	}
 	ext := path.Ext(originalName)
-	result := applyTemplate(templateData, options.SwitchSafeFileNames, options.FileNameTemplate, nameTry)
+	template := options.FileNameTemplate
+	if !options.IncludeBaseType && templateData[settings.TEMPLATE_TYPE] == "BASE" {
+		template = strings.ReplaceAll(template, "{"+settings.TEMPLATE_TYPE+"}", "")
+	}
+	result := applyTemplate(templateData, options.SwitchSafeFileNames, template, nameTry)
 	return result + ext
 }
 

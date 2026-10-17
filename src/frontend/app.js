@@ -672,6 +672,7 @@ $(function () {
                     folder_name_template: form.elements.organization_folder_name_template.value,
                     switch_safe_file_names: form.elements.organization_switch_safe_file_names.checked,
                     file_name_template: form.elements.organization_file_name_template.value,
+                    include_base_type: form.elements.organization_include_base_type.checked,
                     process_when_missing_base_game: form.elements.organization_process_when_missing_base_game.checked
                 },
                 missing_content: {

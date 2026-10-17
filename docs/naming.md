@@ -41,6 +41,7 @@ For a base package with update version `65536` and one DLC, `{PACKAGE_CONTENTS}`
 
 ## Naming behavior
 
+- In Settings → Organization, turn off **Include BASE in {TYPE}** (`organization.include_base_type`) to leave `{TYPE}` empty for base files while keeping `UPD` and `DLC`. It defaults to on, including for existing settings files. For example, `{TITLE_NAME}[{TYPE}][v{VERSION}]` produces `Example Adventure[v0].nsp` for a base file when off; empty `[]`, `()`, and `<>` pairs are removed as usual.
 - A file template must contain `{TITLE_NAME}` or `{TITLE_ID}` when file renaming is enabled. A folder template has the same requirement when per-game folders are enabled.
 - File extensions are kept from the original file and appended after the template output; do not include an extension in the template.
 - Update and DLC files can be placed in the configured `organization.updates_folder` and `organization.dlc_folder`. These subfolders can also apply when per-game folders are disabled.

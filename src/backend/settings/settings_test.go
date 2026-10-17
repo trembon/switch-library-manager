@@ -31,7 +31,7 @@ func TestDefaultSettingsAndJSON(t *testing.T) {
 	if s.SchemaVersion != SETTINGS_SCHEMA_VERSION || !s.GUI.Enabled || s.GUI.RememberWindowState || s.GUI.HideVersionString || !s.Scan.Recursive || s.Scan.RescanOnStartup || s.Scan.IgnoreUnsupportedFileTypes || !s.MissingContent.CheckForUpdates || !s.MissingContent.CheckForDLC || s.GUI.PageSize != 100 || s.GUI.Theme != ThemeInherit {
 		t.Fatalf("unexpected defaults: %#v", s)
 	}
-	if s.DataSources.TitlesURL != DEFAULT_TITLES_JSON_URL || s.DataSources.VersionsURL != DEFAULT_VERSIONS_JSON_URL || !s.Organization.SwitchSafeFileNames || s.Organization.MoveScanFilesToLibrary {
+	if s.DataSources.TitlesURL != DEFAULT_TITLES_JSON_URL || s.DataSources.VersionsURL != DEFAULT_VERSIONS_JSON_URL || !s.Organization.SwitchSafeFileNames || !s.Organization.IncludeBaseType || s.Organization.MoveScanFilesToLibrary {
 		t.Fatalf("unexpected default URLs/options: %#v", s)
 	}
 	if s.Organization.FileNameTemplate != "{TITLE_NAME} ({DLC_NAME})[{TITLE_ID}][v{VERSION}]" {
@@ -73,6 +73,45 @@ func TestMoveScanFilesToLibrarySettingRoundTripsAndDefaultsOff(t *testing.T) {
 	}
 	if !loaded.Organization.MoveScanFilesToLibrary {
 		t.Fatal("move_scan_files_to_library did not survive settings persistence")
+	}
+}
+
+func TestIncludeBaseTypeDefaultsAndPersistence(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		json string
+		want bool
+	}{
+		{"missing field", `{"schema_version":2,"organization":{"rename_files":true,"file_name_template":"{TITLE_NAME}[{TYPE}]"}}`, true},
+		{"enabled", `{"schema_version":2,"organization":{"include_base_type":true}}`, true},
+		{"disabled", `{"schema_version":2,"organization":{"include_base_type":false}}`, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			isolateSettings(t)
+			base := t.TempDir()
+			if err := os.WriteFile(filepath.Join(base, SETTINGS_FILENAME), []byte(test.json), 0644); err != nil {
+				t.Fatal(err)
+			}
+			loaded, err := ReadSettings(base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if loaded.Organization.IncludeBaseType != test.want {
+				t.Fatalf("include_base_type = %v, want %v", loaded.Organization.IncludeBaseType, test.want)
+			}
+			loaded.Organization.IncludeBaseType = !test.want
+			if err := SaveSettingsWithError(loaded, base); err != nil {
+				t.Fatal(err)
+			}
+			settingsInstance = nil
+			reloaded, err := ReadSettings(base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if reloaded.Organization.IncludeBaseType != !test.want {
+				t.Fatalf("include_base_type after reloading = %v, want %v", reloaded.Organization.IncludeBaseType, !test.want)
+			}
+		})
 	}
 }
 
