@@ -90,7 +90,8 @@ func BuildOrganizationPlan(
 		if title != nil {
 			templateData[settings.TEMPLATE_TITLE_ID] = title.Attributes.Id
 			templateData[settings.TEMPLATE_REGION] = title.Attributes.Region
-		} else if game.File.Metadata != nil {
+		}
+		if templateData[settings.TEMPLATE_TITLE_ID] == "" && game.File.Metadata != nil {
 			templateData[settings.TEMPLATE_TITLE_ID] = game.File.Metadata.TitleId
 		}
 		setBaseFileVersionTemplateData(templateData, game)
