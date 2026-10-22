@@ -466,7 +466,7 @@ func TestCheckForUpdates(t *testing.T) {
 		wantError  bool
 	}{
 		{name: "newer", body: `{"version":"3.0.0"}`, wantUpdate: true},
-		{name: "same", body: `{"version":"2.0.0-beta10"}`},
+		{name: "same", body: `{"version":"2.0.0"}`},
 		{name: "older", body: `{"version":"1.0.0"}`},
 		{name: "malformed", body: "[", wantError: true},
 		{name: "missing version", body: `{}`, wantError: true},
