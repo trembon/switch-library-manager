@@ -1,9 +1,96 @@
 name: "Build App"
 description: Builds the app
+inputs:
+  platform:
+    description: Wails target platform
+    required: true
+  webkit-version:
+    description: WebKitGTK API version for Linux builds (4.0 or 4.1)
+    required: false
+    default: "4.0"
 runs:
   using: composite
   steps:
-    - name: Run bundler
+    - name: Generate Wails bindings
       working-directory: ./src
       shell: bash
-      run: ./astilectron-bundler
+      run: |
+        set -euo pipefail
+        if [[ "${{ inputs.platform }}" == linux/* ]]; then
+          case "${{ inputs['webkit-version'] }}" in
+            4.0) wails generate module ;;
+            4.1) wails generate module -tags webkit2_41 ;;
+            *) echo "Unsupported WebKitGTK version: ${{ inputs['webkit-version'] }}" >&2; exit 1 ;;
+          esac
+        else
+          wails generate module
+        fi
+
+    - name: Prepare application icon
+      shell: bash
+      run: bash scripts/prepare-wails-build-assets.sh
+
+    - name: Build with Wails
+      working-directory: ./src
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ "${{ inputs.platform }}" == linux/* ]]; then
+          case "${{ inputs['webkit-version'] }}" in
+            4.0)
+              expected_library=libwebkit2gtk-4.0.so
+              other_library=libwebkit2gtk-4.1.so
+              wails build -platform "${{ inputs.platform }}" -webview2 embed
+              ;;
+            4.1)
+              expected_library=libwebkit2gtk-4.1.so
+              other_library=libwebkit2gtk-4.0.so
+              wails build -platform "${{ inputs.platform }}" -webview2 embed -tags webkit2_41
+              ;;
+            *) echo "Unsupported WebKitGTK version: ${{ inputs['webkit-version'] }}" >&2; exit 1 ;;
+          esac
+        else
+          wails build -platform "${{ inputs.platform }}" -webview2 embed
+        fi
+
+        if [[ "${{ inputs.platform }}" == linux/* ]]; then
+          binary=build/bin/switch-library-manager
+          if [[ ! -x "$binary" ]]; then
+            echo "Linux build is missing an executable $binary" >&2
+            exit 1
+          fi
+          linkage="$(ldd "$binary")"
+          printf '%s\n' "$linkage"
+          if grep -q 'not found' <<<"$linkage"; then
+            echo "Linux build has unresolved shared libraries" >&2
+            exit 1
+          fi
+          if ! grep -Fq "$expected_library" <<<"$linkage"; then
+            echo "Linux build does not link the selected WebKitGTK ${{ inputs['webkit-version'] }} library" >&2
+            exit 1
+          fi
+          if grep -Fq "$other_library" <<<"$linkage"; then
+            echo "Linux build unexpectedly links the other WebKitGTK version" >&2
+            exit 1
+          fi
+
+          smoke_dir="$(mktemp -d)"
+          trap 'rm -rf "$smoke_dir"' EXIT
+          cp "$binary" "$smoke_dir/switch-library-manager"
+          set +e
+          timeout --kill-after=5s 15s xvfb-run -a "$smoke_dir/switch-library-manager" -m gui >"$smoke_dir/stdout.log" 2>&1
+          smoke_status=$?
+          set -e
+          cat "$smoke_dir/stdout.log"
+          if [[ -f "$smoke_dir/slm.log" ]]; then
+            cat "$smoke_dir/slm.log"
+            if grep -Fq 'GUI startup failed' "$smoke_dir/slm.log"; then
+              echo "Linux GUI startup failed under Xvfb" >&2
+              exit 1
+            fi
+          fi
+          if [[ "$smoke_status" -ne 124 && "$smoke_status" -ne 137 ]]; then
+            echo "Linux GUI did not stay open under Xvfb (exit code $smoke_status)" >&2
+            exit 1
+          fi
+        fi

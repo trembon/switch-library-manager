@@ -5,20 +5,21 @@
 - This is a cross-platform Go desktop application for scanning and organizing Nintendo Switch backup files.
 - The Go module is `src/go.mod`. Run Go commands from `src`, not from the repository root. The project targets Go `1.27`.
 - Runtime state is stored beside the executable: `settings.json`, `titles.json`, `versions.json`, `slm.db`, and `slm.log`.
-- The application has two modes: an Astilectron GUI and a command-line workflow. Both use the same `db`, `settings`, `switchfs`, and `process` packages.
-- `src/resources/app` is the embedded HTML/CSS/JavaScript frontend.
+- The application has two modes: a Wails GUI and a command-line workflow. Both use the same backend domain packages. The combined executable selects the mode with `-m gui` or `-m console`.
+- `src/frontend` is the embedded HTML/CSS/JavaScript frontend.
 
 ## Important Paths
 
 - `src/main.go`: executable-relative startup, logging, mode selection, and generated asset entrypoints.
-- `src/gui.go`: GUI lifecycle, state, frontend message handling, and JSON responses.
-- `src/console.go`: CLI workflow, progress output, and CSV export.
-- `src/db`: remote title data, local scan model, BoltDB persistence, and scan/cache orchestration.
-- `src/switchfs`: binary Switch container parsing and decryption.
-- `src/fileio`: split-file metadata dispatch.
-- `src/process`: missing-content calculations and file-moving/deletion operations.
-- `src/settings`: JSON settings, prod.keys discovery, and update checks.
-- `.github`: bundler setup, build, and artifact publication.
+- `src/backend/app`: Wails lifecycle, state, frontend bindings, and JSON responses.
+- `src/backend/consoleapp`: CLI workflow, progress output, and CSV export.
+- `src/backend/db`: remote title data, local scan model, BoltDB persistence, and scan/cache orchestration.
+- `src/backend/switchfs`: binary Switch container parsing and decryption.
+- `src/backend/fileio`: split-file metadata dispatch.
+- `src/backend/process`: missing-content calculations and file-moving/deletion operations.
+- `src/backend/settings`: JSON settings, prod.keys discovery, and update checks.
+- `src/assets/icons`: tracked source icons used by packaging.
+- `.github`: Wails setup, build, and artifact publication.
 
 ## Development Rules
 
@@ -40,9 +41,9 @@
 
 ## Generated Files and Assets
 
-- Do not hand-edit `src/bind_*_amd64.go`, `src/windows.syso`, `src/output`, or `src/astilectron-bundler.exe`; they are generated or build artifacts and are ignored.
-- Changes under `src/resources/app` require running the Astilectron bundler before a packaged build. The bundler regenerates platform bindata.
-- Keep `src/bundler.json` environment targets synchronized with `.github/actions/publish-artifacts/action.yml`.
+- Do not hand-edit `src/frontend/wailsjs`, `src/windows.syso`, `src/output`, or local build products; they are generated artifacts and are ignored where appropriate.
+- Changes under `src/frontend` require running `wails generate module` before a packaged build when Go bindings change. `wails build` embeds the frontend assets.
+- Keep Wails platform targets in `.github/workflows/build-master.yml` synchronized with artifact publication.
 
 ## Verification
 
@@ -55,9 +56,9 @@ go vet ./...
 ```
 
 - Every task that changes Go code must run `go test ./...` before it is considered complete. Report the test command and result in the task summary.
-- Core logic coverage is measured for `db`, `fileio`, `process`, `settings`, `switchfs`, and `switchfs/_crypto`; presentation packages and generated bindata are excluded from the coverage threshold.
+- Core logic coverage is measured for `backend/db`, `backend/fileio`, `backend/process`, `backend/settings`, `backend/switchfs`, and `backend/switchfs/_crypto`; presentation packages and generated bindata are excluded from the coverage threshold.
 - The required aggregate core-logic statement coverage is 90%. The `verify-pr` workflow generates and analyzes the combined coverage profile.
 
 - For parser, filesystem, persistence, or shared-state changes, add focused tests and run `go test -race ./...` when practical.
 - Report whether tests used synthetic fixtures, filename-only fallback data, or real encrypted Switch files. Do not add proprietary keys or large game images to the repository.
-- For packaging changes, run `./astilectron-bundler` from `src` and verify every configured output directory. The CI build also runs `go get`, installs the bundler, copies it into `src`, and then invokes it.
+- For packaging changes, run `wails build` from `src` and verify the generated output under `src/build/bin`. The CI build installs the pinned Wails CLI and builds each configured platform on its native runner.
