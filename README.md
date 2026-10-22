@@ -12,23 +12,41 @@ Easily manage your switch game backups
 
 ## Features
 
+### General
+
 - Cross platform, works on Windows / Mac / Linux
-- GUI and command line interfaces
-- Scan your local switch backup library (NSP/NSZ/XCI)
-- Read titleId/version by decrypting NSP/XCI/NSZ (requires prod.keys)
+- GUI and command line interfaces in the same executable
+- All crypto operations implemented in Go, no external tools needed (the GUI uses the system web view, see [Usage](#usage))
+
+### Scanning
+
+- Scan your local switch backup library (NSP/NSZ/XCI/XCZ), including split files (`.00`, `.01`, ...)
+- Scan additional folders alongside the main library folder
+- Read titleId/version by decrypting NSP/NSZ/XCI/XCZ (requires prod.keys)
 - If no prod.keys present, fallback to read titleId/version by parsing file name (example: `Super Mario Odyssey [0100000000010000][v0].nsp`).
+- Handles multi-content files, where one NSP/XCI contains a base game, updates and/or DLC
+- Reports skipped files (unsupported, duplicate, old, malformed or unrecognized)
+- Title and version data is downloaded automatically and kept up to date
+
+### Missing content
+
 - Lists missing update files (for games and DLC)
 - Lists missing DLCs
-- Automatically organize games per folder
-- Rename files based on metadata read from NSP
+- Ignore lists for specific DLC and update title IDs
+
+### Organization
+
+- Automatically organize games per folder, with optional subfolders for updates and DLC
+- Rename files and folders using [naming templates](docs/naming.md) (title name, title ID, version, region, type, DLC name, package contents, file size)
+- Optionally move files from additional scan folders into the library
 - Delete old update files (in case you have multiple update files for the same game, only the latest will remain)
 - Delete empty folders
-- Zero dependencies, all crypto operations implemented in Go
 
 ## Keys (optional)
 
 Having a prod.keys file will allow you to ensure the files you have a correctly classified.
-The app will look for the "prod.keys" file in the app folder or under ${HOME}/.switch/
+On Windows and Linux, the app will look for the "prod.keys" file in the app folder or under ${HOME}/.switch/
+On macOS, it looks in `~/Library/Application Support/Switch Library Manager` or under ${HOME}/.switch/ (not beside the app).
 You can also specify a custom location in [`settings.json`](docs/settings.md).
 
 Note: Only the header_key, and the key_area_key_application_XX keys are required.
@@ -46,6 +64,7 @@ The application creates a current `settings.json` on first launch. You can custo
 
 ### Windows
 
+- Requires the Microsoft Edge WebView2 runtime, which is included in Windows 10 and 11
 - Extract the zip file
 - Double click the Exe file
 - If you want to use command line mode, update `settings.json` with `"gui": {"enabled": false}`, or pass `-m console`
@@ -84,9 +103,11 @@ NOTE: parameters are only usable in command line mode, except the parameter -m (
 | Name           | Flag | Value       | Description                                                                                        |
 | -------------- | ---- | ----------- | -------------------------------------------------------------------------------------------------- |
 | Mode           | -m   | console/gui | Which mode to start the application in, overrides **gui.enabled** in settings.json                 |
-| NSP Folder     | -    | _path_      | Path to the NSP folder, overrides **paths.library_folder** in settings.json                        |
+| NSP Folder     | -f   | _path_      | Path to the NSP folder, overrides **paths.library_folder** in settings.json                        |
 | Recursive scan | -r   | true/false  | If recursive scan should be used for the NSP folder, overrides **scan.recursive** in settings.json |
-| Export CSV     | -e   | _path_      | Which folder to output missing_updates, missing_dlcs and issues in CSV format                      |
+| Export CSV     | -e   | _path_      | Folder to write missing updates, missing DLC and issues to in CSV format (see below)               |
+
+The CSV files are named `slm_missing_updates.<date>.csv`, `slm_missing_dlc.<date>.csv`, and `slm_issues.<date>.csv`, where `<date>` is `YYYY-MM-DD`. The folder is created if it does not exist.
 
 ## Building
 
@@ -100,7 +121,7 @@ NOTE: parameters are only usable in command line mode, except the parameter -m (
 
 ### Windows, macOS, or Linux
 
-- Install and set up Go and the Wails CLI: `go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0`
+- Install and set up Go (1.25 or newer) and the Wails CLI: `go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0`
 - Clone the repo: `git clone https://github.com/trembon/switch-library-manager.git`
 - From the repository root, prepare the Wails build assets:
   - PowerShell: `pwsh -File .\scripts\prepare-wails-build-assets.ps1`
@@ -124,4 +145,4 @@ The same executable still supports the console workflow. Run `src/build/bin/swit
 
 ## Thanks
 
-This program relies on [blawar's titledb](https://github.com/blawar/titledb), to get the latest titles and versions.
+This program relies on [blawar's titledb](https://github.com/blawar/titledb), to get the latest titles and versions. The `titles.json` and `versions.json` files are generated from titledb with [blawar's NUT](https://github.com/blawar/nut) every six hours and published to this repository's [`data` release](https://github.com/trembon/switch-library-manager/releases/tag/data), which the app downloads by default.
