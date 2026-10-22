@@ -1,21 +1,14 @@
-# Version 2 beta is available
-
-To clean up this application and make it a bit more modern, version 2 beta is currently available with the migrations to a different build platform (astilectron to wails).
-Wails is under active development and will also result in better performance and smaller build sizes.
-
-With this I am also doing a lot of the changes I have wanted under the years.
-
 # Switch library manager
 
 Fork of [Switch Library Manager](https://github.com/giwty/switch-library-manager) created by giwty with continued improvements and changes
 
 Easily manage your switch game backups
 
-![Image description](https://raw.githubusercontent.com/trembon/switch-library-manager/master/.github/readme/updates_ui.png)
+![Image description](.github/readme/library_ui.png)
 
-![Image description](https://raw.githubusercontent.com/trembon/switch-library-manager/master/.github/readme/dlc_ui.png)
+![Image description](.github/readme/dlc_ui.png)
 
-![Image description](https://raw.githubusercontent.com/trembon/switch-library-manager/master/.github/readme/cmd.png)
+![Image description](.github/readme/cmd.png)
 
 ## Features
 
@@ -88,12 +81,12 @@ The release archives are named `switch-library-manager-v<VERSION>.linux-amd64-we
 
 NOTE: parameters are only usable in command line mode, except the parameter -m (mode) which will override `gui.enabled`.
 
-| Name           | Flag | Value       | Description                                                                                          |
-| -------------- | ---- | ----------- | ---------------------------------------------------------------------------------------------------- |
+| Name           | Flag | Value       | Description                                                                                        |
+| -------------- | ---- | ----------- | -------------------------------------------------------------------------------------------------- |
 | Mode           | -m   | console/gui | Which mode to start the application in, overrides **gui.enabled** in settings.json                 |
 | NSP Folder     | -    | _path_      | Path to the NSP folder, overrides **paths.library_folder** in settings.json                        |
 | Recursive scan | -r   | true/false  | If recursive scan should be used for the NSP folder, overrides **scan.recursive** in settings.json |
-| Export CSV     | -e   | _path_      | Which folder to output missing_updates, missing_dlcs and issues in CSV format                       |
+| Export CSV     | -e   | _path_      | Which folder to output missing_updates, missing_dlcs and issues in CSV format                      |
 
 ## Building
 
