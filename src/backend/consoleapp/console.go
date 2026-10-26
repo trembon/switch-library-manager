@@ -3,6 +3,7 @@ package consoleapp
 import (
 	"encoding/csv"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -417,28 +418,63 @@ type CsvFile struct {
 }
 
 func CreateCsvFile(output string, header []string) *CsvFile {
-	if output != "" {
-		file, _ := os.Create(output)
-		writer := csv.NewWriter(file)
-
-		_ = writer.Write(header)
-
-		instance := &CsvFile{Writer: writer, File: file}
-		return instance
-	} else {
+	if output == "" {
 		return nil
 	}
+
+	file, err := os.Create(output)
+	if err != nil {
+		reportCsvExportError(output, "create", err)
+		return nil
+	}
+
+	bom := []byte{0xEF, 0xBB, 0xBF}
+	n, err := file.Write(bom)
+	if err == nil && n != len(bom) {
+		err = io.ErrShortWrite
+	}
+	if err != nil {
+		reportCsvExportError(output, "write UTF-8 BOM to", err)
+		if closeErr := file.Close(); closeErr != nil {
+			reportCsvExportError(output, "close after failed initialization of", closeErr)
+		}
+		return nil
+	}
+
+	writer := csv.NewWriter(file)
+	if err := writer.Write(header); err != nil {
+		reportCsvExportError(output, "write CSV header to", err)
+		if closeErr := file.Close(); closeErr != nil {
+			reportCsvExportError(output, "close after failed initialization of", closeErr)
+		}
+		return nil
+	}
+
+	return &CsvFile{Writer: writer, File: file}
+}
+
+func reportCsvExportError(output, operation string, err error) {
+	message := fmt.Sprintf("Failed to %s CSV export %q: %v", operation, output, err)
+	fmt.Println(message)
+	zap.S().Error(message)
 }
 
 func (csv *CsvFile) Close() {
 	if csv != nil {
 		csv.Writer.Flush()
-		csv.File.Close()
+		if err := csv.Writer.Error(); err != nil {
+			reportCsvExportError(csv.File.Name(), "write", err)
+		}
+		if err := csv.File.Close(); err != nil {
+			reportCsvExportError(csv.File.Name(), "close", err)
+		}
 	}
 }
 
 func (csv *CsvFile) Write(row []string) {
 	if csv != nil {
-		_ = csv.Writer.Write(row)
+		if err := csv.Writer.Write(row); err != nil {
+			reportCsvExportError(csv.File.Name(), "write", err)
+		}
 	}
 }

@@ -992,7 +992,7 @@ $(function () {
 
         $("body").on("click", ".export-btn", e => {
             if (currTable && currTableExportKind) {
-                currTable.download("csv", "slm_" + currTableExportKind + "." + exportDate() + ".csv", {}, "all");
+                currTable.download("csv", "slm_" + currTableExportKind + "." + exportDate() + ".csv", {bom: true}, "all");
             }
         });
 
