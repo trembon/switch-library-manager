@@ -171,7 +171,7 @@ func getDlcName(switchTitle *db.SwitchTitle, file db.SwitchFileInfo) string {
 
 func getFolderName(options settings.OrganizeOptions, templateData map[string]string) string {
 
-	return applyTemplate(templateData, options.SwitchSafeFileNames, options.FolderNameTemplate, 0)
+	return applyTemplate(templateData, !options.AllowUnicodeFileNames, options.FolderNameTemplate, 0)
 }
 
 func getFileName(options settings.OrganizeOptions, originalName string, templateData map[string]string, nameTry int) string {
@@ -183,7 +183,7 @@ func getFileName(options settings.OrganizeOptions, originalName string, template
 	if !options.IncludeBaseType && templateData[settings.TEMPLATE_TYPE] == "BASE" {
 		template = strings.ReplaceAll(template, "{"+settings.TEMPLATE_TYPE+"}", "")
 	}
-	result := applyTemplate(templateData, options.SwitchSafeFileNames, template, nameTry)
+	result := applyTemplate(templateData, !options.AllowUnicodeFileNames, template, nameTry)
 	if result == "" {
 		return ""
 	}

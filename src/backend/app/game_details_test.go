@@ -49,7 +49,7 @@ func TestBuildGameDetailsResolvesContentIDsAndComparesLocalCollection(t *testing
 	}}
 
 	for _, inputID := range []string{detailsBaseID, detailsUpdateID, detailsDLCID} {
-		details, err := buildGameDetails(inputID, localDB, switchDB, settings.MissingContentSettings{})
+		details, err := buildGameDetails(inputID, localDB, switchDB, settings.MissingContentSettings{}, false)
 		if err != nil {
 			t.Fatalf("build details for %s: %v", inputID, err)
 		}
@@ -90,7 +90,7 @@ func TestBuildGameDetailsUsesLocalOnlyNewerUpdateForOlderCatalogStatus(t *testin
 		},
 	}}
 
-	details, err := buildGameDetails(detailsBaseID, localDB, switchDB, settings.MissingContentSettings{})
+	details, err := buildGameDetails(detailsBaseID, localDB, switchDB, settings.MissingContentSettings{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestBuildGameDetailsMarksIgnoredEntriesWithoutHidingThem(t *testing.T) {
 		IgnoreUpdateIDs:   []string{"0100000000010000"},
 	}
 
-	details, err := buildGameDetails(detailsBaseID, &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{detailsPrefix: local}}, switchDB, ignoreSettings)
+	details, err := buildGameDetails(detailsBaseID, &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{detailsPrefix: local}}, switchDB, ignoreSettings, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +155,7 @@ func TestBuildGameDetailsUsesLocalFallbackAndHandlesMissingMetadata(t *testing.T
 		detailsPrefix: {BaseExist: true, File: file, Updates: map[int]db.SwitchFileInfo{}, Dlc: map[string]db.SwitchFileInfo{}},
 	}}
 
-	details, err := buildGameDetails(detailsBaseID, localDB, &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{}}, settings.MissingContentSettings{})
+	details, err := buildGameDetails(detailsBaseID, localDB, &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{}}, settings.MissingContentSettings{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestBuildGameDetailsUsesSharedTitleResolver(t *testing.T) {
 	localDB := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{detailsPrefix: local}}
 	switchDB := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{detailsPrefix: remoteTitle}}
 
-	details, err := buildGameDetails(detailsBaseID, localDB, switchDB, settings.MissingContentSettings{})
+	details, err := buildGameDetails(detailsBaseID, localDB, switchDB, settings.MissingContentSettings{}, false)
 	if err != nil {
 		t.Fatalf("build details: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestBuildGameDetailsUsesSharedTitleResolver(t *testing.T) {
 	}
 
 	local.File.Metadata.Ncap.TitleName = nil
-	details, err = buildGameDetails(detailsBaseID, localDB, switchDB, settings.MissingContentSettings{})
+	details, err = buildGameDetails(detailsBaseID, localDB, switchDB, settings.MissingContentSettings{}, false)
 	if err != nil {
 		t.Fatalf("build details without English metadata: %v", err)
 	}
@@ -208,7 +208,7 @@ func TestBuildGameDetailsKeepsCatalogContentWhenGameMetadataIsMissing(t *testing
 		detailsPrefix: {Updates: map[int]string{1: "2024-01-01"}},
 	}}
 
-	details, err := buildGameDetails(detailsBaseID, localDB, switchDB, settings.MissingContentSettings{})
+	details, err := buildGameDetails(detailsBaseID, localDB, switchDB, settings.MissingContentSettings{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,13 +224,13 @@ func TestBuildGameDetailsRejectsInvalidAndUnknownIDs(t *testing.T) {
 	localDB := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{}}
 	switchDB := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{}}
 
-	if _, err := buildGameDetails("not-a-title-id", localDB, switchDB, settings.MissingContentSettings{}); err == nil {
+	if _, err := buildGameDetails("not-a-title-id", localDB, switchDB, settings.MissingContentSettings{}, false); err == nil {
 		t.Fatal("expected invalid ID error")
 	}
-	if _, err := buildGameDetails("0100000000990000", localDB, switchDB, settings.MissingContentSettings{}); err == nil {
+	if _, err := buildGameDetails("0100000000990000", localDB, switchDB, settings.MissingContentSettings{}, false); err == nil {
 		t.Fatal("expected unknown title error")
 	}
-	if _, err := buildGameDetails(detailsBaseID, nil, switchDB, settings.MissingContentSettings{}); err == nil {
+	if _, err := buildGameDetails(detailsBaseID, nil, switchDB, settings.MissingContentSettings{}, false); err == nil {
 		t.Fatal("expected unloaded database error")
 	}
 }

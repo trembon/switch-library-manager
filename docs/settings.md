@@ -42,7 +42,7 @@ On macOS, runtime files are stored in `~/Library/Application Support/Switch Libr
     "delete_empty_folders": false,
     "delete_old_update_files": false,
     "folder_name_template": "{TITLE_NAME}",
-    "switch_safe_file_names": true,
+    "allow_unicode_file_names": false,
     "file_name_template": "{TITLE_NAME} ({DLC_NAME})[{TITLE_ID}][v{VERSION}]",
     "include_base_type": true,
     "process_when_missing_base_game": false
@@ -91,7 +91,7 @@ On macOS, runtime files are stored in `~/Library/Application Support/Switch Libr
 | `organization.delete_empty_folders`           | boolean      | `false`                                               | Removes empty folders inside the library folder after files were moved or old updates were deleted. Scan folders are never cleaned.                    |
 | `organization.delete_old_update_files`        | boolean      | `false`                                               | Deletes verified duplicate and old update files. Files in scan folders are only deleted when `move_scan_files_to_library` is enabled.                  |
 | `organization.folder_name_template`           | string       | `"{TITLE_NAME}"`                                      | Template used for game folder names.                                                                                                                   |
-| `organization.switch_safe_file_names`         | boolean      | `true`                                                | Replaces characters that are unsafe for Switch-compatible names.                                                                                       |
+| `organization.allow_unicode_file_names`       | boolean      | `false`                                               | Accepts catalog titles in any script for library display, game details, and naming; preserves Unicode in generated filenames and game folders. When off, uses legacy title selection, romanization, and character filtering. |
 | `organization.file_name_template`             | string       | `"{TITLE_NAME} ({DLC_NAME})[{TITLE_ID}][v{VERSION}]"` | Template used when renaming files. See the [naming template guide](naming.md) for available tokens and examples.                                        |
 | `organization.include_base_type`              | boolean      | `true`                                                | Includes `BASE` in the file template's `{TYPE}` token. When false, it is empty for base files; `UPD` and `DLC` are unchanged. Missing settings default to true. |
 | `organization.process_when_missing_base_game` | boolean      | `false`                                               | Allows updates and DLC to be organized even when the base game is absent.                                                                              |
@@ -105,6 +105,8 @@ On macOS, runtime files are stored in `~/Library/Application Support/Switch Libr
 | `logging.debug`                               | boolean      | `false`                                               | Enables debug-level logging in `slm.log`.                                                                                                              |
 
 ## Organization templates
+
+`organization.switch_safe_file_names` is deprecated and accepted only when loading settings. Its value is inverted: `true` maps to `allow_unicode_file_names: false`, and `false` maps to `allow_unicode_file_names: true`, including Unicode catalog title selection. An explicit `allow_unicode_file_names` wins if both keys exist. If neither exists, Unicode is disabled. Loading does not rewrite the file; saving writes only the new key. This remains settings schema version 2 and does not reset other settings.
 
 Folder and file templates use brace-delimited tokens. The [naming template guide](naming.md) lists all tokens, describes which template accepts each one, and gives examples. When `rename_files` is enabled, `file_name_template` must contain `{TITLE_NAME}` or `{TITLE_ID}`. When `create_folder_per_game` is enabled, `folder_name_template` must contain `{TITLE_NAME}` or `{TITLE_ID}`.
 

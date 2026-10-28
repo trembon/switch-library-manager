@@ -63,7 +63,7 @@ func (a *App) GetGameDetails(titleID string) (GameDetails, error) {
 		return GameDetails{}, fmt.Errorf("load missing-content settings: %w", err)
 	}
 
-	return buildGameDetails(titleID, a.state.localDB, a.state.switchDB, settingsObj.MissingContent)
+	return buildGameDetails(titleID, a.state.localDB, a.state.switchDB, settingsObj.MissingContent, settingsObj.Organization.AllowUnicodeFileNames)
 }
 
 func buildGameDetails(
@@ -71,6 +71,7 @@ func buildGameDetails(
 	localDB *db.LocalSwitchFilesDB,
 	switchDB *db.SwitchTitlesDB,
 	missingSettings settings.MissingContentSettings,
+	allowUnicode bool,
 ) (GameDetails, error) {
 	prefix, err := db.TitleIDPrefix(titleID)
 	if err != nil {
@@ -111,7 +112,7 @@ func buildGameDetails(
 			details.BasePath = switchFilePath(local.File)
 		}
 	}
-	details.Attributes.Name = db.ResolveGameTitleName(remote, local)
+	details.Attributes.Name = db.ResolveGameTitleName(remote, local, allowUnicode)
 	details.Name = details.Attributes.Name
 
 	ignoredUpdates := makeIgnoreIDs(missingSettings.IgnoreUpdateIDs)

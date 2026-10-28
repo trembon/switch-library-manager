@@ -74,7 +74,7 @@ func TestTrailingDotFileStemsKeepExtensions(t *testing.T) {
 		for _, original := range []string{"source.nsp", "source.NSZ", "source.xci", "source.xcz"} {
 			t.Run(strconv.FormatBool(safe)+"/"+original, func(t *testing.T) {
 				data := map[string]string{settings.TEMPLATE_TITLE_NAME: "Game..."}
-				options := settings.OrganizeOptions{RenameFiles: true, SwitchSafeFileNames: safe, FileNameTemplate: "{TITLE_NAME}"}
+				options := settings.OrganizeOptions{RenameFiles: true, AllowUnicodeFileNames: !safe, FileNameTemplate: "{TITLE_NAME}"}
 				want := "Game(2)" + filepath.Ext(original)
 				if got := getFileName(options, original, data, 2); got != want {
 					t.Fatalf("file name = %q, want %q", got, want)
@@ -127,7 +127,7 @@ func TestOrganizationTrailingDots(t *testing.T) {
 				}}
 				options := settings.OrganizeOptions{
 					RenameFiles: true, FileNameTemplate: "{TITLE_ID}-{TYPE}...", IncludeBaseType: true,
-					CreateFolderPerGame: true, FolderNameTemplate: "{TITLE_NAME}", SwitchSafeFileNames: safe,
+					CreateFolderPerGame: true, FolderNameTemplate: "{TITLE_NAME}", AllowUnicodeFileNames: !safe,
 					UpdatesFolder: "updates", DlcFolder: "dlc", DeleteEmptyFolders: true,
 				}
 				folder := test.plain
@@ -225,7 +225,7 @@ func TestTrailingDotCollisionsPreserveFiles(t *testing.T) {
 				local.CleanupCandidates = []db.CleanupCandidate{candidate}
 				options := settings.OrganizeOptions{
 					RenameFiles: true, FileNameTemplate: "{TITLE_NAME}", CreateFolderPerGame: true,
-					FolderNameTemplate: "{TITLE_NAME}", SwitchSafeFileNames: safe, DeleteOldUpdateFiles: true, DeleteEmptyFolders: true,
+					FolderNameTemplate: "{TITLE_NAME}", AllowUnicodeFileNames: !safe, DeleteOldUpdateFiles: true, DeleteEmptyFolders: true,
 				}
 				plan, err := BuildOrganizationPlan(root, local, remote, options)
 				if err != nil || len(plan.Conflicts) == 0 {
@@ -294,7 +294,7 @@ func TestEmptySanitizedOrganizationNames(t *testing.T) {
 					}}
 					options := settings.OrganizeOptions{
 						RenameFiles: true, FileNameTemplate: "{TITLE_NAME}", CreateFolderPerGame: folders,
-						FolderNameTemplate: "{TITLE_NAME}", SwitchSafeFileNames: safe, ProcessWhenMissingBaseGame: true,
+						FolderNameTemplate: "{TITLE_NAME}", AllowUnicodeFileNames: !safe, ProcessWhenMissingBaseGame: true,
 					}
 					want := "empty file stem"
 					if folders {
