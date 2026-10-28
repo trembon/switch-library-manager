@@ -53,7 +53,7 @@ func TestApplyTemplate(t *testing.T) {
 		{"safe name", true, "Pokémon™: {TITLE_NAME} [v{VERSION}]", 0, "Pokémon The Game Demo [v12]"},
 		{"collision suffix", false, "name.", 2, "name(2)"},
 		{"cleanup and illegal characters", false, "[]()<>a:b%?", 0, "ab"},
-		{"trailing period", false, "name...", 0, "name.."},
+		{"trailing periods", false, "name...", 0, "name"},
 	}
 
 	for _, tt := range tests {

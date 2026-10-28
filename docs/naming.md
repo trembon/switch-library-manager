@@ -47,6 +47,7 @@ For a base package with update version `65536` and one DLC, `{PACKAGE_CONTENTS}`
 - Update and DLC files can be placed in the configured `organization.updates_folder` and `organization.dlc_folder`. These subfolders can also apply when per-game folders are disabled.
 - After the game title is removed from `{DLC_NAME}`, leading and trailing colons, Unicode whitespace, and dash characters are trimmed. Dashes within the DLC name are preserved.
 - When `organization.switch_safe_file_names` is enabled, the generated name is converted to a Switch-safe name.
+- Trailing ASCII dots and spaces are removed from generated game-folder names and renamed file stems after character filtering, on every platform and with Switch-safe names on or off. For example, `Game...` becomes the folder `Game` or the file `Game.nsp`; internal dots in `BIT.TRIP` or `Game... [TITLE_ID]` are preserved. Names that become empty are rejected before organization changes any files; include `{TITLE_ID}` in the template to retain a usable name.
 - Split archives are moved as a set and keep their original part filenames.
 
 See the [settings reference](settings.md#organization-templates) for the related settings and validation requirements.
