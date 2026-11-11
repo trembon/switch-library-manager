@@ -80,7 +80,8 @@ func getMissingGames(localDB *db.LocalSwitchFilesDB, switchDB *db.SwitchTitlesDB
 		if _, ok := localDB.TitlesMap[key]; ok {
 			continue
 		}
-		if title.Attributes.Name == "" || title.Attributes.Id == "" {
+		name := db.GameName(key+"000", title.Attributes.Name, settingsObj.TitleNameOverrides)
+		if name == "" || title.Attributes.Id == "" {
 			continue
 		}
 		if settingsObj.GUI.HideDemoGames && title.Attributes.IsDemo {
@@ -88,7 +89,7 @@ func getMissingGames(localDB *db.LocalSwitchFilesDB, switchDB *db.SwitchTitlesDB
 		}
 		result = append(result, SwitchTitle{
 			TitleId:     title.Attributes.Id,
-			Name:        db.GameName(key+"000", title.Attributes.Name, settingsObj.TitleNameOverrides),
+			Name:        name,
 			Icon:        title.Attributes.BannerUrl,
 			Region:      title.Attributes.Region,
 			ReleaseDate: title.Attributes.ParsedReleaseDate,

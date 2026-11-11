@@ -83,8 +83,10 @@ func BuildOrganizationPlan(
 		if titlesDB != nil {
 			title = titlesDB.TitlesMap[key]
 		}
-		titleName := db.GameName(key+"000", db.ResolveGameTitleName(title, game, options.AllowUnicodeFileNames), overrides...)
+		automaticTitleName := db.ResolveGameTitleName(title, game, options.AllowUnicodeFileNames)
+		titleName := db.GameName(key+"000", automaticTitleName, overrides...)
 		templateData := map[string]string{
+			automaticTitleNameKey:         automaticTitleName,
 			settings.TEMPLATE_TITLE_NAME:  titleName,
 			settings.TEMPLATE_VERSION_TXT: "",
 		}

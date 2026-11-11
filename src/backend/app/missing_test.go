@@ -24,6 +24,56 @@ func TestMissingGettersRequireLoadedDatabases(t *testing.T) {
 	}
 }
 
+func TestMissingGamesUsesEffectiveNameForFiltering(t *testing.T) {
+	const id, key = "0100000000010000", "0100000000010"
+	for _, test := range []struct {
+		name        string
+		catalogName string
+		customName  string
+		missingID   bool
+		owned       bool
+		demo        bool
+		hideDemos   bool
+		wantName    string
+	}{
+		{name: "custom name without catalog name", customName: "Saved custom", wantName: "Saved custom"},
+		{name: "custom name overrides catalog", catalogName: "Catalog", customName: "Saved custom", wantName: "Saved custom"},
+		{name: "catalog fallback", catalogName: "Catalog", wantName: "Catalog"},
+		{name: "no effective name"},
+		{name: "missing ID", catalogName: "Catalog", customName: "Saved custom", missingID: true},
+		{name: "owned game", customName: "Saved custom", owned: true},
+		{name: "hidden demo", customName: "Saved custom", demo: true, hideDemos: true},
+		{name: "visible demo", customName: "Saved custom", demo: true, wantName: "Saved custom"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			attributes := db.TitleAttributes{Id: id, Name: test.catalogName, IsDemo: test.demo}
+			if test.missingID {
+				attributes.Id = ""
+			}
+			local := &db.LocalSwitchFilesDB{TitlesMap: map[string]*db.SwitchGameFiles{}}
+			if test.owned {
+				local.TitlesMap[key] = &db.SwitchGameFiles{BaseExist: true}
+			}
+			remote := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{key: {Attributes: attributes}}}
+			options := &settings.AppSettings{
+				GUI:                settings.GUISettings{HideDemoGames: test.hideDemos},
+				TitleNameOverrides: map[string]string{id: test.customName},
+			}
+			games := getMissingGames(local, remote, options)
+			if test.wantName == "" {
+				if len(games) != 0 {
+					t.Fatalf("excluded games = %#v", games)
+				}
+			} else if len(games) != 1 || games[0].TitleId != id || games[0].Name != test.wantName {
+				t.Fatalf("missing games = %#v, want %q with ID %q", games, test.wantName, id)
+			}
+			if remote.TitlesMap[key].Attributes.Name != test.catalogName {
+				t.Fatal("missing-game lookup changed the catalog name")
+			}
+		})
+	}
+}
+
 func TestMissingGettersSettingsIntegration(t *testing.T) {
 	scenario := os.Getenv("SLM_MISSING_TEST_CASE")
 	if scenario == "" {

@@ -157,7 +157,6 @@ func TestGameNameOverrides(t *testing.T) {
 		t.Fatalf("local fallback = %#v, %v", result, err)
 	}
 	delete(a.state.localDB.TitlesMap, detailsPrefix)
-	a.state.switchDB.TitlesMap[detailsPrefix].Attributes.Name = "Catalog"
 	games, err := a.GetMissingGames()
 	if err != nil || len(games) != 1 || games[0].Name != "Local custom" {
 		t.Fatalf("missing = %v, %v", games, err)
