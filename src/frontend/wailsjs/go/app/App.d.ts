@@ -31,9 +31,13 @@ export function RescanLibrary(arg1:boolean):Promise<app.LocalLibraryData>;
 
 export function Restart():Promise<void>;
 
-export function SaveSettings(arg1:settings.AppSettings):Promise<void>;
+export function SaveSettings(arg1:settings.AppSettings):Promise<app.SettingsSaveResult>;
 
 export function SelectFolder():Promise<string>;
+
+export function SetContentIgnored(arg1:string,arg2:string,arg3:boolean):Promise<settings.MissingContentSettings>;
+
+export function SetGameNameOverride(arg1:string,arg2:string):Promise<app.GameNameOverrideResult>;
 
 export function ShowInFolder(arg1:string):Promise<void>;
 

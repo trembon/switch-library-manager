@@ -70,6 +70,8 @@ export namespace app {
 	    attributes: db.TitleAttributes;
 	    titleId: string;
 	    name: string;
+	    automatic_name: string;
+	    custom_name: string;
 	    release_date_text: string;
 	    remote_available: boolean;
 	    metadata_available: boolean;
@@ -89,6 +91,8 @@ export namespace app {
 	        this.attributes = this.convertValues(source["attributes"], db.TitleAttributes);
 	        this.titleId = source["titleId"];
 	        this.name = source["name"];
+	        this.automatic_name = source["automatic_name"];
+	        this.custom_name = source["custom_name"];
 	        this.release_date_text = source["release_date_text"];
 	        this.remote_available = source["remote_available"];
 	        this.metadata_available = source["metadata_available"];
@@ -118,7 +122,20 @@ export namespace app {
 		    return a;
 		}
 	}
+	export class Pair {
+	    key: string;
+	    value: string;
 	
+	    static createFrom(source: any = {}) {
+	        return new Pair(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.value = source["value"];
+	    }
+	}
 	export class LibraryTemplateData {
 	    id: number;
 	    name: string;
@@ -147,20 +164,6 @@ export namespace app {
 	        this.update = source["update"];
 	        this.region = source["region"];
 	        this.type = source["type"];
-	    }
-	}
-	export class Pair {
-	    key: string;
-	    value: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new Pair(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.key = source["key"];
-	        this.value = source["value"];
 	    }
 	}
 	export class LocalLibraryData {
@@ -197,6 +200,43 @@ export namespace app {
 		    return a;
 		}
 	}
+	export class GameNameOverrideResult {
+	    title_name_overrides: Record<string, string>;
+	    library: LocalLibraryData;
+	    details: GameDetails;
+	
+	    static createFrom(source: any = {}) {
+	        return new GameNameOverrideResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.title_name_overrides = source["title_name_overrides"];
+	        this.library = this.convertValues(source["library"], LocalLibraryData);
+	        this.details = this.convertValues(source["details"], GameDetails);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
+	
 	export class OrganizationPreviewEntry {
 	    kind: string;
 	    path: string;
@@ -279,6 +319,42 @@ export namespace app {
 		}
 	}
 	
+	export class SettingsSaveResult {
+	    settings: settings.AppSettings;
+	    restart_required: boolean;
+	    restart_reasons: string[];
+	    library?: LocalLibraryData;
+	
+	    static createFrom(source: any = {}) {
+	        return new SettingsSaveResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.settings = this.convertValues(source["settings"], settings.AppSettings);
+	        this.restart_required = source["restart_required"];
+	        this.restart_reasons = source["restart_reasons"];
+	        this.library = this.convertValues(source["library"], LocalLibraryData);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class SwitchTitle {
 	    name: string;
 	    titleId: string;
@@ -551,6 +627,7 @@ export namespace settings {
 	    hide_version_string: boolean;
 	    remember_window_state: boolean;
 	    theme: string;
+	    date_format: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new GUISettings(source);
@@ -565,9 +642,11 @@ export namespace settings {
 	        this.hide_version_string = source["hide_version_string"];
 	        this.remember_window_state = source["remember_window_state"];
 	        this.theme = source["theme"];
+	        this.date_format = source["date_format"];
 	    }
 	}
 	export class AppSettings {
+	    title_name_overrides: Record<string, string>;
 	    schema_version: number;
 	    gui: GUISettings;
 	    paths: PathSettings;
@@ -583,6 +662,7 @@ export namespace settings {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.title_name_overrides = source["title_name_overrides"];
 	        this.schema_version = source["schema_version"];
 	        this.gui = this.convertValues(source["gui"], GUISettings);
 	        this.paths = this.convertValues(source["paths"], PathSettings);

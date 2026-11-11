@@ -36,6 +36,7 @@
           <li class="nav-item" role="presentation"><a id="status-tab" href="#status" class="nav-link" role="tab" aria-controls="status" aria-selected="false">Issues</a></li>
           <li class="nav-item" role="presentation"><a id="settings-tab" href="#settings" class="nav-link" role="tab" aria-controls="settings" aria-selected="false">Settings</a></li>
         </ul>
+        <button type="button" class="shortcut-help-button" data-shortcut-help aria-label="Keyboard shortcuts" aria-haspopup="dialog" aria-keyshortcuts="F1">?</button>
       </nav>
       <div class="progress-container" role="status" aria-live="polite" aria-label="Loading application">
         <div class="progress-panel">
@@ -55,15 +56,54 @@
         </div>
       </div>
       <section id="tab-group" class="tabgroup" aria-hidden="true" inert>
-        <div id="library" role="tabpanel" aria-labelledby="library-tab"></div>
-        <div id="updates" role="tabpanel" aria-labelledby="updates-tab"></div>
-        <div id="missing" role="tabpanel" aria-labelledby="missing-tab"></div>
-        <div id="dlc" role="tabpanel" aria-labelledby="dlc-tab"></div>
-        <div id="organize" role="tabpanel" aria-labelledby="organize-tab"></div>
-        <div id="status" role="tabpanel" aria-labelledby="status-tab"></div>
-        <div id="settings" role="tabpanel" aria-labelledby="settings-tab"></div>
+        <div id="library" role="tabpanel" tabindex="-1" aria-labelledby="library-tab"></div>
+        <div id="updates" role="tabpanel" tabindex="-1" aria-labelledby="updates-tab"></div>
+        <div id="missing" role="tabpanel" tabindex="-1" aria-labelledby="missing-tab"></div>
+        <div id="dlc" role="tabpanel" tabindex="-1" aria-labelledby="dlc-tab"></div>
+        <div id="organize" role="tabpanel" tabindex="-1" aria-labelledby="organize-tab"></div>
+        <div id="status" role="tabpanel" tabindex="-1" aria-labelledby="status-tab"></div>
+        <div id="settings" role="tabpanel" tabindex="-1" aria-labelledby="settings-tab"></div>
       </section>
     </div>
+
+    <dialog id="keyboard-shortcuts-dialog" class="keyboard-shortcuts-dialog" aria-labelledby="keyboard-shortcuts-heading">
+      <div class="shortcut-help-heading">
+        <h2 id="keyboard-shortcuts-heading">Keyboard shortcuts</h2>
+        <button type="button" class="btn-close" data-shortcut-help-close aria-label="Close keyboard shortcuts" autofocus></button>
+      </div>
+      <p>Tab and Shift+Tab move between controls. Row shortcuts work when a game row has focus.</p>
+      <table class="table table-sm">
+        <thead><tr><th scope="col">Shortcut</th><th scope="col">Action</th></tr></thead>
+        <tbody id="keyboard-shortcuts-body"></tbody>
+      </table>
+      <p class="shortcut-help-note">Tab numbers stay fixed when Missing games is hidden. Search applies to the current table. Commands pause during loading and while a dialog is open. Back/Forward remembers the last details until you change tabs or refresh data.</p>
+    </dialog>
+
+    <dialog id="game-name-dialog" class="game-name-dialog" aria-labelledby="game-name-heading">
+      <button type="button" class="btn-close game-details-close" aria-label="Close name editor" data-name-close></button>
+      <h2 id="game-name-heading">Edit game name</h2>
+      <p class="text-secondary">Title ID: <code data-name-id></code></p>
+      <form novalidate>
+        <fieldset>
+          <label class="form-label" for="game-name-input">Game name</label>
+          <input id="game-name-input" class="form-control" name="name" type="text" autocomplete="off">
+          <div class="game-name-case-tools" aria-label="Change capitalization">
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-name-case="lower">lowercase</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-name-case="upper">UPPERCASE</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-name-case="title">Title Case</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-name-case="sentence">Sentence case</button>
+          </div>
+          <p class="game-name-automatic">Automatic name: <span data-name-automatic></span></p>
+          <p class="form-text">Used throughout SLM and the next time you organize files. Saving a name does not move or rename files.</p>
+          <div class="game-name-actions">
+            <button type="button" class="btn btn-outline-secondary" data-name-restore>Restore automatic name</button>
+            <button type="button" class="btn btn-secondary" data-name-close>Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+          </div>
+        </fieldset>
+      </form>
+      <p class="game-name-message" role="status" data-name-message hidden></p>
+    </dialog>
 
     <dialog id="game-details-dialog" class="game-details-dialog" aria-label="Game details">
       <button type="button" class="btn-close game-details-close" aria-label="Close game details" data-game-details-close></button>
@@ -90,7 +130,7 @@
           <div class="form-check form-switch mb-3">
             <input class="form-check-input" type="checkbox" name="gui_enabled" id="settings-gui-enabled" aria-describedby="settings-gui-enabled-help" {{if gui.enabled}}checked{{/if}}>
             <label class="form-check-label" for="settings-gui-enabled">Start with the graphical interface</label>
-            <div class="form-text" id="settings-gui-enabled-help">Turn this off to start SLM in console mode. Launch it from a terminal (Command Prompt or PowerShell on Windows); double-clicking the executable on Windows will not open a window. To open the graphical interface again, launch SLM with <code>-m gui</code>.</div>
+            <div class="form-text" id="settings-gui-enabled-help">Applies the next time you launch SLM. Turn this off to start in console mode. Launch it from a terminal (Command Prompt or PowerShell on Windows); double-clicking the executable on Windows will not open a window. To open the graphical interface again, launch SLM with <code>-m gui</code>.</div>
           </div>
           <div class="row g-3">
             <div class="col-md-4">
@@ -105,6 +145,23 @@
                 <option value="dark" {{if gui.theme === "dark"}}selected{{/if}}>Dark</option>
               </select>
             </div>
+          </div>
+          <div class="mt-3">
+            <label class="form-label" for="settings-gui-date-format">Date format</label>
+            <select class="form-select" name="gui_date_format_preset" id="settings-gui-date-format" aria-describedby="settings-date-format-help settings-date-format-example">
+              <option value="YYYY-MM-DD" {{if dateFormatPreset === "YYYY-MM-DD"}}selected{{/if}}>ISO (YYYY-MM-DD)</option>
+              <option value="MM/DD/YYYY" {{if dateFormatPreset === "MM/DD/YYYY"}}selected{{/if}}>Month first (MM/DD/YYYY)</option>
+              <option value="DD/MM/YYYY" {{if dateFormatPreset === "DD/MM/YYYY"}}selected{{/if}}>Day first (DD/MM/YYYY)</option>
+              <option value="custom" {{if dateFormatPreset === "custom"}}selected{{/if}}>Custom</option>
+            </select>
+            <div class="form-text" id="settings-date-format-help">Applies to GUI and console dates, including CSV and Excel values. Export filenames use ISO dates.</div>
+            <div class="mt-2" id="settings-date-format-custom-row" {{if dateFormatPreset !== "custom"}}hidden{{/if}}>
+              <label class="form-label" for="settings-gui-date-format-custom">Custom date format</label>
+              <input class="form-control" type="text" name="gui_date_format_custom" id="settings-gui-date-format-custom" value="{{attr:gui.date_format}}" aria-describedby="settings-date-format-tokens settings-date-format-error" {{if dateFormatPreset !== "custom"}}disabled{{/if}}>
+              <div class="invalid-feedback" id="settings-date-format-error" role="alert"></div>
+              <div class="form-text" id="settings-date-format-tokens">Use YYYY once for the year, M/MM/MMM/MMMM once for the month, and D/DD once for the day, in any order. Separate them with spaces or / - . , (maximum 32 characters). Month names are English. Examples: DD.MM.YYYY, D MMM YYYY, MMMM D, YYYY.</div>
+            </div>
+            <div class="form-text" id="settings-date-format-example" role="status" aria-live="polite"></div>
           </div>
           <div class="form-check mt-3">
             <input class="form-check-input" type="checkbox" name="gui_hide_missing_games" id="settings-gui-hide-missing" {{if gui.hide_missing_games}}checked{{/if}}>
@@ -126,6 +183,7 @@
 
         <div class="settings-section">
           <h4>Paths</h4>
+          <p class="form-text">Changing paths requires restarting the application.</p>
           <label class="form-label" for="settings-library-folder">Library folder</label>
           <div class="input-group mb-3">
             <input class="form-control" type="text" name="paths_library_folder" id="settings-library-folder" value="{{:paths.library_folder}}">
@@ -149,6 +207,7 @@
 
         <div class="settings-section">
           <h4>Scanning</h4>
+          <p class="form-text">Changing scan rules requires restarting. The startup rescan preference applies at the next launch.</p>
           <div class="form-check form-switch mb-3">
             <input class="form-check-input" type="checkbox" name="scan_recursive" id="settings-scan-recursive" {{if scan.recursive}}checked{{/if}}>
             <label class="form-check-label" for="settings-scan-recursive">Scan subfolders recursively</label>
@@ -236,11 +295,11 @@
           <h4>Missing content</h4>
           <div class="form-check">
             <input class="form-check-input" type="checkbox" name="missing_check_for_updates" id="settings-missing-updates" {{if missing_content.check_for_updates}}checked{{/if}}>
-            <label class="form-check-label" for="settings-missing-updates">Check for missing updates</label>
+            <label class="form-check-label" for="settings-missing-updates">Check for missing updates in console mode</label>
           </div>
           <div class="form-check">
             <input class="form-check-input" type="checkbox" name="missing_check_for_dlc" id="settings-missing-dlc" {{if missing_content.check_for_dlc}}checked{{/if}}>
-            <label class="form-check-label" for="settings-missing-dlc">Check for missing DLC</label>
+            <label class="form-check-label" for="settings-missing-dlc">Check for missing DLC in console mode</label>
           </div>
           <div class="form-check mb-3">
             <input class="form-check-input" type="checkbox" name="missing_ignore_dlc_updates" id="settings-missing-ignore-dlc" {{if missing_content.ignore_dlc_updates}}checked{{/if}}>
@@ -272,6 +331,7 @@
 
         <div class="settings-section">
           <h4>Data sources</h4>
+          <p class="form-text">Changing data sources requires restarting the application.</p>
           <label class="form-label" for="settings-data-titles">Titles URL</label>
           <input class="form-control mb-3" type="url" name="data_titles_url" id="settings-data-titles" value="{{:data_sources.titles_url}}" required>
           <label class="form-label" for="settings-data-versions">Versions URL</label>
@@ -283,6 +343,7 @@
           <div class="form-check form-switch">
             <input class="form-check-input" type="checkbox" name="logging_debug" id="settings-logging-debug" {{if logging.debug}}checked{{/if}}>
             <label class="form-check-label" for="settings-logging-debug">Enable debug logging</label>
+            <div class="form-text">Requires restarting the application.</div>
           </div>
         </div>
 
@@ -468,7 +529,7 @@
             {{else organization.move_scan_files_to_library}}
               <p class="text-secondary mb-0">Recognized files outside the library will be moved into it. Original filenames will be kept; configured Updates/DLC subfolders may change destinations as shown below.</p>
             {{else}}
-              <div class="alert alert-info mb-0" role="status">Organization is disabled. Enable importing scan-folder files, renaming files, or per-game folders in Settings and restart the application to apply the change.</div>
+              <div class="alert alert-info mb-0" role="status">Organization is disabled. Enable importing scan-folder files, renaming files, or per-game folders in Settings and save your changes.</div>
             {{/if}}
           </section>
 
@@ -504,8 +565,8 @@
             <h4 id="organization-scan-heading">Refresh library data</h4>
             <p class="text-secondary">Rescan the configured folders, or use a hard rescan to rebuild the local scan data.</p>
             <div class="organization-actions">
-              <button type="button" class="btn btn-outline-secondary rescan-action" data-hard="false" aria-keyshortcuts="Control+r">Rescan (Ctrl+R)</button>
-              <button type="button" class="btn btn-outline-secondary rescan-action" data-hard="true" aria-keyshortcuts="Control+Shift+r">Hard rescan (Ctrl+Shift+R)</button>
+              <button type="button" class="btn btn-outline-secondary rescan-action" data-hard="false" aria-keyshortcuts="Control+r">Rescan</button>
+              <button type="button" class="btn btn-outline-secondary rescan-action" data-hard="true" aria-keyshortcuts="Control+Shift+r">Hard rescan</button>
             </div>
           </section>
        </div>
@@ -529,7 +590,11 @@
           <img class="game-details-icon" src="{{:attributes.iconUrl}}" alt="">
           {{/if}}
           <div class="game-details-title-block">
-            <h1 id="game-details-title">{{if name}}{{:name}}{{else}}Unknown game{{/if}}</h1>
+            <div class="game-details-name-line">
+              <h1 id="game-details-title">{{if name}}{{>name}}{{else}}Unknown game{{/if}}</h1>
+              <button type="button" class="btn btn-outline-secondary game-name-edit" aria-label="Edit game name" title="Edit game name" data-edit-game-name="{{attr:titleId}}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m13.5 2.5 4 4-10 10-5 1 1-5Z M11.5 4.5l4 4"/></svg></button>
+            </div>
+            {{if custom_name}}<span class="badge text-bg-secondary">Custom name</span>{{/if}}
             <div class="game-details-title-id">{{:titleId}}</div>
           </div>
         </div>
@@ -549,7 +614,7 @@
             <dl class="game-details-metadata">
               {{if attributes.publisher}}<div><dt>Publisher</dt><dd>{{:attributes.publisher}}</dd></div>{{/if}}
               {{if attributes.region}}<div><dt>Region</dt><dd>{{:attributes.region}}</dd></div>{{/if}}
-              {{if release_date_text}}<div><dt>Release date</dt><dd>{{:release_date_text}}</dd></div>{{/if}}
+              {{if release_date_text}}<div><dt>Release date</dt><dd>{{>~formatDate(release_date_text)}}</dd></div>{{/if}}
               {{if attributes.id}}<div><dt>Title ID</dt><dd><code>{{:attributes.id}}</code></dd></div>{{/if}}
             </dl>
             {{if base_collected && base_path}}
@@ -586,7 +651,7 @@
                   {{for updates}}
                   <tr>
                     <th scope="row">v{{:version}}</th>
-                    <td>{{if date}}{{:date}}{{else}}Unknown{{/if}}</td>
+                    <td>{{>~formatDate(date)}}</td>
                     <td>{{if status === "collected"}}<span class="badge text-bg-success">Collected</span>{{else status === "ignored"}}<span class="badge text-bg-secondary">Ignored</span>{{else}}<span class="badge text-bg-warning">Missing</span>{{/if}}</td>
                     <td>{{if path}}<span class="game-details-file-action-placeholder" data-file-path="{{attr:path}}"></span>{{else}}<span class="text-secondary">—</span>{{/if}}</td>
                   </tr>
@@ -632,7 +697,7 @@
                   <tr>
                     <th scope="row">{{if name}}{{:name}}{{else}}Unnamed DLC{{/if}}</th>
                     <td><code>{{:titleId}}</code></td>
-                    <td>{{if attributes.releaseDate && attributes.ParsedReleaseDate}}{{>attributes.ParsedReleaseDate}}{{else}}Unknown{{/if}}</td>
+                    <td>{{if attributes.releaseDate}}{{>~formatDate(attributes.ParsedReleaseDate)}}{{else}}Unknown{{/if}}</td>
                     <td>{{if has_available_version && has_local_version}}Local v{{:local_version}} / latest v{{:available_version}}{{else has_available_version}}Local version unknown / latest v{{:available_version}}{{else has_local_version}}Local v{{:local_version}} / latest unknown{{else}}—{{/if}}</td>
                     <td>
                       {{if status === "collected"}}

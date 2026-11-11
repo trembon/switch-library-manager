@@ -16,6 +16,8 @@ type GameDetails struct {
 	Attributes        db.TitleAttributes `json:"attributes"`
 	TitleID           string             `json:"titleId"`
 	Name              string             `json:"name"`
+	AutomaticName     string             `json:"automatic_name"`
+	CustomName        string             `json:"custom_name"`
 	ReleaseDateText   string             `json:"release_date_text"`
 	RemoteAvailable   bool               `json:"remote_available"`
 	MetadataAvailable bool               `json:"metadata_available"`
@@ -63,7 +65,7 @@ func (a *App) GetGameDetails(titleID string) (GameDetails, error) {
 		return GameDetails{}, fmt.Errorf("load missing-content settings: %w", err)
 	}
 
-	return buildGameDetails(titleID, a.state.localDB, a.state.switchDB, settingsObj.MissingContent, settingsObj.Organization.AllowUnicodeFileNames)
+	return buildGameDetails(titleID, a.state.localDB, a.state.switchDB, settingsObj.MissingContent, settingsObj.Organization.AllowUnicodeFileNames, settingsObj.TitleNameOverrides)
 }
 
 func buildGameDetails(
@@ -72,6 +74,7 @@ func buildGameDetails(
 	switchDB *db.SwitchTitlesDB,
 	missingSettings settings.MissingContentSettings,
 	allowUnicode bool,
+	overrides ...map[string]string,
 ) (GameDetails, error) {
 	prefix, err := db.TitleIDPrefix(titleID)
 	if err != nil {
@@ -112,10 +115,13 @@ func buildGameDetails(
 			details.BasePath = switchFilePath(local.File)
 		}
 	}
-	details.Attributes.Name = db.ResolveGameTitleName(remote, local, allowUnicode)
+	details.AutomaticName = db.ResolveGameTitleName(remote, local, allowUnicode)
+	details.CustomName = db.GameName(baseID, "", overrides...)
+	details.Attributes.Name = db.GameName(baseID, details.AutomaticName, overrides...)
 	details.Name = details.Attributes.Name
 
 	ignoredUpdates := makeIgnoreIDs(missingSettings.IgnoreUpdateIDs)
+	_, gameUpdatesIgnored := ignoredUpdates[baseID]
 	ignoredDLC := makeIgnoreIDs(missingSettings.IgnoreDLCTitleIDs)
 	latestLocalUpdateVersion, hasLocalUpdate := 0, false
 	if local != nil {
@@ -201,7 +207,7 @@ func buildGameDetails(
 				dlcDetail.UpdateStatus = "unknown"
 			} else if dlcDetail.LocalVersion >= dlcDetail.AvailableVersion {
 				dlcDetail.UpdateStatus = "up_to_date"
-			} else if missingSettings.IgnoreDLCUpdates {
+			} else if missingSettings.IgnoreDLCUpdates || gameUpdatesIgnored {
 				dlcDetail.UpdateStatus = "ignored"
 			} else if _, ignored := ignoredUpdates[id]; ignored {
 				dlcDetail.UpdateStatus = "ignored"

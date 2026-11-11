@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/mcuadros/go-version"
+	"github.com/trembon/switch-library-manager/backend/dateformat"
 	"go.uber.org/zap"
 )
 
@@ -60,6 +61,7 @@ type GUISettings struct {
 	HideVersionString   bool   `json:"hide_version_string"`
 	RememberWindowState bool   `json:"remember_window_state"`
 	Theme               string `json:"theme"`
+	DateFormat          string `json:"date_format"`
 }
 
 type PathSettings struct {
@@ -131,14 +133,15 @@ func (options *OrganizationSettings) UnmarshalJSON(data []byte) error {
 type OrganizeOptions = OrganizationSettings
 
 type AppSettings struct {
-	SchemaVersion  int                    `json:"schema_version"`
-	GUI            GUISettings            `json:"gui"`
-	Paths          PathSettings           `json:"paths"`
-	Scan           ScanSettings           `json:"scan"`
-	Organization   OrganizationSettings   `json:"organization"`
-	MissingContent MissingContentSettings `json:"missing_content"`
-	DataSources    DataSourceSettings     `json:"data_sources"`
-	Logging        LoggingSettings        `json:"logging"`
+	TitleNameOverrides map[string]string      `json:"title_name_overrides"`
+	SchemaVersion      int                    `json:"schema_version"`
+	GUI                GUISettings            `json:"gui"`
+	Paths              PathSettings           `json:"paths"`
+	Scan               ScanSettings           `json:"scan"`
+	Organization       OrganizationSettings   `json:"organization"`
+	MissingContent     MissingContentSettings `json:"missing_content"`
+	DataSources        DataSourceSettings     `json:"data_sources"`
+	Logging            LoggingSettings        `json:"logging"`
 }
 
 type Cache struct {
@@ -258,6 +261,13 @@ func PrepareSettings(baseFolder string) (*SettingsPreparation, error) {
 		return nil, fmt.Errorf("decode settings: %w; the file was not changed", err)
 	}
 	verifySettings(loaded)
+	loaded.TitleNameOverrides, err = NormalizeTitleNameOverrides(loaded.TitleNameOverrides)
+	if err != nil {
+		return nil, fmt.Errorf("%w; the file was not changed", err)
+	}
+	if _, err := dateformat.New(loaded.GUI.DateFormat); err != nil {
+		return nil, fmt.Errorf("gui.date_format: %w; the file was not changed", err)
+	}
 	settingsInstance = loaded
 	return &SettingsPreparation{Settings: settingsInstance}, nil
 }
@@ -299,11 +309,13 @@ func restoreOldSettings(filename, backupPath string) error {
 
 func defaultSettings() *AppSettings {
 	return &AppSettings{
-		SchemaVersion: SETTINGS_SCHEMA_VERSION,
+		TitleNameOverrides: map[string]string{},
+		SchemaVersion:      SETTINGS_SCHEMA_VERSION,
 		GUI: GUISettings{
-			Enabled:  true,
-			PageSize: 100,
-			Theme:    ThemeInherit,
+			Enabled:    true,
+			PageSize:   100,
+			Theme:      ThemeInherit,
+			DateFormat: dateformat.Default,
 		},
 		Paths: PathSettings{ScanFolders: []string{}},
 		Scan:  ScanSettings{Recursive: true, IgnoreFileTypes: []string{}},
@@ -328,6 +340,7 @@ func defaultSettings() *AppSettings {
 
 func verifySettings(settings *AppSettings) {
 	settings.GUI.Theme = NormalizeTheme(settings.GUI.Theme)
+	settings.GUI.DateFormat = dateformat.Normalize(settings.GUI.DateFormat)
 	if settings.DataSources.TitlesURL == "" {
 		settings.DataSources.TitlesURL = DEFAULT_TITLES_JSON_URL
 	}
@@ -411,17 +424,7 @@ func SaveSettings(settings *AppSettings, baseFolder string) *AppSettings {
 }
 
 func SaveSettingsWithError(settings *AppSettings, baseFolder string) error {
-	if settings == nil {
-		return errors.New("settings are nil")
-	}
-	if settings.SchemaVersion == 0 {
-		settings.SchemaVersion = SETTINGS_SCHEMA_VERSION
-	}
-	if settings.SchemaVersion != SETTINGS_SCHEMA_VERSION {
-		return fmt.Errorf("unsupported settings schema_version %d", settings.SchemaVersion)
-	}
-	verifySettings(settings)
-	if err := validateSettings(settings); err != nil {
+	if err := ValidateSettings(settings); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(settings, "", " ")
@@ -435,7 +438,31 @@ func SaveSettingsWithError(settings *AppSettings, baseFolder string) error {
 	return nil
 }
 
+// ValidateSettings normalizes defaults and validates a candidate without saving
+// or publishing it. Callers can validate before invalidating dependent caches.
+func ValidateSettings(settings *AppSettings) error {
+	if settings == nil {
+		return errors.New("settings are nil")
+	}
+	if settings.SchemaVersion == 0 {
+		settings.SchemaVersion = SETTINGS_SCHEMA_VERSION
+	}
+	if settings.SchemaVersion != SETTINGS_SCHEMA_VERSION {
+		return fmt.Errorf("unsupported settings schema_version %d", settings.SchemaVersion)
+	}
+	verifySettings(settings)
+	return validateSettings(settings)
+}
+
 func validateSettings(settings *AppSettings) error {
+	names, err := NormalizeTitleNameOverrides(settings.TitleNameOverrides)
+	if err != nil {
+		return err
+	}
+	settings.TitleNameOverrides = names
+	if _, err := dateformat.New(settings.GUI.DateFormat); err != nil {
+		return fmt.Errorf("gui.date_format: %w", err)
+	}
 	if err := validateDataSourceURL("titles_url", settings.DataSources.TitlesURL); err != nil {
 		return err
 	}
