@@ -513,6 +513,15 @@
             </div>
           </section>
 
+          <section class="organization-section" aria-labelledby="organization-scan-heading">
+            <h4 id="organization-scan-heading">Refresh library data</h4>
+            <p class="text-secondary">Rescan the configured folders, or use a hard rescan to rebuild the local scan data.</p>
+            <div class="organization-actions">
+              <button type="button" class="btn btn-primary rescan-action" data-hard="false" aria-keyshortcuts="Control+r">Rescan</button>
+              <button type="button" class="btn btn-warning rescan-action" data-hard="true" aria-keyshortcuts="Control+Shift+r">Hard rescan</button>
+            </div>
+          </section>
+
           <section class="organization-section" aria-labelledby="organization-behavior-heading">
             <h4 id="organization-behavior-heading">Organization behavior</h4>
             <div class="organization-option-state">
@@ -561,14 +570,6 @@
             </section>
           {{/if}}
 
-          <section class="organization-section" aria-labelledby="organization-scan-heading">
-            <h4 id="organization-scan-heading">Refresh library data</h4>
-            <p class="text-secondary">Rescan the configured folders, or use a hard rescan to rebuild the local scan data.</p>
-            <div class="organization-actions">
-              <button type="button" class="btn btn-outline-secondary rescan-action" data-hard="false" aria-keyshortcuts="Control+r">Rescan</button>
-              <button type="button" class="btn btn-outline-secondary rescan-action" data-hard="true" aria-keyshortcuts="Control+Shift+r">Hard rescan</button>
-            </div>
-          </section>
        </div>
 
         {{else}}
