@@ -148,6 +148,12 @@ With `move_scan_files_to_library` off (the default), folders in `paths.scan_fold
 
 When `move_scan_files_to_library` is enabled, Organize imports recognized Switch files from outside the library into it, applying the active settings: per-game folders, renaming, and Updates/DLC folders. Without per-game folders, imported files are placed directly in the library folder. Verified duplicate or old files in scan folders may then be deleted by `delete_old_update_files`, but empty folders left behind in scan folders are kept.
 
+## Network-share organization
+
+Some macOS and Linux filesystems, including SMB shares and some NFS and FUSE mounts, do not support exclusive renames. If an exclusive rename fails with an unsupported-operation or invalid-argument error (or, on Linux, because the kernel lacks `renameat2`), SLM automatically checks the destination with `Lstat` and retries using the standard OS rename. An existing destination, including a directory or dangling symbolic link, cancels the move. An inspection error other than a missing destination also cancels the move. No additional setting is needed, and other rename errors do not trigger this fallback.
+
+This applies to both ordinary moves and the final rename of a temporary cross-filesystem copy. The first fallback after SLM starts logs a warning in `slm.log`; every fallback is also logged at debug level. The destination check provides best-effort collision protection: another application or SMB client could create the destination between the check and rename, and that file could then be overwritten. Avoid concurrent changes to the library while organizing. Windows always uses exclusive renames.
+
 ## Internal cache
 
 `cache.json` stores the HTTP ETags and the source URL and SHA-256 hash associated with each local data file:

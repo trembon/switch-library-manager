@@ -465,9 +465,10 @@ func resolveOrganizationPath(path string) (string, error) {
 	}
 }
 
-// ExecuteOrganizationPlan applies a previously validated plan and refuses to
-// replace destinations that appear after preflight. Empty-folder cleanup runs
-// inside baseFolder only; scanFolders nested inside it are kept.
+// ExecuteOrganizationPlan applies a previously validated plan. Exclusive renames
+// reject destinations that appear after preflight; the macOS and Linux standard rename
+// fallback uses a best-effort destination check. Empty-folder cleanup runs inside
+// baseFolder only; scanFolders nested inside it are kept.
 func ExecuteOrganizationPlan(plan OrganizationPlan, localDB *db.LocalSwitchFilesDB, baseFolder string, options settings.OrganizeOptions, progress db.ProgressUpdater, scanFolders ...string) error {
 	if len(plan.Conflicts) > 0 {
 		return &OrganizationConflictsError{Conflicts: plan.Conflicts}
