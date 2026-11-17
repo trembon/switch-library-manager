@@ -18,6 +18,9 @@ import (
 	"robpike.io/nihongo"
 )
 
+// automaticTitleNameKey is internal context for DLC trimming, not a template placeholder.
+const automaticTitleNameKey = "_automatic_title_name"
+
 var (
 	folderIllegalCharsRegex = regexp.MustCompile(`[/\\?%*:;=|"<>]`)
 	nonAscii                = regexp.MustCompile("[a-zA-Z0-9áéíóú@#%&',.\\s-\\[\\]\\(\\)\\+]")
@@ -393,8 +396,12 @@ func applyTemplate(templateData map[string]string, useSafeNames bool, template s
 	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_SIZE_MB+"}", templateData[settings.TEMPLATE_SIZE_MB])
 	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_PACKAGE_CONTENTS+"}", templateData[settings.TEMPLATE_PACKAGE_CONTENTS])
 
-	//remove title name from dlc name
-	dlcName := strings.Replace(templateData[settings.TEMPLATE_DLC_NAME], templateData[settings.TEMPLATE_TITLE_NAME], "", 1)
+	// Trim the automatic game name so custom names only affect TITLE_NAME.
+	automaticTitleName, ok := templateData[automaticTitleNameKey]
+	if !ok {
+		automaticTitleName = templateData[settings.TEMPLATE_TITLE_NAME]
+	}
+	dlcName := strings.Replace(templateData[settings.TEMPLATE_DLC_NAME], automaticTitleName, "", 1)
 	dlcName = strings.TrimFunc(dlcName, func(r rune) bool {
 		return r == ':' || unicode.IsSpace(r) || unicode.Is(unicode.Dash, r)
 	})

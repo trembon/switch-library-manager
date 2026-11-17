@@ -57,6 +57,7 @@ func BuildOrganizationPlan(
 	localDB *db.LocalSwitchFilesDB,
 	titlesDB *db.SwitchTitlesDB,
 	options settings.OrganizeOptions,
+	overrides ...map[string]string,
 ) (OrganizationPlan, error) {
 	if localDB == nil {
 		return OrganizationPlan{}, fmt.Errorf("local library has not been scanned")
@@ -82,8 +83,10 @@ func BuildOrganizationPlan(
 		if titlesDB != nil {
 			title = titlesDB.TitlesMap[key]
 		}
-		titleName := db.ResolveGameTitleName(title, game, options.AllowUnicodeFileNames)
+		automaticTitleName := db.ResolveGameTitleName(title, game, options.AllowUnicodeFileNames)
+		titleName := db.GameName(key+"000", automaticTitleName, overrides...)
 		templateData := map[string]string{
+			automaticTitleNameKey:         automaticTitleName,
 			settings.TEMPLATE_TITLE_NAME:  titleName,
 			settings.TEMPLATE_VERSION_TXT: "",
 		}
@@ -462,9 +465,10 @@ func resolveOrganizationPath(path string) (string, error) {
 	}
 }
 
-// ExecuteOrganizationPlan applies a previously validated plan and refuses to
-// replace destinations that appear after preflight. Empty-folder cleanup runs
-// inside baseFolder only; scanFolders nested inside it are kept.
+// ExecuteOrganizationPlan applies a previously validated plan. Exclusive renames
+// reject destinations that appear after preflight; the macOS and Linux standard rename
+// fallback uses a best-effort destination check. Empty-folder cleanup runs inside
+// baseFolder only; scanFolders nested inside it are kept.
 func ExecuteOrganizationPlan(plan OrganizationPlan, localDB *db.LocalSwitchFilesDB, baseFolder string, options settings.OrganizeOptions, progress db.ProgressUpdater, scanFolders ...string) error {
 	if len(plan.Conflicts) > 0 {
 		return &OrganizationConflictsError{Conflicts: plan.Conflicts}
@@ -546,7 +550,7 @@ func OrganizeByFolders(baseFolder string, localDB *db.LocalSwitchFilesDB, titles
 	if libraryRoot == "" {
 		libraryRoot = baseFolder
 	}
-	plan, err := BuildOrganizationPlan(libraryRoot, localDB, titlesDB, settingsObj.Organization)
+	plan, err := BuildOrganizationPlan(libraryRoot, localDB, titlesDB, settingsObj.Organization, settingsObj.TitleNameOverrides)
 	if err != nil {
 		return err
 	}

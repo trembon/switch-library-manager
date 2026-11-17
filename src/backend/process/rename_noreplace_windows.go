@@ -17,3 +17,9 @@ func renameNoReplace(from, to string) error {
 	// appears at the destination after organization preflight.
 	return windows.MoveFileEx(fromPath, toPath, 0)
 }
+
+// isUnsupportedExclusiveRenameError always reports false: MoveFileEx without
+// MOVEFILE_REPLACE_EXISTING is exclusive on every Windows filesystem.
+func isUnsupportedExclusiveRenameError(error) bool {
+	return false
+}
