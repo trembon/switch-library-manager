@@ -36,6 +36,8 @@ import {
     columnMenuItems,
     menuPosition,
     savedWidthFields,
+    trimOverflow,
+    withHeaderMinWidths,
 } from './table_layout.js'
 import {
     CATALOG_FIELDS,
@@ -548,6 +550,52 @@ $(function () {
         menu.style.left = position.left + "px";
     });
 
+    // Work around Tabulator 4.7's fitColumns overflowing by its rounding gap when columns
+    // reach their minimum width (see trimOverflow); otherwise a needless horizontal
+    // scrollbar appears below the table.
+    (function fixFitColumnsOverflow() {
+        const layout = Tabulator.prototype.moduleBindings.layout;
+        const fitColumns = layout && layout.prototype.modes.fitColumns;
+        if (!fitColumns) {
+            return;
+        }
+        layout.prototype.modes.fitColumns = function (columns) {
+            fitColumns.call(this, columns);
+            const holder = this.table.rowManager.element;
+            let available = this.table.element.clientWidth;
+            if (holder.scrollHeight > holder.clientHeight) {
+                available -= holder.offsetWidth - holder.clientWidth;
+            }
+            const visible = columns.filter(column => column.visible);
+            const widths = trimOverflow(visible.map(column => ({
+                width: column.getWidth(),
+                minWidth: column.minWidth,
+                flexible: !column.definition.width
+            })), available);
+            visible.forEach((column, index) => {
+                if (widths[index] !== column.getWidth()) {
+                    column.setWidth(widths[index]);
+                }
+            });
+        };
+    })();
+
+    let headerTextContext;
+
+    // Width of header title text in the header font (bold, as Tabulator draws titles).
+    function measureHeaderText(text) {
+        if (headerTextContext === undefined) {
+            const canvas = document.createElement("canvas");
+            headerTextContext = canvas.getContext ? canvas.getContext("2d") : null;
+            if (headerTextContext) {
+                const style = window.getComputedStyle(document.querySelector(".wrapper") || document.body);
+                headerTextContext.font = "bold " + style.fontSize + " " + style.fontFamily;
+            }
+        }
+        // Without a canvas, estimate generously from the character count.
+        return headerTextContext ? headerTextContext.measureText(text).width : text.length * 9;
+    }
+
     // Makes a table's columns movable, resizable and hideable (header right-click menu)
     // and restores/saves its layout under key. hiddenFields stay hidden because an
     // application setting controls them.
@@ -573,7 +621,8 @@ $(function () {
 
         return Object.assign({}, options, {
             movableColumns: true,
-            columns: applyTableLayout(options.columns || [], layout, hiddenFields)
+            columns: withHeaderMinWidths(applyTableLayout(options.columns || [], layout, hiddenFields),
+                measureHeaderText, options.headerSort)
                 .map(column => Object.assign({}, column, {headerContextMenu})),
             columnMoved: function () {
                 save(this);

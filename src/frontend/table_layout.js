@@ -115,6 +115,58 @@ export function columnMenuItems(columns, {labels = {}, hiddenFields = [], onTogg
     return items;
 }
 
+// Header content padding (8px each side in the Bootstrap Tabulator theme), the title
+// padding a sortable header keeps clear for its arrow (set in app.css), and a little
+// slack for borders and rounding.
+const HEADER_PADDING = 16;
+const HEADER_SORT_ARROW = 16;
+const HEADER_SLACK = 4;
+
+// Smallest column width that keeps every word of a header title on one line, so titles
+// wrap between words ("Rating / descriptors") but never inside one ("Genr / es").
+export function headerMinWidth(title, sortable, measureText) {
+    const words = String(title ?? "").split(/\s+/).filter(Boolean);
+    if (!words.length) {
+        return 0;
+    }
+    const widest = Math.max(...words.map(word => measureText(word)));
+    return Math.ceil(widest) + HEADER_PADDING + HEADER_SLACK + (sortable ? HEADER_SORT_ARROW : 0);
+}
+
+// Raises each titled column's minWidth to fit its title words. Columns with a fixed width
+// keep it. tableHeaderSort is the table-wide headerSort option (Tabulator defaults to true).
+export function withHeaderMinWidths(columns, measureText, tableHeaderSort = true) {
+    return columns.map(column => {
+        if (!column.title || column.width) {
+            return column;
+        }
+        const sortable = (column.headerSort ?? tableHeaderSort) !== false;
+        const minWidth = headerMinWidth(column.title, sortable, measureText);
+        return minWidth > (column.minWidth || 0) ? Object.assign({}, column, {minWidth}) : column;
+    });
+}
+
+// Tabulator 4.7's fitColumns layout counts its rounding gap twice once a column is held
+// at its minimum width, so the table ends up a few pixels wider than its container and
+// shows a horizontal scrollbar. Given the laid-out columns in display order, returns
+// widths with any overflow taken from flexible columns (last first), never below their
+// minimum width. Columns with a set width are left alone.
+export function trimOverflow(columns, available) {
+    const widths = columns.map(column => column.width);
+    let overflow = widths.reduce((sum, width) => sum + width, 0) - available;
+    for (let i = columns.length - 1; i >= 0 && overflow > 0; i--) {
+        if (!columns[i].flexible) {
+            continue;
+        }
+        const cut = Math.min(overflow, widths[i] - (columns[i].minWidth || 0));
+        if (cut > 0) {
+            widths[i] -= cut;
+            overflow -= cut;
+        }
+    }
+    return widths;
+}
+
 // Keeps a menu opened at the pointer inside the viewport. Tabulator flips a menu that
 // would run past the bottom upward from the pointer, which can push its first items
 // above the window; instead open it at the pointer and shift it up or left only as far

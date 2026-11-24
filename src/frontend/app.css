@@ -321,17 +321,34 @@ body {
 }
 
 /* These tables' columns share the window width, so long names and IDs wrap instead of scrolling sideways. */
-#library-table .tabulator-col-title,
 #library-table .tabulator-cell,
-#updates-table .tabulator-col-title,
 #updates-table .tabulator-cell,
-#missingGames-table .tabulator-col-title,
 #missingGames-table .tabulator-cell,
-#dlc-table .tabulator-col-title,
 #dlc-table .tabulator-cell {
     white-space: normal;
     overflow-wrap: anywhere;
     text-overflow: clip;
+}
+
+/* Header titles wrap only between words; each column is at least as wide as its longest
+   title word (see withHeaderMinWidths in table_layout.js). */
+#library-table .tabulator-col-title,
+#updates-table .tabulator-col-title,
+#missingGames-table .tabulator-col-title,
+#dlc-table .tabulator-col-title {
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+    text-overflow: clip;
+}
+
+/* The sort arrow sits 8-20px from the column's right edge; Tabulator's 25px title padding
+   leaves more room than it needs, which adds up across many narrow columns. */
+#library-table .tabulator-col.tabulator-sortable .tabulator-col-title,
+#updates-table .tabulator-col.tabulator-sortable .tabulator-col-title,
+#missingGames-table .tabulator-col.tabulator-sortable .tabulator-col-title,
+#dlc-table .tabulator-col.tabulator-sortable .tabulator-col-title {
+    padding-right: 16px;
 }
 
 #library-table .tabulator .tabulator-cell img {

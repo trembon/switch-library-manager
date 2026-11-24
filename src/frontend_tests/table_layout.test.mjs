@@ -9,8 +9,11 @@ import {
     escapeHtml,
     formatFileSize,
     joinList,
+    headerMinWidth,
     menuPosition,
     savedWidthFields,
+    trimOverflow,
+    withHeaderMinWidths,
 } from "../frontend/table_layout.js";
 import {
     ageRatingColumn,
@@ -208,4 +211,38 @@ test("column menus stay inside the window", () => {
     assert.deepEqual(menuPosition({x: 1150, y: 160}, {width: 200, height: 584}, viewport), {top: 8, left: 992},
         "a tall menu near the bottom-right is shifted up and left, not flipped above the window");
     assert.deepEqual(menuPosition({x: 2, y: 590}, {width: 200, height: 100}, viewport), {top: 492, left: 8});
+});
+
+test("columns are at least as wide as their longest header word", () => {
+    const measure = text => text.length * 10;
+    assert.equal(headerMinWidth("Rating descriptors", true, measure), 110 + 16 + 4 + 16, "the longest word plus padding and the sort arrow");
+    assert.equal(headerMinWidth("Players", false, measure), 70 + 16 + 4);
+    assert.equal(headerMinWidth("  ", true, measure), 0);
+    assert.equal(headerMinWidth(undefined, true, measure), 0);
+
+    const columns = withHeaderMinWidths([
+        {field: ROW_NUMBER_FIELD},
+        {title: "Genres", field: "genres"},
+        {title: "Title ID", field: "titleId", headerSort: false},
+        {title: "Title", field: "name", minWidth: 500},
+        {title: "Version", field: "version", width: 40},
+    ], measure, true);
+    assert.deepEqual(columns.map(column => column.minWidth), [undefined, 60 + 36, 50 + 20, 500, undefined]);
+
+    const unsortedTable = withHeaderMinWidths([{title: "Genres", field: "genres"}], measure, false);
+    assert.equal(unsortedTable[0].minWidth, 60 + 20, "a table without sorting reserves no arrow space");
+});
+
+test("layout overflow is trimmed from flexible columns without going below their minimum", () => {
+    const columns = [
+        {width: 80, minWidth: 24, flexible: true},
+        {width: 240, minWidth: 75, flexible: true},
+        {width: 150, minWidth: 0, flexible: false},
+        {width: 94, minWidth: 90, flexible: true},
+    ];
+    assert.deepEqual(trimOverflow(columns, 562), [80, 240, 150, 92], "the last flexible column absorbs a small overflow");
+    assert.deepEqual(trimOverflow(columns, 557), [80, 237, 150, 90], "then the one before it, once the last is at its minimum");
+    assert.deepEqual(trimOverflow(columns, 500), [80, 180, 150, 90], "earlier columns give the rest, down to their minimum");
+    assert.deepEqual(trimOverflow(columns, 600), [80, 240, 150, 94], "a table that fits is unchanged");
+    assert.deepEqual(trimOverflow(columns, 100), [24, 75, 150, 90], "columns never shrink below their minimum");
 });
