@@ -320,6 +320,14 @@ body {
     white-space: normal;
 }
 
+/* Missing DLC columns share the window width, so long names and IDs wrap instead of scrolling sideways. */
+#dlc-table .tabulator-col-title,
+#dlc-table .tabulator-cell {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+}
+
 #library-table .tabulator .tabulator-cell img {
     max-width: 100%;
     height: auto;

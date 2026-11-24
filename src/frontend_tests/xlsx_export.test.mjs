@@ -123,6 +123,12 @@ test("Missing DLC sorts newest releases across games and exports dates with blan
     vm.runInContext(appSource.slice(start, end), context);
     vm.runInContext('loadTab("#dlc")', context);
 
+    // Columns share the window width (no sideways scrolling): only the row-number column is fixed.
+    assert.equal(options.layout, "fitColumns");
+    assert.equal(typeof options.tableBuilt, "function");
+    assert.deepEqual([...options.columns.filter(value => value.width !== undefined).map(value => value.formatter)], ["rownum"]);
+    assert.ok(options.columns.filter(value => value.field).every(value => value.widthGrow > 0 && value.minWidth === undefined));
+
     const table = tableFor(options.columns, options.data);
     table.options = {...options, headerSort: false};
     table.rowManager.activeRows = table.rowManager.rows;
