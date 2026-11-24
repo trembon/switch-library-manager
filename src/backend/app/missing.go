@@ -86,11 +86,12 @@ func getMissingGames(localDB *db.LocalSwitchFilesDB, switchDB *db.SwitchTitlesDB
 			continue
 		}
 		result = append(result, SwitchTitle{
-			TitleId:     title.Attributes.Id,
-			Name:        title.Attributes.Name,
-			Icon:        title.Attributes.BannerUrl,
-			Region:      title.Attributes.Region,
-			ReleaseDate: title.Attributes.ParsedReleaseDate,
+			TitleId:       title.Attributes.Id,
+			Name:          title.Attributes.Name,
+			Icon:          title.Attributes.BannerUrl,
+			Region:        title.Attributes.Region,
+			ReleaseDate:   title.Attributes.ParsedReleaseDate,
+			TitleMetadata: titleMetadata(title.Attributes),
 		})
 	}
 	return result

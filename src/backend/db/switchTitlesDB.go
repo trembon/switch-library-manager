@@ -25,6 +25,12 @@ type TitleAttributes struct {
 	Description       string   `json:"description,omitempty"`
 	Size              int      `json:"size,omitempty"`
 	IsDemo            bool     `json:"isDemo,omitempty"`
+	// Optional catalog metadata shown as extra table columns.
+	Category        FlexibleStrings `json:"category,omitempty"`
+	Languages       FlexibleStrings `json:"languages,omitempty"`
+	NumberOfPlayers FlexibleInt     `json:"numberOfPlayers,omitempty"`
+	Rating          FlexibleInt     `json:"rating,omitempty"`
+	RatingContent   FlexibleStrings `json:"ratingContent,omitempty"`
 }
 
 type SwitchTitle struct {

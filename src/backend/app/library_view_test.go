@@ -237,3 +237,59 @@ func TestBuildLocalLibraryDataFallsBackToBaseDisplayVersion(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildLocalLibraryDataAddsCatalogMetadataSizeAndUpdateID(t *testing.T) {
+	localDB := &db.LocalSwitchFilesDB{
+		TitlesMap: map[string]*db.SwitchGameFiles{
+			"0100000000010": {
+				BaseExist:    true,
+				LatestUpdate: 65536,
+				File:         db.SwitchFileInfo{ExtendedInfo: db.ExtendedFileInfo{FileName: "Game.nsp", Size: 4096}},
+			},
+			"0100000000020": {
+				BaseExist: true,
+				IsSplit:   true,
+				File:      db.SwitchFileInfo{ExtendedInfo: db.ExtendedFileInfo{FileName: "Split", Size: 4096, IsDir: true}},
+			},
+		},
+		Skipped: map[db.ExtendedFileInfo]db.SkippedFile{},
+	}
+	switchDB := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{
+		"0100000000010": {Attributes: db.TitleAttributes{
+			Id: "0100000000010000", Name: "Game", Publisher: "Studio", ReleaseDate: 20240102, ParsedReleaseDate: "2024-01-02",
+			Category: db.FlexibleStrings{"Puzzle"}, Languages: db.FlexibleStrings{"en", "ja"},
+			NumberOfPlayers: 2, Rating: 12, RatingContent: db.FlexibleStrings{"Mild Violence"},
+		}},
+		"0100000000020": {Attributes: db.TitleAttributes{Id: "0100000000020000", Name: "Split", ParsedReleaseDate: "0"}},
+	}}
+
+	rows := map[string]LibraryTemplateData{}
+	for _, row := range buildLocalLibraryData(localDB, switchDB, false).LibraryData {
+		rows[row.Name] = row
+	}
+
+	game := rows["Game"]
+	wantMetadata := TitleMetadata{Publisher: "Studio", Genres: []string{"Puzzle"}, Languages: []string{"en", "ja"}, Players: 2, AgeRating: 12, RatingContent: []string{"Mild Violence"}}
+	if !reflect.DeepEqual(game.TitleMetadata, wantMetadata) || game.ReleaseDate != "2024-01-02" || game.FileSize != 4096 || game.UpdateID != "0100000000010800" {
+		t.Fatalf("Game row = %#v", game)
+	}
+	split := rows["Split"]
+	if split.FileSize != 0 || split.UpdateID != "" || split.ReleaseDate != "" {
+		t.Fatalf("split row should have no size, update ID or placeholder release date: %#v", split)
+	}
+}
+
+func TestLibraryRowHelpersRejectUnknownValues(t *testing.T) {
+	if got := baseFileSize(nil); got != 0 {
+		t.Fatalf("baseFileSize(nil) = %d", got)
+	}
+	if got := baseFileSize(&db.SwitchGameFiles{File: db.SwitchFileInfo{ExtendedInfo: db.ExtendedFileInfo{Size: -1}}}); got != 0 {
+		t.Fatalf("negative size = %d, want 0", got)
+	}
+	if got := updateTitleID("short", 1); got != "" {
+		t.Fatalf("updateTitleID for a malformed ID = %q", got)
+	}
+	if got := updateTitleID("0100000000010000", 0); got != "" {
+		t.Fatalf("updateTitleID without an update = %q", got)
+	}
+}

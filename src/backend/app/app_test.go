@@ -300,7 +300,7 @@ func TestFrontendModelsPreserveJSONContract(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := `{"library_data":[{"id":0,"name":"","version":"","dlc":"","titleId":"0100000000001000","path":"","icon":"","update":0,"region":"","type":""}],"issues":[{"key":"file.nsp","value":"issue"}],"num_files":1}`
+	want := `{"library_data":[{"id":0,"name":"","version":"","dlc":"","titleId":"0100000000001000","path":"","icon":"","update":0,"region":"","type":"","update_id":"","file_size":0,"release_date":"","publisher":"","genres":null,"languages":null,"players":0,"age_rating":0,"rating_content":null}],"issues":[{"key":"file.nsp","value":"issue"}],"num_files":1}`
 	if string(data) != want {
 		t.Fatalf("JSON = %s, want %s", data, want)
 	}
