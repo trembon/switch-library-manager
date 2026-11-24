@@ -13,6 +13,7 @@ import {
     Restart,
     RescanLibrary,
     SaveSettings,
+    SaveTableLayout,
     SelectFolder,
     ShowInFolder,
     ShowMessage,
@@ -28,6 +29,25 @@ import {
 } from './wailsjs/runtime/runtime.js'
 import { registerRescanShortcuts } from './rescan_shortcuts.js'
 import { exportTableXLSX } from './xlsx_export.js'
+import {
+    ROW_NUMBER_FIELD,
+    applyTableLayout,
+    captureTableLayout,
+    columnMenuItems,
+    menuPosition,
+    savedWidthFields,
+} from './table_layout.js'
+import {
+    CATALOG_FIELDS,
+    FIT_TO_WINDOW,
+    ROW_METADATA_FIELDS,
+    catalogColumns,
+    fileSizeColumn,
+    listColumn,
+    releaseDateColumn,
+    rowNumberColumn,
+    textColumn,
+} from './table_columns.js'
 
 $(function () {
 
@@ -88,6 +108,8 @@ $(function () {
     }
 
     function destroyTables() {
+        flushTableLayoutSaves();
+
         for (const observer of tableResizeObservers) {
             observer.disconnect();
         }
@@ -429,6 +451,141 @@ $(function () {
             openGameDetails(detailRowTitleID(row.getData(), kind), row.getElement());
         };
         return tableOptions(optionsWithDetails);
+    }
+
+    // Tab that shows each table whose column layout can be saved.
+    const TABLE_LAYOUT_TABS = {
+        library: "#library",
+        missing_games: "#missing",
+        missing_updates: "#updates",
+        missing_dlc: "#dlc",
+        issues: "#status"
+    };
+    // Menu labels for columns without a header title.
+    const COLUMN_LABELS = {
+        [ROW_NUMBER_FIELD]: "Row number",
+        icon: "Thumbnail",
+        "Attributes.bannerUrl": "Thumbnail"
+    };
+    const pendingTableLayoutSaves = new Map();
+
+    function savedTableLayout(key) {
+        const layouts = state.settings && state.settings.gui && state.settings.gui.table_layouts;
+        return layouts ? layouts[key] : undefined;
+    }
+
+    // Keep the loaded settings in step so a rebuilt table uses the latest layout.
+    function storeTableLayout(key, layout) {
+        const layouts = Object.assign({}, state.settings.gui.table_layouts);
+        if (layout) {
+            layouts[key] = layout;
+        } else {
+            delete layouts[key];
+        }
+        state.settings.gui.table_layouts = layouts;
+    }
+
+    function persistTableLayout(key, layout) {
+        return SaveTableLayout(key, layout).catch(error => {
+            const detail = error && error.message ? error.message : String(error);
+            return ShowMessage("error", "Error", "The column layout could not be saved", detail)
+                .catch(messageError => console.error(messageError));
+        });
+    }
+
+    // Dragging or resizing fires many events; save once the user pauses.
+    function scheduleTableLayoutSave(key, layout) {
+        storeTableLayout(key, layout);
+        cancelTableLayoutSave(key);
+        const run = () => {
+            pendingTableLayoutSaves.delete(key);
+            persistTableLayout(key, layout);
+        };
+        pendingTableLayoutSaves.set(key, {timer: setTimeout(run, 400), run});
+    }
+
+    function cancelTableLayoutSave(key) {
+        const pending = pendingTableLayoutSaves.get(key);
+        if (pending) {
+            clearTimeout(pending.timer);
+            pendingTableLayoutSaves.delete(key);
+        }
+    }
+
+    function flushTableLayoutSaves() {
+        for (const pending of Array.from(pendingTableLayoutSaves.values())) {
+            clearTimeout(pending.timer);
+            pending.run();
+        }
+    }
+
+    function resetTableLayout(key) {
+        cancelTableLayoutSave(key);
+        storeTableLayout(key, undefined);
+        persistTableLayout(key, {columns: []});
+        if (!restartRequired) {
+            loadTab(TABLE_LAYOUT_TABS[key]);
+        }
+    }
+
+    // Tabulator builds the column menu in the header's own contextmenu handler, which runs
+    // before this document listener, so the menu can be moved inside the window here.
+    document.addEventListener("contextmenu", event => {
+        const menu = event.target.closest && event.target.closest(".tabulator-col") && document.querySelector(".tabulator-menu");
+        if (!menu) {
+            return;
+        }
+        // Measure at the top-left first: near the right edge the menu is squeezed narrower
+        // (and wraps taller) than it will be once moved. Tabulator may also have anchored it
+        // by bottom or right, which would stretch it once top and left are set.
+        menu.style.bottom = "auto";
+        menu.style.right = "auto";
+        menu.style.top = "0px";
+        menu.style.left = "0px";
+        const position = menuPosition({x: event.clientX, y: event.clientY}, menu.getBoundingClientRect(),
+            {width: window.innerWidth, height: window.innerHeight});
+        menu.style.top = position.top + "px";
+        menu.style.left = position.left + "px";
+    });
+
+    // Makes a table's columns movable, resizable and hideable (header right-click menu)
+    // and restores/saves its layout under key. hiddenFields stay hidden because an
+    // application setting controls them.
+    function tableLayoutOptions(options, key, hiddenFields = []) {
+        const layout = savedTableLayout(key);
+        const resizedFields = savedWidthFields(layout);
+        const save = table => scheduleTableLayoutSave(key,
+            captureTableLayout(table.getColumns(), resizedFields, savedTableLayout(key), hiddenFields));
+        const headerContextMenu = column => columnMenuItems(column.getTable().getColumns(), {
+            labels: COLUMN_LABELS,
+            hiddenFields,
+            onToggle: (target, visible) => {
+                if (visible) {
+                    target.show();
+                } else {
+                    target.hide();
+                }
+                // Re-fit the remaining columns (and re-measure wrapped rows) to the table width.
+                target.getTable().redraw();
+            },
+            onReset: () => resetTableLayout(key)
+        });
+
+        return Object.assign({}, options, {
+            movableColumns: true,
+            columns: applyTableLayout(options.columns || [], layout, hiddenFields)
+                .map(column => Object.assign({}, column, {headerContextMenu})),
+            columnMoved: function () {
+                save(this);
+            },
+            columnResized: function (column) {
+                resizedFields.add(column.getField());
+                save(this);
+            },
+            columnVisibilityChanged: function () {
+                save(this);
+            }
+        });
     }
 
     document.addEventListener("keydown", event => {
@@ -830,16 +987,19 @@ $(function () {
                 let html = $(target + "Template").render({folder: state.settings.paths.library_folder,updates:state.updates})
                 $(target).html(html);
                 if (state.updates && state.updates.length) {
-                    createTable("#updates-table", gameDetailsTableOptions({
-                        layout:"fitDataStretch",
+                    createTable("#updates-table", gameDetailsTableOptions(tableLayoutOptions({
+                        ...FIT_TO_WINDOW,
+                        tableBuilt: function () {
+                            refitColumnsOnResize(this);
+                        },
                         initialSort:[
                             {column:"latest_update_date", dir:"desc"}, //sort by this first
                         ],
                         data: state.updates,
                         columns: [
-                            {formatter:"rownum",download:false},
-                            {field: "Attributes.bannerUrl",download:false,formatter:"image", headerSort:false,formatterParams:{height:"60px", width:"60px"}},
-                            {title: "Title", field: "Attributes.name", headerFilter:"input",formatter:"textarea",width:350},
+                            Object.assign(rowNumberColumn(), {width:40}),
+                            {field: "Attributes.bannerUrl",download:false,formatter:"image", headerSort:false,width:78,formatterParams:{height:"60px", width:"60px"}},
+                            {title: "Title", field: "Attributes.name", headerFilter:"input",formatter:"textarea",widthGrow:3},
                             {title: "Type", field: "Meta.type", headerFilter:"input"},
                             {title: "Title ID", headerSort:false, field: "Attributes.id", headerFilter:"input", hozAlign: "right", sorter: "number"},
                             {title: "Local update", headerSort:false, field: "local_update", hozAlign: "right", sorter: "number", formatter: function (cell) {
@@ -850,9 +1010,12 @@ $(function () {
                                 return content;
                             }},
                             {title: "Available update", headerSort:false, field: "latest_update", hozAlign: "right"},
-                            {title: "Update date", headerSort:true, field: "latest_update_date",sorter:"date", sorterParams:{format:"YYYY-MM-DD"}}
+                            {title: "Update date", headerSort:true, field: "latest_update_date",sorter:"date", sorterParams:{format:"YYYY-MM-DD"}},
+                            releaseDateColumn("Attributes.ParsedReleaseDate", false),
+                            ...catalogColumns("Attributes.", CATALOG_FIELDS),
+                            fileSizeColumn("Download size", "Attributes.size")
                         ],
-                    }, "updates"), "missing_updates");
+                    }, "missing_updates"), "updates"), "missing_updates");
                 }
             } else if (target === "#dlc") {
                 if (state.settings.paths.library_folder && !state.library){
@@ -883,14 +1046,8 @@ $(function () {
                 });
                 $(target).html(html);
                 if (missingDlcRows.length) {
-                    createTable("#dlc-table", gameDetailsTableOptions({
-                        // Every column shares the window width in proportion, so nothing scrolls
-                        // sideways at any window size; text wraps instead (see #dlc-table in app.css).
-                        layout:"fitColumns",
-                        columnMinWidth:24,
-                        // Classic rendering re-measures wrapped rows after columns are sized
-                        // and on window resize; the virtual renderer keeps stale row heights.
-                        virtualDom:false,
+                    createTable("#dlc-table", gameDetailsTableOptions(tableLayoutOptions({
+                        ...FIT_TO_WINDOW,
                         tableBuilt: function () {
                             refitColumnsOnResize(this);
                         },
@@ -904,7 +1061,7 @@ $(function () {
                         ],
                         data: missingDlcRows,
                         columns: [
-                            {formatter:"rownum",download:false,width:40},
+                            Object.assign(rowNumberColumn(), {width:40}),
                             {title: "Missing DLC", field: "dlc.name", headerFilter:"input", formatter:"textarea", widthGrow:3},
                             {title: "DLC ID", field: "dlc.id", headerFilter:"input", widthGrow:1.3},
                             {title: "Release date", field: "dlc.release_date", sorter:"date", sorterParams:{format:"YYYY-MM-DD", alignEmptyValues:"bottom"}, widthGrow:1, formatter: function (cell) {
@@ -913,9 +1070,11 @@ $(function () {
                                 return content;
                             }},
                             {title: "Title", field: "game.name", headerFilter:"input", formatter:"textarea", widthGrow:2},
-                            {title: "Title ID", field: "game.id", headerFilter:"input", widthGrow:1.3}
+                            {title: "Title ID", field: "game.id", headerFilter:"input", widthGrow:1.3},
+                            Object.assign(textColumn("Publisher", "game.publisher"), {widthGrow:2}),
+                            Object.assign(listColumn("Genres", "game.category"), {widthGrow:2})
                         ],
-                    }, "dlc"), "missing_dlc");
+                    }, "missing_dlc"), "dlc"), "missing_dlc");
                 }
             } else if (target === "#status") {
                 if (state.settings.paths.library_folder && !state.library){
@@ -925,11 +1084,11 @@ $(function () {
                 let html = $(target + "Template").render({folder: state.settings.paths.library_folder,library:libraryIssues,numFiles:state.library ? state.library.num_files:-1});
                 $(target).html(html);
                 if (libraryIssues.length) {
-                    createTable("#status-table", tableOptions({
+                    createTable("#status-table", tableOptions(tableLayoutOptions({
                         layout:"fitDataStretch",
                         data: libraryIssues,
                         columns: [
-                            {formatter:"rownum",download:false},
+                            rowNumberColumn(),
                             {title: "File name",width:500, headerSort:false, field: "key",formatter:"textarea",cellClick:function(e, cell){
                                     //e - the click event object
                                     //cell - cell component
@@ -949,7 +1108,7 @@ $(function () {
                                 }
                             }
                         ],
-                    }), "issues");
+                    }, "issues")), "issues");
                 }
             } else if (target === "#library") {
                 if (state.settings.paths.library_folder && !state.library && !state.libraryRefreshError){
@@ -968,25 +1127,32 @@ $(function () {
                     })
                 $(target).html(html);
                 if (libraryData.length) {
-                    createTable("#library-table", gameDetailsTableOptions({
+                    const hideVersion = Boolean(state.settings.gui.hide_version_string);
+                    createTable("#library-table", gameDetailsTableOptions(tableLayoutOptions({
                         initialSort:[
                             {column:"name", dir:"asc"}, //sort by this first
                         ],
-                        layout:"fitColumns",
-                        columnMinWidth:24,
+                        ...FIT_TO_WINDOW,
+                        tableBuilt: function () {
+                            refitColumnsOnResize(this);
+                        },
                         data: libraryData,
                         columns: [
-                            {formatter:"rownum",download:false,minWidth:24},
+                            Object.assign(rowNumberColumn(), {minWidth:24}),
                             {field: "icon",minWidth:40,formatter:"image", download:false,headerSort:false,formatterParams:{height:"60px", width:"60px"}},
                             {title: "Title", field: "name", headerFilter:"input",formatter:"textarea",widthGrow:3},
                             {title: "Title ID", headerSort:false, headerFilter:"input", field: "titleId"},
                             {title: "Region", headerSort:true, headerFilter:"input", field: "region"},
                             {title: "Type", headerSort:true, headerFilter:"input", field: "type"},
                             {title: "Update", headerSort:false, field: "update"},
-                            {title: "Version", headerSort:false, field: "version", visible: !state.settings.gui.hide_version_string, download: true},
-                            {title: "File name", headerSort:false, field: "path",formatter:"textarea",widthGrow:3}
+                            {title: "Version", headerSort:false, field: "version", visible: !hideVersion, download: true},
+                            {title: "File name", headerSort:false, field: "path",formatter:"textarea",widthGrow:3},
+                            textColumn("Update ID", "update_id"),
+                            releaseDateColumn("release_date", false),
+                            ...catalogColumns("", ROW_METADATA_FIELDS),
+                            fileSizeColumn("File size", "file_size")
                         ],
-                    }, "games"), "games");
+                    }, "library", hideVersion ? ["version"] : []), "games"), "games");
                 }
             } else if (target === "#missing") {
                 if (state.settings.paths.library_folder && !state.library){
@@ -1010,21 +1176,25 @@ $(function () {
                 let html = $(target + "Template").render({folder: state.settings.paths.library_folder,missingGames:state.missingGames});
                 $(target).html(html);
                 if (state.missingGames && state.missingGames.length) {
-                    createTable("#missingGames-table", gameDetailsTableOptions({
-                        layout:"fitDataStretch",
+                    createTable("#missingGames-table", gameDetailsTableOptions(tableLayoutOptions({
+                        ...FIT_TO_WINDOW,
+                        tableBuilt: function () {
+                            refitColumnsOnResize(this);
+                        },
                         initialSort:[
                             {column:"name", dir:"asc"}, //sort by this first
                         ],
                         data: state.missingGames,
                         columns: [
-                            {formatter:"rownum",download:false},
-                            {field: "icon",download:false,formatter:"image", headerSort:false,formatterParams:{height:"60px", width:"60px"}},
-                            {field: "name",title: "Title",  headerFilter:"input",formatter:"textarea",width:350},
+                            Object.assign(rowNumberColumn(), {width:40}),
+                            {field: "icon",download:false,formatter:"image", headerSort:false,width:78,formatterParams:{height:"60px", width:"60px"}},
+                            {field: "name",title: "Title",  headerFilter:"input",formatter:"textarea",widthGrow:3},
                             {title: "Title ID", headerSort:false, headerFilter:"input", field: "titleId"},
                             {title: "Region", headerSort:true,headerFilter:"input",formatter:"textarea", field: "region"},
-                            {title: "Release date", headerSort:true, field: "release_date", sorter:"date", sorterParams:{format:"YYYY-MM-DD"}},
+                            releaseDateColumn("release_date", true),
+                            ...catalogColumns("", ROW_METADATA_FIELDS)
                         ],
-                    }, "games"), "missing_games");
+                    }, "missing_games"), "games"), "missing_games");
                 }
             }
         }

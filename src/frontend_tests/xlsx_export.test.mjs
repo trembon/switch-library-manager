@@ -3,6 +3,7 @@ import {readFile} from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 import {exportTableXLSX, reportFromExportList} from "../frontend/xlsx_export.js";
+import * as tableColumns from "../frontend/table_columns.js";
 
 const appSource = await readFile(new URL("../frontend/app.js", import.meta.url), "utf8");
 const tabulatorSource = await readFile(new URL("../frontend/lib/js/tabulator/tabulator.min.js", import.meta.url), "utf8");
@@ -80,6 +81,7 @@ test("all five GUI tabs supply the correct report kind to the export adapter", (
         missingGames: [{name: "test"}]
     };
     const context = {state, $: () => ui, hideCurrentTab() {}, gameDetailsTableOptions: value => value, tableOptions: value => value,
+        tableLayoutOptions: value => value, ...tableColumns,
         createTable(selector, options, kind) {captured.push({selector, options, kind});}};
     vm.createContext(context);
     vm.runInContext(appSource.slice(start, end), context);
@@ -116,6 +118,7 @@ test("Missing DLC sorts newest releases across games and exports dates with blan
             ]
         },
         $: () => ui, hideCurrentTab() {}, gameDetailsTableOptions: value => value,
+        tableLayoutOptions: value => value, ...tableColumns,
         document: {createElement: () => ({textContent: ""})},
         createTable(selector, value) {assert.equal(selector, "#dlc-table"); options = value;}
     };
@@ -127,7 +130,8 @@ test("Missing DLC sorts newest releases across games and exports dates with blan
     assert.equal(options.layout, "fitColumns");
     assert.equal(typeof options.tableBuilt, "function");
     assert.deepEqual([...options.columns.filter(value => value.width !== undefined).map(value => value.formatter)], ["rownum"]);
-    assert.ok(options.columns.filter(value => value.field).every(value => value.widthGrow > 0 && value.minWidth === undefined));
+    assert.ok(options.columns.filter(value => value.field && value.field !== tableColumns.rowNumberColumn().field)
+        .every(value => value.widthGrow > 0 && value.minWidth === undefined));
 
     const table = tableFor(options.columns, options.data);
     table.options = {...options, headerSort: false};

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import * as tableColumns from "../frontend/table_columns.js";
 
 const source = await readFile(new URL("../frontend/app.js", import.meta.url), "utf8");
 const functionStart = source.indexOf("        function loadTab(target) {");
@@ -36,7 +37,9 @@ function createLibraryRenderer(library, target = "#library") {
         hideCurrentTab() {},
         createTable(selector, options) { tables.push({selector, options}); },
         gameDetailsTableOptions: options => options,
-        tableOptions: options => options
+        tableOptions: options => options,
+        tableLayoutOptions: options => options,
+        ...tableColumns
     };
     vm.createContext(context);
     vm.runInContext(loadTabSource, context);
