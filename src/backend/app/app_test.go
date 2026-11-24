@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -515,5 +516,48 @@ func TestRescanLibraryRefreshesSnapshotAndPreservesMetadataCache(t *testing.T) {
 				t.Fatalf("empty scan lists must be non-nil: library=%#v issues=%#v", got.LibraryData, got.Issues)
 			}
 		})
+	}
+}
+
+func TestSaveTableLayoutPersistsAndSettingsSaveKeepsLayouts(t *testing.T) {
+	base := t.TempDir()
+	application := &App{baseFolder: base}
+	layout := settings.TableLayout{Columns: []settings.ColumnLayout{{Field: "name", Visible: true, Width: 150}, {Field: "path", Visible: false}}}
+	if err := application.SaveTableLayout(settings.TableLayoutLibrary, layout); err != nil {
+		t.Fatal(err)
+	}
+
+	storedLayout := func() settings.TableLayout {
+		t.Helper()
+		contents, err := os.ReadFile(filepath.Join(base, settings.SETTINGS_FILENAME))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var stored settings.AppSettings
+		if err := json.Unmarshal(contents, &stored); err != nil {
+			t.Fatal(err)
+		}
+		return stored.GUI.TableLayouts[settings.TableLayoutLibrary]
+	}
+	if got := storedLayout(); !reflect.DeepEqual(got, layout) {
+		t.Fatalf("stored layout = %#v, want %#v", got, layout)
+	}
+
+	// A settings form built before the layout was saved carries no layouts.
+	if err := application.SaveSettings(settings.AppSettings{GUI: settings.GUISettings{PageSize: 50}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := storedLayout(); !reflect.DeepEqual(got, layout) {
+		t.Fatalf("settings save replaced the stored layout with %#v", got)
+	}
+
+	if err := application.SaveTableLayout(settings.TableLayoutLibrary, settings.TableLayout{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := storedLayout(); len(got.Columns) != 0 {
+		t.Fatalf("reset left layout %#v", got)
+	}
+	if err := application.SaveTableLayout("unknown", layout); err == nil {
+		t.Fatal("unknown table was accepted")
 	}
 }

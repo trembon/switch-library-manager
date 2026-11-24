@@ -58,6 +58,10 @@ export function SaveSettings(arg1) {
   return window['go']['app']['App']['SaveSettings'](arg1);
 }
 
+export function SaveTableLayout(arg1, arg2) {
+  return window['go']['app']['App']['SaveTableLayout'](arg1, arg2);
+}
+
 export function SelectFolder() {
   return window['go']['app']['App']['SelectFolder']();
 }

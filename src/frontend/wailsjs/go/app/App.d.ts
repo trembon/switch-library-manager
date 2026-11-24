@@ -33,6 +33,8 @@ export function Restart():Promise<void>;
 
 export function SaveSettings(arg1:settings.AppSettings):Promise<void>;
 
+export function SaveTableLayout(arg1:string,arg2:settings.TableLayout):Promise<void>;
+
 export function SelectFolder():Promise<string>;
 
 export function ShowInFolder(arg1:string):Promise<void>;
