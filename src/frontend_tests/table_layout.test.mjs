@@ -6,9 +6,13 @@ import {
     captureTableLayout,
     columnLabel,
     columnMenuItems,
+    contentMinWidth,
+    digitsWidth,
     escapeHtml,
     formatFileSize,
+    longestWordWidth,
     joinList,
+    linesWidth,
     headerMinWidth,
     menuPosition,
     savedWidthFields,
@@ -25,6 +29,8 @@ import {
     releaseDateColumn,
     rowNumberColumn,
     ROW_METADATA_FIELDS,
+    THUMBNAIL_WIDTH,
+    thumbnailColumn,
 } from "../frontend/table_columns.js";
 
 const definitions = () => [
@@ -201,7 +207,58 @@ test("optional catalog columns start hidden and format, sort and export their va
     assert.equal(release.accessorDownload("0"), null);
     assert.equal(knownDate(20240102), null);
 
-    assert.deepEqual(rowNumberColumn(), {formatter: "rownum", field: ROW_NUMBER_FIELD, headerSort: false, download: false});
+    assert.deepEqual(rowNumberColumn(), {formatter: "rownum", field: ROW_NUMBER_FIELD, headerSort: false, download: false, hozAlign: "center"});
+    assert.equal(rowNumberColumn(44).width, 44);
+    assert.deepEqual(thumbnailColumn("icon"), {field: "icon", download: false, formatter: "image", headerSort: false,
+        width: THUMBNAIL_WIDTH, hozAlign: "center", formatterParams: {height: "60px", width: "60px"}});
+});
+
+test("ID and row-number columns are sized to their content", () => {
+    const measured = [];
+    const measure = text => {
+        measured.push(text);
+        return text.length * 8 + (text.includes("D") ? 0.4 : 0);
+    };
+    assert.equal(contentMinWidth(["0100000000001000", "0100D00000001000", "0100D00000001000", "", null, 7], measure),
+        Math.ceil(16 * 8 + 0.4) + 20, "the widest ID plus cell padding");
+    assert.equal(measured.length, 2, "repeated and non-text values are not measured");
+    assert.equal(contentMinWidth([], measure), 0);
+    assert.equal(contentMinWidth([undefined, ""], measure), 0);
+
+    const digit = character => ({"1": 5, "8": 9})[character] ?? 7;
+    assert.equal(digitsWidth(3, digit), 3 * 9 + 20, "three of the widest digit");
+});
+
+test("text and list columns fit their longest word", () => {
+    const measure = text => text.length * 8;
+    assert.equal(longestWordWidth(["Nintendo", "Bandai Namco Entertainment", null], measure), 13 * 8 + 20,
+        "the longest word of any value plus cell padding");
+    assert.equal(longestWordWidth([["Multiplayer", "Action"], ["Simulation"]], measure), "Multiplayer,".length * 8 + 20,
+        "lists are measured as displayed, joined with commas");
+    assert.equal(longestWordWidth(["A_very_long_file_name_without_any_spaces.nsp"], measure), 150,
+        "one long word cannot take over the table");
+    assert.equal(longestWordWidth(["x".repeat(30)], measure, 120), 120);
+    assert.equal(longestWordWidth([], measure), 0);
+    assert.equal(longestWordWidth([7, "", [], undefined], measure), 0);
+});
+
+test("text columns are widened until every value fits in three lines", () => {
+    const measure = text => text.length * 10;
+    const laidOut = [];
+    // Lines as if text broke anywhere: its width spread over the column's.
+    const countLines = (width, texts) => {
+        laidOut.push(...texts);
+        return texts.map(text => Math.ceil(measure(text) / width));
+    };
+    // The 300px text needs 100px for three lines; the cell adds padding and slack.
+    assert.equal(linesWidth(["x".repeat(30), "short", ["Action", "RPG"]], 3, measure, countLines), 100 + 20);
+    assert.ok(!laidOut.includes("short"), "values that fit on one line are not laid out");
+    assert.equal(linesWidth([["Board Game", "Strategy"]], 2, measure, countLines), Math.ceil(200 / 2) + 20,
+        "lists are measured as displayed, joined with commas");
+    // A layout that wraps more than the width suggests (words that do not split) widens further.
+    const wordWrap = (width, texts) => texts.map(text => text.split(" ").length > 1 && width < 60 ? 4 : 1);
+    assert.equal(linesWidth(["aaaaa bbbbb"], 3, measure, wordWrap), 60 + 20);
+    assert.equal(linesWidth([7, "", null, []], 3, measure, countLines), 0);
 });
 
 test("column menus stay inside the window", () => {
@@ -213,9 +270,10 @@ test("column menus stay inside the window", () => {
     assert.deepEqual(menuPosition({x: 2, y: 590}, {width: 200, height: 100}, viewport), {top: 492, left: 8});
 });
 
-test("columns are at least as wide as their longest header word", () => {
+test("columns are at least as wide as their header title", () => {
     const measure = text => text.length * 10;
-    assert.equal(headerMinWidth("Rating descriptors", true, measure), 110 + 16 + 4 + 16, "the longest word plus padding and the sort arrow");
+    assert.equal(headerMinWidth("Rating descriptors", true, measure), 180 + 16 + 4 + 16, "the whole title plus padding and the sort arrow");
+    assert.equal(headerMinWidth(" Rating   descriptors ", true, measure), 180 + 16 + 4 + 16, "spaces collapse as displayed");
     assert.equal(headerMinWidth("Players", false, measure), 70 + 16 + 4);
     assert.equal(headerMinWidth("  ", true, measure), 0);
     assert.equal(headerMinWidth(undefined, true, measure), 0);
@@ -227,7 +285,8 @@ test("columns are at least as wide as their longest header word", () => {
         {title: "Title", field: "name", minWidth: 500},
         {title: "Version", field: "version", width: 40},
     ], measure, true);
-    assert.deepEqual(columns.map(column => column.minWidth), [undefined, 60 + 36, 50 + 20, 500, undefined]);
+    assert.deepEqual(columns.map(column => column.minWidth), [undefined, 60 + 36, 80 + 20, 500, 70 + 36],
+        "a fixed or saved width is raised to fit the title too");
 
     const unsortedTable = withHeaderMinWidths([{title: "Genres", field: "genres"}], measure, false);
     assert.equal(unsortedTable[0].minWidth, 60 + 20, "a table without sorting reserves no arrow space");

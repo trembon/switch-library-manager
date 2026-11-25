@@ -4,6 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 import {exportTableXLSX, reportFromExportList} from "../frontend/xlsx_export.js";
 import * as tableColumns from "../frontend/table_columns.js";
+import {tableHelpers} from "./table_sandbox.mjs";
 
 const appSource = await readFile(new URL("../frontend/app.js", import.meta.url), "utf8");
 const tabulatorSource = await readFile(new URL("../frontend/lib/js/tabulator/tabulator.min.js", import.meta.url), "utf8");
@@ -76,12 +77,12 @@ test("all five GUI tabs supply the correct report kind to the export adapter", (
     const state = {
         settings: {paths: {library_folder: "synthetic"}, gui: {}},
         library: {library_data: [{name: "test"}], issues: [{key: "test", value: "issue"}]},
-        updates: [{Attributes: {name: "test"}}],
+        updates: [{Attributes: {name: "test"}, local_update: 4456448, local_display_version: "1.8.795"}],
         dlc: [{Attributes: {name: "test"}, missing_dlc: [{name: "expansion"}]}],
         missingGames: [{name: "test"}]
     };
     const context = {state, $: () => ui, hideCurrentTab() {}, gameDetailsTableOptions: value => value, tableOptions: value => value,
-        tableLayoutOptions: value => value, ...tableColumns,
+        ...tableHelpers,
         createTable(selector, options, kind) {captured.push({selector, options, kind});}};
     vm.createContext(context);
     vm.runInContext(appSource.slice(start, end), context);
@@ -90,6 +91,13 @@ test("all five GUI tabs supply the correct report kind to the export adapter", (
         assert.equal(captured.at(-1).kind, kind);
         assert.ok(captured.at(-1).options.columns.length);
     }
+
+    // Local update shows the version beside the number and is wide enough for either word.
+    const updates = captured.find(value => value.kind === "missing_updates").options;
+    const localUpdate = updates.columns.find(value => value.field === "local_update");
+    assert.equal(localUpdate.minWidth, "(1.8.795)".length * 8 + 20);
+    context.document = {createElement: () => ({textContent: ""})};
+    assert.equal(localUpdate.formatter({getRow: () => ({getData: () => state.updates[0]})}).textContent, "4456448 (1.8.795)");
 });
 
 test("Missing DLC sorts newest releases across games and exports dates with blanks for unknowns", async () => {
@@ -118,7 +126,7 @@ test("Missing DLC sorts newest releases across games and exports dates with blan
             ]
         },
         $: () => ui, hideCurrentTab() {}, gameDetailsTableOptions: value => value,
-        tableLayoutOptions: value => value, ...tableColumns,
+        ...tableHelpers,
         document: {createElement: () => ({textContent: ""})},
         createTable(selector, value) {assert.equal(selector, "#dlc-table"); options = value;}
     };
@@ -126,12 +134,18 @@ test("Missing DLC sorts newest releases across games and exports dates with blan
     vm.runInContext(appSource.slice(start, end), context);
     vm.runInContext('loadTab("#dlc")', context);
 
-    // Columns share the window width (no sideways scrolling): only the row-number column is fixed.
+    // Columns share the window width: only the row-number and game cover columns are fixed,
+    // the ID and date columns are kept wide enough for a whole value, and names keep a
+    // readable minimum.
     assert.equal(options.layout, "fitColumns");
     assert.equal(typeof options.tableBuilt, "function");
-    assert.deepEqual([...options.columns.filter(value => value.width !== undefined).map(value => value.formatter)], ["rownum"]);
-    assert.ok(options.columns.filter(value => value.field && value.field !== tableColumns.rowNumberColumn().field)
-        .every(value => value.widthGrow > 0 && value.minWidth === undefined));
+    assert.deepEqual(Array.from(options.columns.filter(value => value.width !== undefined), value => [value.formatter, value.field]),
+        [["rownum", tableColumns.rowNumberColumn().field], ["image", "game.iconUrl"]]);
+    const flexible = options.columns.filter(value => value.width === undefined);
+    assert.ok(flexible.every(value => value.widthGrow > 0));
+    assert.deepEqual(Array.from(flexible.filter(value => value.minWidth !== undefined), value => [value.field, value.minWidth]),
+        [["dlc.name", tableColumns.TEXT_MIN_WIDTH], ["dlc.id", 16 * 8 + 20], ["dlc.release_date", 10 * 8 + 20],
+            ["game.name", tableColumns.TEXT_MIN_WIDTH], ["game.id", 16 * 8 + 20]]);
 
     const table = tableFor(options.columns, options.data);
     table.options = {...options, headerSort: false};

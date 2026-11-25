@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
-import * as tableColumns from "../frontend/table_columns.js";
+import {tableHelpers} from "./table_sandbox.mjs";
 
 const source = await readFile(new URL("../frontend/app.js", import.meta.url), "utf8");
 const functionStart = source.indexOf("        function loadTab(target) {");
@@ -38,8 +38,7 @@ function createLibraryRenderer(library, target = "#library") {
         createTable(selector, options) { tables.push({selector, options}); },
         gameDetailsTableOptions: options => options,
         tableOptions: options => options,
-        tableLayoutOptions: options => options,
-        ...tableColumns
+        ...tableHelpers
     };
     vm.createContext(context);
     vm.runInContext(loadTabSource, context);
@@ -89,6 +88,9 @@ test("issues without games render in both Library and Issues views", () => {
     assert.equal(statusView.tables.length, 1);
     assert.equal(statusView.tables[0].selector, "#status-table");
     assert.equal(statusView.tables[0].options.data[0].key, "notes.txt");
+    assert.deepEqual(JSON.parse(JSON.stringify(statusView.tables[0].options.columns.filter(column => column.title)
+        .map(column => [column.field, column.headerFilter]))), [["key", "input"], ["value", "input"]],
+        "both Issues columns can be filtered");
 });
 
 test("populated library rows still create the games table", () => {
@@ -99,6 +101,12 @@ test("populated library rows still create the games table", () => {
     assert.equal(tables.length, 1);
     assert.equal(tables[0].selector, "#library-table");
     assert.equal(tables[0].options.data[0].name, "Synthetic Game");
+
+    // Row numbers and game art are fixed, centered columns; Title IDs never wrap.
+    const [number, art, , titleId] = tables[0].options.columns;
+    assert.deepEqual([number.formatter, number.width, number.hozAlign], ["rownum", 3 * 8 + 20, "center"]);
+    assert.deepEqual([art.field, art.width, art.hozAlign], ["icon", tableHelpers.THUMBNAIL_WIDTH, "center"]);
+    assert.deepEqual([titleId.field, titleId.minWidth], ["titleId", 16 * 8 + 20]);
 });
 
 test("Game Details renders DLC release dates and unknowns without changing the local-only table", async () => {

@@ -34,6 +34,10 @@ import {
     applyTableLayout,
     captureTableLayout,
     columnMenuItems,
+    contentMinWidth,
+    digitsWidth,
+    linesWidth,
+    longestWordWidth,
     menuPosition,
     savedWidthFields,
     trimOverflow,
@@ -43,12 +47,15 @@ import {
     CATALOG_FIELDS,
     FIT_TO_WINDOW,
     ROW_METADATA_FIELDS,
+    MAX_ROW_LINES,
+    TEXT_MIN_WIDTH,
     catalogColumns,
     fileSizeColumn,
     listColumn,
     releaseDateColumn,
     rowNumberColumn,
     textColumn,
+    thumbnailColumn,
 } from './table_columns.js'
 
 $(function () {
@@ -80,24 +87,42 @@ $(function () {
 
     function createTable(element, options, exportKind) {
         currTable = new Tabulator(element, options);
+        scrollRowsWithHeader(currTable);
         activeTables.add(currTable);
         currTableExportKind = exportKind;
+    }
+
+    // Tabulator scrolls the header sideways with the rows, but not the reverse: the browser
+    // scrolls only the header when a filter box out of view gets focus, and rows rendered
+    // again after a filter empties the table come back scrolled to the left. Either way each
+    // filter would sit above another column's values, so scroll the rows to the header.
+    function scrollRowsToHeader(table) {
+        const header = table.columnManager.getElement();
+        const holder = table.rowManager.element;
+        if (holder.scrollLeft !== header.scrollLeft) {
+            holder.scrollLeft = header.scrollLeft;
+        }
+    }
+
+    function scrollRowsWithHeader(table) {
+        table.columnManager.getElement().addEventListener("scroll", () => scrollRowsToHeader(table));
     }
 
     const tableResizeObservers = new Set();
 
     // Without the virtual renderer, Tabulator re-fits columns only on window resize events.
-    // Also re-fit when the table's own width changes, e.g. when the tab's vertical scrollbar
-    // appears, so fitColumns tables never overflow sideways.
+    // Also re-fit when the row area's width changes, e.g. when its own vertical scrollbar
+    // appears after rows render, so fitColumns tables do not overflow sideways needlessly.
     function refitColumnsOnResize(table) {
         if (typeof ResizeObserver === "undefined") {
             return;
         }
 
-        let width = table.element.clientWidth;
+        const holder = table.rowManager.element;
+        let width = holder.clientWidth;
         let frame;
         const observer = new ResizeObserver(() => {
-            const nextWidth = table.element.clientWidth;
+            const nextWidth = holder.clientWidth;
             if (!nextWidth || nextWidth === width) {
                 return;
             }
@@ -105,7 +130,7 @@ $(function () {
             cancelAnimationFrame(frame);
             frame = requestAnimationFrame(() => table.redraw());
         });
-        observer.observe(table.element);
+        observer.observe(holder);
         tableResizeObservers.add(observer);
     }
 
@@ -147,6 +172,7 @@ $(function () {
 
         tableOptions.renderComplete = function () {
             updatePaginationVisibility(this);
+            scrollRowsToHeader(this);
             if (renderComplete) {
                 renderComplete.call(this);
             }
@@ -467,7 +493,8 @@ $(function () {
     const COLUMN_LABELS = {
         [ROW_NUMBER_FIELD]: "Row number",
         icon: "Thumbnail",
-        "Attributes.bannerUrl": "Thumbnail"
+        "Attributes.bannerUrl": "Thumbnail",
+        "game.iconUrl": "Thumbnail"
     };
     const pendingTableLayoutSaves = new Map();
 
@@ -530,6 +557,24 @@ $(function () {
         }
     }
 
+    // A click in a table while its column menu is open only closes the menu, as with a
+    // native menu; otherwise the click that dismisses it would also open a game's details
+    // or sort a column. Clicks elsewhere (such as the tabs) close it and go through.
+    document.addEventListener("click", event => {
+        const menu = document.querySelector(".tabulator-menu");
+        if (!menu || menu.contains(event.target) || !(event.target.closest && event.target.closest(".tabulator"))) {
+            return;
+        }
+        for (const table of activeTables) {
+            const menus = table.modules.menu;
+            if (menus && menus.menuEl && menus.isOpen()) {
+                menus.hideMenu();
+            }
+        }
+        event.stopPropagation();
+        event.preventDefault();
+    }, true);
+
     // Tabulator builds the column menu in the header's own contextmenu handler, which runs
     // before this document listener, so the menu can be moved inside the window here.
     document.addEventListener("contextmenu", event => {
@@ -577,8 +622,32 @@ $(function () {
                     column.setWidth(widths[index]);
                 }
             });
+            // Tabulator sizes the header before fitting the columns, so a title that only
+            // wraps once its column narrows would push its filter box out of view. Size the
+            // header again for the final widths (skipped while the tab is hidden).
+            const columnManager = this.table.columnManager;
+            if (Tabulator.prototype.helpers.elVisible(columnManager.element)) {
+                columnManager._verticalAlignHeaders();
+            }
         };
     })();
+
+    // Tabulator 4.7 closes a menu whenever one of its items is clicked. Opens the column
+    // menu again in the same place with updated check marks, so several columns can be
+    // shown or hidden from one right-click. Reopened on the next frame, after any scroll
+    // caused by the re-fit, because scrolling the rows closes Tabulator menus.
+    function reopenColumnMenu(column, items) {
+        const menu = column.getTable().modules.menu;
+        const closed = menu && menu.menuEl;
+        if (!closed) {
+            return;
+        }
+        const position = {top: closed.style.top, left: closed.style.left, bottom: closed.style.bottom, right: closed.style.right};
+        requestAnimationFrame(() => {
+            menu.loadMenu({preventDefault() {}, pageX: 0, pageY: 0}, column._column, items());
+            Object.assign(menu.menuEl.style, position);
+        });
+    }
 
     let headerTextContext;
 
@@ -594,6 +663,90 @@ $(function () {
         }
         // Without a canvas, estimate generously from the character count.
         return headerTextContext ? headerTextContext.measureText(text).width : text.length * 9;
+    }
+
+    let cellTextContext;
+
+    // Width of text in the table cell font, read from a hidden sample cell.
+    function measureCellText(text) {
+        if (cellTextContext === undefined) {
+            const canvas = document.createElement("canvas");
+            cellTextContext = canvas.getContext ? canvas.getContext("2d") : null;
+            if (cellTextContext) {
+                const probe = $('<div class="tabulator" style="position:absolute;visibility:hidden"><div class="tabulator-cell"></div></div>').appendTo("body");
+                const style = window.getComputedStyle(probe.children()[0]);
+                cellTextContext.font = style.fontWeight + " " + style.fontSize + " " + style.fontFamily;
+                probe.remove();
+            }
+        }
+        return cellTextContext ? cellTextContext.measureText(text).width : text.length * 9;
+    }
+
+    // Row numbers up to 999, centered.
+    function rowNumber() {
+        return rowNumberColumn(digitsWidth(3, measureCellText));
+    }
+
+    // Keeps every value in an ID or date column on one line: the column is at least as
+    // wide as the widest value in rows.
+    function oneLineColumn(definition, rows) {
+        return withMinWidth(definition, contentMinWidth(fieldValues(definition, rows), measureCellText));
+    }
+
+    // Keeps a text or list column readable: its words stay whole and no value wraps to
+    // more than MAX_ROW_LINES lines, so rows stay that short; a column that needs more room
+    // is widened and the table scrolls sideways instead. text gives a row's displayed text
+    // when the column formats its value.
+    function readableColumn(definition, rows, text) {
+        // Measured widths are kept per data array (replaced on rescan), so switching back
+        // to a tab with thousands of titles does not lay them all out again.
+        let widths = readableWidths.get(rows);
+        if (!widths) {
+            widths = new Map();
+            readableWidths.set(rows, widths);
+        }
+        const key = definition.field + (text ? " text" : "");
+        if (text || !widths.has(key)) {
+            const values = text ? rows.map(text) : fieldValues(definition, rows);
+            const preWrap = definition.formatter === "textarea";
+            widths.set(key, Math.max(longestWordWidth(values, measureCellText),
+                linesWidth(values, MAX_ROW_LINES, measureCellText, (width, texts) => countCellLines(width, texts, preWrap))));
+        }
+        return withMinWidth(definition, widths.get(key));
+    }
+
+    const readableWidths = new WeakMap();
+
+    // Lays texts out as table cells with the given content width, in a hidden box, and
+    // returns how many lines each takes. preWrap matches Tabulator's textarea formatter.
+    function countCellLines(width, texts, preWrap) {
+        const box = document.createElement("div");
+        box.className = "tabulator";
+        box.style.cssText = "position:absolute;top:0;left:-100000px;visibility:hidden;border:0;width:" + width + "px";
+        const cells = document.createDocumentFragment();
+        for (const text of texts) {
+            const cell = document.createElement("div");
+            cell.className = "tabulator-cell";
+            cell.style.cssText = "display:block;padding:0;border:0;overflow-wrap:anywhere;white-space:" + (preWrap ? "pre-wrap" : "normal");
+            cell.textContent = text;
+            cells.appendChild(cell);
+        }
+        box.appendChild(cells);
+        (document.querySelector(".wrapper") || document.body).appendChild(box);
+        const style = window.getComputedStyle(box);
+        const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.5;
+        const counts = Array.from(box.children, cell => Math.round(cell.offsetHeight / lineHeight));
+        box.remove();
+        return counts;
+    }
+
+    function fieldValues(definition, rows) {
+        const path = definition.field.split(".");
+        return rows.map(row => path.reduce((value, key) => value == null ? value : value[key], row));
+    }
+
+    function withMinWidth(definition, minWidth) {
+        return minWidth > (definition.minWidth || 0) ? Object.assign({}, definition, {minWidth}) : definition;
     }
 
     // Makes a table's columns movable, resizable and hideable (header right-click menu)
@@ -615,6 +768,7 @@ $(function () {
                 }
                 // Re-fit the remaining columns (and re-measure wrapped rows) to the table width.
                 target.getTable().redraw();
+                reopenColumnMenu(column, () => headerContextMenu(column));
             },
             onReset: () => resetTableLayout(key)
         });
@@ -1036,6 +1190,10 @@ $(function () {
                 let html = $(target + "Template").render({folder: state.settings.paths.library_folder,updates:state.updates})
                 $(target).html(html);
                 if (state.updates && state.updates.length) {
+                    const localUpdateText = row => {
+                        const displayVersion = state.settings.gui.hide_version_string ? "" : row.local_display_version;
+                        return String(row.local_update) + (displayVersion ? " (" + displayVersion + ")" : "");
+                    };
                     createTable("#updates-table", gameDetailsTableOptions(tableLayoutOptions({
                         ...FIT_TO_WINDOW,
                         tableBuilt: function () {
@@ -1046,22 +1204,20 @@ $(function () {
                         ],
                         data: state.updates,
                         columns: [
-                            Object.assign(rowNumberColumn(), {width:40}),
-                            {field: "Attributes.bannerUrl",download:false,formatter:"image", headerSort:false,width:78,formatterParams:{height:"60px", width:"60px"}},
-                            {title: "Title", field: "Attributes.name", headerFilter:"input",formatter:"textarea",widthGrow:3},
-                            {title: "Type", field: "Meta.type", headerFilter:"input"},
-                            {title: "Title ID", headerSort:false, field: "Attributes.id", headerFilter:"input", hozAlign: "right", sorter: "number"},
-                            {title: "Local update", headerSort:false, field: "local_update", hozAlign: "right", sorter: "number", formatter: function (cell) {
-                                const displayVersion = state.settings.gui.hide_version_string ? "" : cell.getRow().getData().local_display_version;
-                                const value = String(cell.getValue()) + (displayVersion ? " (" + displayVersion + ")" : "");
+                            rowNumber(),
+                            thumbnailColumn("Attributes.bannerUrl"),
+                            readableColumn({title: "Title", field: "Attributes.name", headerFilter:"input",formatter:"textarea",widthGrow:3,minWidth:TEXT_MIN_WIDTH}, state.updates),
+                            readableColumn({title: "Type", field: "Meta.type", headerFilter:"input"}, state.updates),
+                            oneLineColumn({title: "Title ID", headerSort:false, field: "Attributes.id", headerFilter:"input", hozAlign: "right", sorter: "number"}, state.updates),
+                            readableColumn({title: "Local update", headerSort:false, field: "local_update", hozAlign: "right", sorter: "number", formatter: function (cell) {
                                 const content = document.createElement("span");
-                                content.textContent = value;
+                                content.textContent = localUpdateText(cell.getRow().getData());
                                 return content;
-                            }},
+                            }}, state.updates, localUpdateText),
                             {title: "Available update", headerSort:false, field: "latest_update", hozAlign: "right"},
-                            {title: "Update date", headerSort:true, field: "latest_update_date",sorter:"date", sorterParams:{format:"YYYY-MM-DD"}},
-                            releaseDateColumn("Attributes.ParsedReleaseDate", false),
-                            ...catalogColumns("Attributes.", CATALOG_FIELDS),
+                            oneLineColumn({title: "Update date", headerSort:true, field: "latest_update_date",sorter:"date", sorterParams:{format:"YYYY-MM-DD"}}, state.updates),
+                            oneLineColumn(releaseDateColumn("Attributes.ParsedReleaseDate", false), state.updates),
+                            ...catalogColumns("Attributes.", CATALOG_FIELDS).map(column => readableColumn(column, state.updates)),
                             fileSizeColumn("Download size", "Attributes.size")
                         ],
                     }, "missing_updates"), "updates"), "missing_updates");
@@ -1110,18 +1266,19 @@ $(function () {
                         ],
                         data: missingDlcRows,
                         columns: [
-                            Object.assign(rowNumberColumn(), {width:40}),
-                            {title: "Missing DLC", field: "dlc.name", headerFilter:"input", formatter:"textarea", widthGrow:3},
-                            {title: "DLC ID", field: "dlc.id", headerFilter:"input", widthGrow:1.3},
-                            {title: "Release date", field: "dlc.release_date", sorter:"date", sorterParams:{format:"YYYY-MM-DD", alignEmptyValues:"bottom"}, widthGrow:1, formatter: function (cell) {
+                            rowNumber(),
+                            thumbnailColumn("game.iconUrl"),
+                            readableColumn({title: "Missing DLC", field: "dlc.name", headerFilter:"input", formatter:"textarea", widthGrow:3, minWidth:TEXT_MIN_WIDTH}, missingDlcRows),
+                            oneLineColumn({title: "DLC ID", field: "dlc.id", headerFilter:"input", widthGrow:1.3}, missingDlcRows),
+                            oneLineColumn({title: "Release date", field: "dlc.release_date", sorter:"date", sorterParams:{format:"YYYY-MM-DD", alignEmptyValues:"bottom"}, widthGrow:1, formatter: function (cell) {
                                 const content = document.createElement("span");
                                 content.textContent = cell.getValue() || "Unknown";
                                 return content;
-                            }},
-                            {title: "Title", field: "game.name", headerFilter:"input", formatter:"textarea", widthGrow:2},
-                            {title: "Title ID", field: "game.id", headerFilter:"input", widthGrow:1.3},
-                            Object.assign(textColumn("Publisher", "game.publisher"), {widthGrow:2}),
-                            Object.assign(listColumn("Genres", "game.category"), {widthGrow:2})
+                            }}, missingDlcRows),
+                            readableColumn({title: "Title", field: "game.name", headerFilter:"input", formatter:"textarea", widthGrow:2, minWidth:TEXT_MIN_WIDTH}, missingDlcRows),
+                            oneLineColumn({title: "Title ID", field: "game.id", headerFilter:"input", widthGrow:1.3}, missingDlcRows),
+                            readableColumn(Object.assign(textColumn("Publisher", "game.publisher"), {widthGrow:2}), missingDlcRows),
+                            readableColumn(Object.assign(listColumn("Genres", "game.category"), {widthGrow:2}), missingDlcRows)
                         ],
                     }, "missing_dlc"), "dlc"), "missing_dlc");
                 }
@@ -1137,15 +1294,15 @@ $(function () {
                         layout:"fitDataStretch",
                         data: libraryIssues,
                         columns: [
-                            rowNumberColumn(),
-                            {title: "File name",width:500, headerSort:false, field: "key",formatter:"textarea",cellClick:function(e, cell){
+                            rowNumber(),
+                            {title: "File name",width:500, headerSort:false, headerFilter:"input", field: "key",formatter:"textarea",cellClick:function(e, cell){
                                     //e - the click event object
                                     //cell - cell component
                                     ShowInFolder(cell.getData().key).catch(error => showError(error.message))
                                 }
                             },
                             {
-                                title: "Issue", field: "value", width: 350, formatter: function (cell) {
+                                title: "Issue", field: "value", width: 350, headerFilter:"input", formatter: function (cell) {
                                     const value = String(cell.getValue() ?? "");
                                     return value.replace(/[&<>"']/g, character => ({
                                         "&": "&amp;",
@@ -1187,18 +1344,18 @@ $(function () {
                         },
                         data: libraryData,
                         columns: [
-                            Object.assign(rowNumberColumn(), {minWidth:24}),
-                            {field: "icon",minWidth:40,formatter:"image", download:false,headerSort:false,formatterParams:{height:"60px", width:"60px"}},
-                            {title: "Title", field: "name", headerFilter:"input",formatter:"textarea",widthGrow:3},
-                            {title: "Title ID", headerSort:false, headerFilter:"input", field: "titleId"},
-                            {title: "Region", headerSort:true, headerFilter:"input", field: "region"},
-                            {title: "Type", headerSort:true, headerFilter:"input", field: "type"},
+                            rowNumber(),
+                            thumbnailColumn("icon"),
+                            readableColumn({title: "Title", field: "name", headerFilter:"input",formatter:"textarea",widthGrow:3,minWidth:TEXT_MIN_WIDTH}, libraryData),
+                            oneLineColumn({title: "Title ID", headerSort:false, headerFilter:"input", field: "titleId"}, libraryData),
+                            readableColumn({title: "Region", headerSort:true, headerFilter:"input", field: "region"}, libraryData),
+                            readableColumn({title: "Type", headerSort:true, headerFilter:"input", field: "type"}, libraryData),
                             {title: "Update", headerSort:false, field: "update"},
-                            {title: "Version", headerSort:false, field: "version", visible: !hideVersion, download: true},
-                            {title: "File name", headerSort:false, field: "path",formatter:"textarea",widthGrow:3},
-                            textColumn("Update ID", "update_id"),
-                            releaseDateColumn("release_date", false),
-                            ...catalogColumns("", ROW_METADATA_FIELDS),
+                            readableColumn({title: "Version", headerSort:false, field: "version", visible: !hideVersion, download: true}, libraryData),
+                            readableColumn({title: "File name", headerSort:false, field: "path",formatter:"textarea",widthGrow:3,minWidth:TEXT_MIN_WIDTH}, libraryData),
+                            oneLineColumn(textColumn("Update ID", "update_id"), libraryData),
+                            oneLineColumn(releaseDateColumn("release_date", false), libraryData),
+                            ...catalogColumns("", ROW_METADATA_FIELDS).map(column => readableColumn(column, libraryData)),
                             fileSizeColumn("File size", "file_size")
                         ],
                     }, "library", hideVersion ? ["version"] : []), "games"), "games");
@@ -1235,13 +1392,13 @@ $(function () {
                         ],
                         data: state.missingGames,
                         columns: [
-                            Object.assign(rowNumberColumn(), {width:40}),
-                            {field: "icon",download:false,formatter:"image", headerSort:false,width:78,formatterParams:{height:"60px", width:"60px"}},
-                            {field: "name",title: "Title",  headerFilter:"input",formatter:"textarea",widthGrow:3},
-                            {title: "Title ID", headerSort:false, headerFilter:"input", field: "titleId"},
-                            {title: "Region", headerSort:true,headerFilter:"input",formatter:"textarea", field: "region"},
-                            releaseDateColumn("release_date", true),
-                            ...catalogColumns("", ROW_METADATA_FIELDS)
+                            rowNumber(),
+                            thumbnailColumn("icon"),
+                            readableColumn({field: "name",title: "Title",  headerFilter:"input",formatter:"textarea",widthGrow:3,minWidth:TEXT_MIN_WIDTH}, state.missingGames),
+                            oneLineColumn({title: "Title ID", headerSort:false, headerFilter:"input", field: "titleId"}, state.missingGames),
+                            readableColumn({title: "Region", headerSort:true,headerFilter:"input",formatter:"textarea", field: "region"}, state.missingGames),
+                            oneLineColumn(releaseDateColumn("release_date", true), state.missingGames),
+                            ...catalogColumns("", ROW_METADATA_FIELDS).map(column => readableColumn(column, state.missingGames))
                         ],
                     }, "missing_games"), "games"), "missing_games");
                 }

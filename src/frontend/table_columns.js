@@ -22,15 +22,36 @@ export const ROW_METADATA_FIELDS = {
     ratingContent: "rating_content"
 };
 
-// Layout for tables whose columns share the window width in proportion, so nothing
-// scrolls sideways however many columns are shown; text wraps instead (see app.css).
-// Classic rendering re-measures wrapped rows after columns are sized and on window
-// resize; the virtual renderer keeps stale row heights. Pair it with a tableBuilt
-// callback that re-fits when the table's own width changes.
+// Layout for tables whose columns share the window width in proportion; text wraps
+// (see app.css). Only when the columns' minimum widths add up to more than the window
+// does the table scroll sideways, inside its own area. Classic rendering re-measures
+// wrapped rows after columns are sized and on window resize; the virtual renderer keeps
+// stale row heights. Pair it with a tableBuilt callback that re-fits when the row area's
+// width changes.
 export const FIT_TO_WINDOW = Object.freeze({layout: "fitColumns", columnMinWidth: 24, virtualDom: false});
 
-export function rowNumberColumn() {
-    return {formatter: "rownum", field: ROW_NUMBER_FIELD, headerSort: false, download: false};
+// Narrowest a title or file name column gets, so a few words still fit on each line.
+export const TEXT_MIN_WIDTH = 140;
+
+// Most lines a row's text may wrap to; wider text widens its column instead.
+export const MAX_ROW_LINES = 3;
+
+// Row numbers are centered; give the column a fixed width (see digitsWidth) so it
+// does not take a share of the window.
+export function rowNumberColumn(width) {
+    const column = {formatter: "rownum", field: ROW_NUMBER_FIELD, headerSort: false, download: false, hozAlign: "center"};
+    if (width) {
+        column.width = width;
+    }
+    return column;
+}
+
+// 60px game art, centered in a fixed 78px column (art, cell padding and border).
+export const THUMBNAIL_WIDTH = 78;
+
+export function thumbnailColumn(field) {
+    return {field, download: false, formatter: "image", headerSort: false, width: THUMBNAIL_WIDTH, hozAlign: "center",
+        formatterParams: {height: "60px", width: "60px"}};
 }
 
 export function textColumn(title, field) {

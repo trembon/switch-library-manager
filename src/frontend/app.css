@@ -311,16 +311,56 @@ body {
     word-break: break-word;
 }
 
-#library-table .tabulator .tabulator-tableHolder {
-    overflow: visible;
-}
-
 #library-table .tabulator .tabulator-tableHolder .tabulator-table {
-    width: 100%;
     white-space: normal;
 }
 
-/* These tables' columns share the window width, so long names and IDs wrap instead of scrolling sideways. */
+/* Table tabs fill the window below the navigation. A long or wide table scrolls inside its
+   own area, so its header, sideways scrollbar and footer stay in view; the tab itself
+   scrolls only when the window is too short for the alerts plus a few rows. */
+#library,
+#updates,
+#missing,
+#dlc,
+#status {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 22rem;
+}
+
+#library > *,
+#updates > *,
+#missing > *,
+#dlc > *,
+#status > * {
+    flex: none;
+}
+
+#library > .tabulator,
+#updates > .tabulator,
+#missing > .tabulator,
+#dlc > .tabulator,
+#status > .tabulator {
+    display: flex;
+    flex: 0 1 auto;
+    flex-direction: column;
+    min-height: 10rem;
+}
+
+.content.tabulator > .tabulator-header,
+.content.tabulator > .tabulator-footer {
+    flex: none;
+}
+
+.content.tabulator > .tabulator-tableHolder {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+/* These tables' columns share the window width; long text wraps, at most three lines per
+   row (see linesWidth in table_layout.js), and columns that no longer fit scroll sideways. */
 #library-table .tabulator-cell,
 #updates-table .tabulator-cell,
 #missingGames-table .tabulator-cell,
@@ -330,15 +370,15 @@ body {
     text-overflow: clip;
 }
 
-/* Header titles wrap only between words; each column is at least as wide as its longest
-   title word (see withHeaderMinWidths in table_layout.js). */
+/* Header titles stay on one line, so every header is one title line plus its filter box
+   tall; each column is at least as wide as its title (see withHeaderMinWidths in
+   table_layout.js) and extra columns scroll sideways. */
 #library-table .tabulator-col-title,
 #updates-table .tabulator-col-title,
 #missingGames-table .tabulator-col-title,
-#dlc-table .tabulator-col-title {
-    white-space: normal;
-    overflow-wrap: normal;
-    word-break: normal;
+#dlc-table .tabulator-col-title,
+#status-table .tabulator-col-title {
+    white-space: nowrap;
     text-overflow: clip;
 }
 
