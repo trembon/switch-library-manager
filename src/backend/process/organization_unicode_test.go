@@ -16,7 +16,8 @@ func TestUnicodeFileAndFolderNames(t *testing.T) {
 		{"中文", ""},
 		{"åäö", ""},
 		{"🎮", ""},
-		{"Pokémon™", "Pokémon"},
+		{"Pokémon Legends Z-A", "Pokemon Legends Z-A"},
+		{"áéíóúō", "aeiouo"},
 		{"マリオ", "mario"},
 	} {
 		t.Run(test.name, func(t *testing.T) {

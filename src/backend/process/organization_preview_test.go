@@ -295,8 +295,9 @@ func TestBuildOrganizationPreviewAppliesSafeNames(t *testing.T) {
 	if len(got) != 3 {
 		t.Fatalf("safe-name preview entries = %#v, want fallback-filled entries", got)
 	}
-	if strings.ContainsAny(got[0].Path, ":?*<>|\"") {
-		t.Errorf("safe-name preview contains an unsafe character: %q", got[0].Path)
+	want := OrganizationPreviewEntry{Kind: "game", Path: filepath.Join("Pokemon Demo", "Pokemon Demo.nsp")}
+	if got[0] != want {
+		t.Errorf("game preview = %#v, want %#v", got[0], want)
 	}
 }
 
