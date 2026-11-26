@@ -161,4 +161,15 @@ func TestGameNameOverrides(t *testing.T) {
 	if err != nil || len(games) != 1 || games[0].Name != "Local custom" {
 		t.Fatalf("missing = %v, %v", games, err)
 	}
+	if _, err := a.SetGameNameOverride(detailsBaseID, ""); err != nil {
+		t.Fatal(err)
+	}
+	games, err = a.GetMissingGames()
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(games)
+	if err != nil || string(data) != "[]" {
+		t.Fatalf("empty missing games JSON = %s, %v, want []", data, err)
+	}
 }

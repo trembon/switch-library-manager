@@ -266,6 +266,41 @@ test('responses from before a successful save cannot restore stale previews or m
     await expect(page.locator('#organize')).not.toContainText('STALE PREVIEW');
 });
 
+test('rescan controls remain usable while organization previews load or fail', async ({app, page}) => {
+    const stale = structuredClone(fixtures.preview);
+    stale.entries[0].path = 'STALE PREVIEW.nsp';
+    await app.open({responses: {GetOrganizationPreview: [
+        {defer: 'first-preview'},
+        {error: 'Preview failed again'},
+        {defer: 'stale-preview', result: stale},
+        {result: fixtures.preview}
+    ]}});
+    await app.tab('Organize');
+    const preview = page.getByRole('region', {name: 'Example resulting paths'});
+    const rescan = page.getByRole('button', {name: 'Rescan', exact: true});
+    const hardRescan = page.getByRole('button', {name: 'Hard rescan', exact: true});
+    await expect(preview.getByRole('status')).toHaveText('Loading…');
+    await expect(rescan).toBeEnabled();
+    await expect(hardRescan).toBeEnabled();
+    await app.tab('Organize');
+    await app.called('GetOrganizationPreview');
+    await hardRescan.focus();
+    await app.reject('first-preview', 'Preview unavailable');
+    await expect(preview.getByRole('alert')).toContainText('Preview unavailable');
+    await expect(hardRescan).toBeFocused();
+    await rescan.click();
+    await expect(preview.getByRole('alert')).toContainText('Preview failed again');
+    await app.tab('Organize');
+    await app.called('GetOrganizationPreview', 3);
+    await expect(preview.getByRole('status')).toHaveText('Loading…');
+    await hardRescan.click();
+    await expect(preview).toContainText(fixtures.preview.entries[0].path);
+    await app.resolve('stale-preview');
+    await expect(preview).not.toContainText('STALE PREVIEW');
+    await app.called('GetOrganizationPreview', 4);
+    expect((await app.calls('RescanLibrary')).map(call => call.args)).toEqual([[false], [true]]);
+});
+
 test('failed folder save retains the active library and cancelled pickers do not save', async ({app, page}) => {
     const data = structuredClone(fixtures);
     data.library = {library_data: [], issues: [], num_files: 0};

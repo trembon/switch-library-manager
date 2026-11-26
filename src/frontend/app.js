@@ -236,6 +236,8 @@ $(function () {
         rowContextMenu.open(event, row, [edit, action].filter(Boolean));
     }
 
+    const fetchMissingGames = async () => (await GetMissingGames()) ?? [];
+
     const gameNameEditor = createGameNameEditor({
         document, load: GetGameDetails, save: SetGameNameOverride,
         onBusyChange: pending => { settingsSavePending = pending; },
@@ -245,7 +247,7 @@ $(function () {
             else {
                 const row = currTable?.getRows("display").find(row => row.getData().titleId === titleID);
                 if (row) row.getElement().focus({preventScroll: true});
-                else currRowNavigation?.focusFirst();
+                else if (!currRowNavigation?.focusFirst()) document.querySelector(activeTabTarget)?.focus({preventScroll: true});
             }
         },
         async onSaved(result) {
@@ -261,7 +263,7 @@ $(function () {
             const table = currTable;
             const page = table?.getPage();
             let rows = result.library.library_data;
-            const fetches = {"#updates": ["updates", GetMissingUpdates], "#dlc": ["dlc", GetMissingDLC], "#missing": ["missingGames", GetMissingGames]};
+            const fetches = {"#updates": ["updates", GetMissingUpdates], "#dlc": ["dlc", GetMissingDLC], "#missing": ["missingGames", fetchMissingGames]};
             if (fetches[target]) {
                 const [key, fetch] = fetches[target];
                 const data = await fetch();
@@ -270,6 +272,10 @@ $(function () {
                 rows = target === "#dlc" ? data.flatMap(game => game.missing_dlc.map(dlc => ({game: game.Attributes, dlc}))) : data;
             }
             if (generation !== libraryDataGeneration || currTable !== table || activeTabTarget !== target) return;
+            if (target === "#missing" && rows.length === 0) {
+                loadTab(target);
+                return;
+            }
             if (table) {
                 await table.replaceData(rows);
                 await table.setPage(Math.max(1, Math.min(page, table.getPageMax())));
@@ -538,7 +544,9 @@ $(function () {
         const active = document.activeElement;
         if (!commandsBlocked() && (active === document.body || active === gameDetailsReturnFocus || gameDetailsDialog.contains(active))) {
             if (gameDetailsReturnFocus?.isConnected) gameDetailsReturnFocus.focus();
-            else currRowNavigation?.focusFirst();
+            else if (!currRowNavigation?.focusFirst() && activeTabTarget === "#missing") {
+                document.querySelector(activeTabTarget).focus({preventScroll: true});
+            }
         }
         gameDetailsReturnFocus = null;
     });
@@ -656,24 +664,28 @@ $(function () {
         loadTab(target);
     }
 
-    function requestTabData(target, cacheKey, fetchData) {
+    function requestTabData(target, cacheKey, fetchData, {
+        contentSelector = target,
+        render = () => loadTab(target),
+        failureMessage = "Unable to load this tab. Select the tab again to retry."
+    } = {}) {
         const generation = libraryDataGeneration;
+        $(contentSelector).html('<div class="game-details-message" role="status">Loading…</div>');
         if (pendingTabLoads.get(target)?.generation === generation) return;
         const request = {generation};
         pendingTabLoads.set(target, request);
-        $(target).html('<div class="game-details-message" role="status">Loading…</div>');
         Promise.resolve().then(fetchData).then(data => {
             if (generation !== libraryDataGeneration) return;
             state[cacheKey] = data;
-            if (!restartRequired && activeTabTarget === target) loadTab(target);
+            if (!restartRequired && activeTabTarget === target) render(data);
         }).catch(error => {
             if (generation !== libraryDataGeneration) return;
             if (activeTabTarget === target) {
                 const failure = document.createElement("div");
                 failure.className = "alert alert-danger";
                 failure.setAttribute("role", "alert");
-                failure.textContent = "Unable to load this tab. Select the tab again to retry. " + settingsErrorMessage(error);
-                document.querySelector(target).replaceChildren(failure);
+                failure.textContent = failureMessage + " " + settingsErrorMessage(error);
+                document.querySelector(contentSelector).replaceChildren(failure);
                 scheduleTabFocus(target);
             } else console.error("Could not load " + target + ":", error);
         }).finally(() => {
@@ -1064,21 +1076,16 @@ $(function () {
             } else if (target === "#organize") {
                 const folder = state.settings.paths.library_folder;
                 const organization = state.settings.organization;
-                if (!folder) {
-                    $(target).html($(target + "Template").render({folder: folder, organization: organization}));
-                    updateShortcutMetadata(document.querySelector(target));
-                    scheduleTabFocus(target);
-                    return;
+                $(target).html($(target + "Template").render({folder, organization}));
+                const contentSelector = "#organization-preview-content";
+                if (document.querySelector(contentSelector)) {
+                    const render = preview => $(contentSelector).html($("#organizationPreviewTemplate").render({preview}));
+                    if (state.organizationPreview?.root_folder === folder) render(state.organizationPreview);
+                    else requestTabData(target, "organizationPreview", GetOrganizationPreview, {
+                        contentSelector, render,
+                        failureMessage: "Unable to load the preview. Select Organize again to retry."
+                    });
                 }
-                if (!state.organizationPreview || state.organizationPreview.root_folder !== folder) {
-                    $(target).html($(target + "Template").render({folder: folder, organization: organization, previewLoading: true}));
-                    updateShortcutMetadata(document.querySelector(target));
-                    requestTabData(target, "organizationPreview", GetOrganizationPreview);
-                    return;
-                }
-                let html = $(target + "Template").render({folder: folder, organization: organization, preview: state.organizationPreview})
-                $(target).html(html);
-                updateShortcutMetadata(document.querySelector(target));
             } else if (target === "#updates") {
                 if (state.settings.paths.library_folder && !state.library){
                     return
@@ -1229,7 +1236,7 @@ $(function () {
                     return
                 }
                 if (state.library && !state.missingGames){
-                    requestTabData(target, "missingGames", GetMissingGames);
+                    requestTabData(target, "missingGames", fetchMissingGames);
                     return
                 }
                 let html = $(target + "Template").render({folder: state.settings.paths.library_folder,missingGames:state.missingGames});

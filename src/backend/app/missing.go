@@ -75,7 +75,7 @@ func makeIgnoreIDs(ids []string) map[string]struct{} {
 }
 
 func getMissingGames(localDB *db.LocalSwitchFilesDB, switchDB *db.SwitchTitlesDB, settingsObj *settings.AppSettings) []SwitchTitle {
-	var result []SwitchTitle
+	result := []SwitchTitle{}
 	for key, title := range switchDB.TitlesMap {
 		if _, ok := localDB.TitlesMap[key]; ok {
 			continue

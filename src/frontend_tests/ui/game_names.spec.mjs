@@ -140,6 +140,47 @@ test('a renamed row can leave its current filter and missing games can be rename
     await expect(page.locator('#missingGames-table')).toContainText('My Missing Game');
 });
 
+for (const entryPoint of ['row menu', 'game details']) {
+    test(`restoring the last custom-named missing game from ${entryPoint} shows the empty state`, async ({app, page}) => {
+        const data = structuredClone(fixtures);
+        const [game] = data.missingGames;
+        game.automatic_name = 'Unknown Title';
+        data.settings.title_name_overrides[game.titleId] = game.name;
+        await app.open({data, responses: {GetMissingGames: [{}, {result: []}]}});
+        await app.tab('Missing games');
+        const details = page.locator('#game-details-dialog');
+        if (entryPoint === 'game details') {
+            await page.locator('#missingGames-table .tabulator-row').first().click();
+            await details.getByRole('button', {name: 'Edit game name', exact: true}).click();
+        } else {
+            await openMenu(page, '#missingGames-table');
+        }
+        await editor(page).getByRole('button', {name: 'Restore automatic name'}).click();
+        await expect(input(page)).toHaveValue('Unknown Title');
+        await editor(page).getByRole('button', {name: 'Save', exact: true}).click();
+        await expect(editor(page)).not.toBeVisible();
+        if (entryPoint === 'game details') {
+            await expect(details.getByRole('button', {name: 'Edit game name', exact: true})).toBeFocused();
+            await page.keyboard.press('Escape');
+        }
+        const panel = page.locator('#missing');
+        await expect(panel).toBeFocused();
+        await expect(panel.getByRole('alert')).toContainText('not missing any Games');
+        expect((await app.calls('SetGameNameOverride'))[0].args).toEqual([game.titleId, '']);
+        await app.tab('Library');
+        await app.tab('Missing games');
+        await expect(panel.getByRole('alert')).toContainText('not missing any Games');
+        await app.called('GetMissingGames', 2);
+    });
+}
+
+test('a null Missing games response renders the empty state', async ({app, page}) => {
+    await app.open({responses: {GetMissingGames: [{result: null}]}});
+    await app.tab('Missing games');
+    await expect(page.locator('#missing').getByRole('alert')).toContainText('not missing any Games');
+    await app.called('GetMissingGames');
+});
+
 test('stale editor loads cannot replace the next editor and refresh errors report saved state', async ({app, page}) => {
     await app.open({responses: {GetGameDetails: [{defer: 'old-name'}]}});
     await page.locator('#library-table .tabulator-row').first().click({button:'right'});

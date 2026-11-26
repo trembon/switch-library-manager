@@ -545,28 +545,7 @@
           {{if organization.create_folder_per_game || organization.rename_files || organization.move_scan_files_to_library}}
             <section class="organization-section" aria-labelledby="organization-preview-heading">
               <h4 id="organization-preview-heading">Example resulting paths</h4>
-              {{if previewLoading}}
-                <p class="text-secondary mb-0">Preparing examples...</p>
-              {{else preview && preview.entries && preview.entries.length}}
-                <p class="text-secondary">Paths are shown relative to the library root.</p>
-                <div class="table-responsive">
-                  <table class="table table-sm align-middle mb-0 organization-preview-table">
-                    <thead>
-                      <tr><th scope="col">Content</th><th scope="col">Resulting path</th></tr>
-                    </thead>
-                    <tbody>
-                      {{for preview.entries}}
-                      <tr>
-                        <th scope="row">{{if kind === "game"}}Game{{else kind === "update"}}Update{{else}}DLC{{/if}}</th>
-                        <td><code>{{:path}}</code></td>
-                      </tr>
-                      {{/for}}
-                    </tbody>
-                  </table>
-                </div>
-              {{else}}
-                <p class="text-secondary mb-0">No preview paths are available.</p>
-              {{/if}}
+              <div id="organization-preview-content"></div>
             </section>
           {{/if}}
 
@@ -580,6 +559,29 @@
                   <button type="button" class="btn btn-outline-primary folder-set">Set Folder</button>
             </div>
         {{/if}}
+    </script>
+
+    <script id="organizationPreviewTemplate" type="text/x-jsrender">
+      {{if preview && preview.entries && preview.entries.length}}
+        <p class="text-secondary">Paths are shown relative to the library root.</p>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0 organization-preview-table">
+            <thead>
+              <tr><th scope="col">Content</th><th scope="col">Resulting path</th></tr>
+            </thead>
+            <tbody>
+              {{for preview.entries}}
+              <tr>
+                <th scope="row">{{if kind === "game"}}Game{{else kind === "update"}}Update{{else}}DLC{{/if}}</th>
+                <td><code>{{>path}}</code></td>
+              </tr>
+              {{/for}}
+            </tbody>
+          </table>
+        </div>
+      {{else}}
+        <p class="text-secondary mb-0">No preview paths are available.</p>
+      {{/if}}
     </script>
 
     <script id="gameDetailsTemplate" type="text/x-jsrender">
