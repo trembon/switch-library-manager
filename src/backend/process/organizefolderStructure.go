@@ -18,9 +18,13 @@ import (
 	"robpike.io/nihongo"
 )
 
+// automaticTitleNameKey is internal context for DLC trimming, not a template placeholder.
+const automaticTitleNameKey = "_automatic_title_name"
+
 var (
 	folderIllegalCharsRegex = regexp.MustCompile(`[/\\?%*:;=|"<>]`)
-	nonAscii                = regexp.MustCompile("[a-zA-Z0-9áéíóú@#%&',.\\s-\\[\\]\\(\\)\\+]")
+	safeNameCharsRegex      = regexp.MustCompile("[a-zA-Z0-9@#%&',.\\s-\\[\\]\\(\\)\\+]")
+	safeNameVowelReplacer   = strings.NewReplacer("á", "a", "é", "e", "í", "i", "ó", "o", "ú", "u", "ō", "o")
 )
 
 var packageContentsRegex = regexp.MustCompile(`(?i)\(([1-9][0-9]{0,8})g(?:\+([1-9][0-9]{0,8})u)?(?:\+([1-9][0-9]{0,8})d)?\)`)
@@ -393,8 +397,12 @@ func applyTemplate(templateData map[string]string, useSafeNames bool, template s
 	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_SIZE_MB+"}", templateData[settings.TEMPLATE_SIZE_MB])
 	result = strings.ReplaceAll(result, "{"+settings.TEMPLATE_PACKAGE_CONTENTS+"}", templateData[settings.TEMPLATE_PACKAGE_CONTENTS])
 
-	//remove title name from dlc name
-	dlcName := strings.Replace(templateData[settings.TEMPLATE_DLC_NAME], templateData[settings.TEMPLATE_TITLE_NAME], "", 1)
+	// Trim the automatic game name so custom names only affect TITLE_NAME.
+	automaticTitleName, ok := templateData[automaticTitleNameKey]
+	if !ok {
+		automaticTitleName = templateData[settings.TEMPLATE_TITLE_NAME]
+	}
+	dlcName := strings.Replace(templateData[settings.TEMPLATE_DLC_NAME], automaticTitleName, "", 1)
 	dlcName = strings.TrimFunc(dlcName, func(r rune) bool {
 		return r == ':' || unicode.IsSpace(r) || unicode.Is(unicode.Dash, r)
 	})
@@ -406,11 +414,9 @@ func applyTemplate(templateData map[string]string, useSafeNames bool, template s
 
 	if useSafeNames {
 		result = nihongo.RomajiString(result)
+		result = safeNameVowelReplacer.Replace(result)
 
-		// handle known characters that have safe variants
-		result = strings.ReplaceAll(result, "ō", "o")
-
-		safe := nonAscii.FindAllString(result, -1)
+		safe := safeNameCharsRegex.FindAllString(result, -1)
 		result = strings.Join(safe, "")
 	}
 

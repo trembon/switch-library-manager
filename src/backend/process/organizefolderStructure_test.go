@@ -50,7 +50,7 @@ func TestApplyTemplate(t *testing.T) {
 	}{
 		{"all placeholders and repeated values", false, "{TITLE_NAME}-{TITLE_NAME}-{TITLE_ID}-{VERSION}-{VERSION_TXT}-{REGION}-{TYPE}-{DLC_NAME}-{SIZE_GB}-{SIZE_MB}-{SIZE_MB} ({PACKAGE_CONTENTS})", 0, "The Game  Demo-The Game  Demo-0100ABCD00001000-12-1.2.0-US-UPD-The Game - Extra Pack-0.6GB-600MB-600MB (1G+1U+1D)"},
 		{"package contents placeholder omitted", false, "{TITLE_NAME}[{TITLE_ID}]", 0, "The Game  Demo[0100ABCD00001000]"},
-		{"safe name", true, "Pokémon™: {TITLE_NAME} [v{VERSION}]", 0, "Pokémon The Game Demo [v12]"},
+		{"safe name", true, "Pokémon™: {TITLE_NAME} [v{VERSION}]", 0, "Pokemon The Game Demo [v12]"},
 		{"collision suffix", false, "name.", 2, "name(2)"},
 		{"cleanup and illegal characters", false, "[]()<>a:b%?", 0, "ab"},
 		{"trailing periods", false, "name...", 0, "name"},

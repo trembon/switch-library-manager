@@ -268,8 +268,10 @@ func TestBuildOrganizationPlanReportsOccupiedDestinationWithoutOverwrite(t *test
 	base := t.TempDir()
 	source := filepath.Join(base, "incoming")
 	mustMkdir(t, source)
+	destination := filepath.Join(base, "Pokemon Legends Z-A")
+	mustMkdir(t, destination)
 	sourcePath := filepath.Join(source, "original.nsp")
-	destinationPath := filepath.Join(source, "Game.nsp")
+	destinationPath := filepath.Join(destination, "Pokemon Legends Z-A.nsp")
 	writeFixture(t, sourcePath, "source content")
 	writeFixture(t, destinationPath, "existing destination")
 	file := db.ExtendedFileInfo{BaseFolder: source, FileName: "original.nsp"}
@@ -280,24 +282,29 @@ func TestBuildOrganizationPlanReportsOccupiedDestinationWithoutOverwrite(t *test
 		},
 	}}
 	remote := &db.SwitchTitlesDB{TitlesMap: map[string]*db.SwitchTitle{
-		"0100E95004039": {Attributes: db.TitleAttributes{Id: "0100E95004039000", Name: "Game"}},
+		"0100E95004039": {Attributes: db.TitleAttributes{Id: "0100E95004039000", Name: "Pokémon Legends Z-A"}},
 	}}
-	options := settings.OrganizeOptions{RenameFiles: true, FileNameTemplate: "{TITLE_NAME}"}
+	options := settings.OrganizeOptions{
+		CreateFolderPerGame: true,
+		FolderNameTemplate:  "{TITLE_NAME}",
+		RenameFiles:         true,
+		FileNameTemplate:    "{TITLE_NAME}",
+	}
 
 	plan, err := BuildOrganizationPlan(base, local, remote, options)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(plan.Conflicts) != 1 || plan.Conflicts[0].Reason != "destination already exists" {
-		t.Fatalf("conflicts = %#v, want occupied destination", plan.Conflicts)
+	if len(plan.Conflicts) != 1 || plan.Conflicts[0].Reason != "destination already exists" || plan.Conflicts[0].Destination != destinationPath {
+		t.Fatalf("conflicts = %#v, want occupied destination %q", plan.Conflicts, destinationPath)
 	}
 	if err := ExecuteOrganizationPlan(plan, local, base, options, nil); err == nil {
 		t.Fatal("ExecuteOrganizationPlan() accepted occupied destination")
 	}
-	assertExists(t, sourcePath)
-	content, err := os.ReadFile(destinationPath)
-	if err != nil || string(content) != "existing destination" {
-		t.Fatalf("existing destination changed: content=%q err=%v", content, err)
+	for path, want := range map[string]string{sourcePath: "source content", destinationPath: "existing destination"} {
+		if content, err := os.ReadFile(path); err != nil || string(content) != want {
+			t.Errorf("file %q changed: content=%q err=%v", path, content, err)
+		}
 	}
 }
 

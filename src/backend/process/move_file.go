@@ -6,7 +6,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type organizationSourceFile interface {
@@ -24,19 +27,25 @@ type organizationTemporaryFile interface {
 }
 
 type organizationFileOperations struct {
-	renameNoReplace func(string, string) error
-	isCrossDevice   func(error) bool
-	openSource      func(string) (organizationSourceFile, error)
-	createTemp      func(string, string) (organizationTemporaryFile, error)
-	lstat           func(string) (os.FileInfo, error)
-	remove          func(string) error
-	chtimes         func(string, time.Time, time.Time) error
+	renameNoReplace     func(string, string) error
+	rename              func(string, string) error
+	isRenameUnsupported func(error) bool
+	logRenameFallback   func(string, string)
+	isCrossDevice       func(error) bool
+	openSource          func(string) (organizationSourceFile, error)
+	createTemp          func(string, string) (organizationTemporaryFile, error)
+	lstat               func(string) (os.FileInfo, error)
+	remove              func(string) error
+	chtimes             func(string, time.Time, time.Time) error
 }
 
 func defaultOrganizationFileOperations() organizationFileOperations {
 	return organizationFileOperations{
-		renameNoReplace: renameNoReplace,
-		isCrossDevice:   isCrossDeviceMoveError,
+		renameNoReplace:     renameNoReplace,
+		rename:              os.Rename,
+		isRenameUnsupported: isUnsupportedExclusiveRenameError,
+		logRenameFallback:   defaultRenameFallbackLogger.log,
+		isCrossDevice:       isCrossDeviceMoveError,
 		openSource: func(path string) (organizationSourceFile, error) {
 			return os.Open(path)
 		},
@@ -68,7 +77,7 @@ func moveOrganizationFile(move OrganizationMove) error {
 }
 
 func moveFileWithOperations(move OrganizationMove, operations organizationFileOperations) (retErr error) {
-	if err := operations.renameNoReplace(move.Source, move.Destination); err == nil {
+	if err := renameOrganizationFile(move.Source, move.Destination, operations); err == nil {
 		return nil
 	} else if !operations.isCrossDevice(err) {
 		return err
@@ -164,7 +173,7 @@ func moveFileWithOperations(move OrganizationMove, operations organizationFileOp
 	if err := verifyMoveSourcePath(move, operations.lstat); err != nil {
 		return err
 	}
-	if err := operations.renameNoReplace(temporary.Name(), move.Destination); err != nil {
+	if err := renameOrganizationFile(temporary.Name(), move.Destination, operations); err != nil {
 		return fmt.Errorf("publish cross-filesystem copy at %q: %w", move.Destination, err)
 	}
 	published = true
@@ -173,6 +182,47 @@ func moveFileWithOperations(move OrganizationMove, operations organizationFileOp
 	}
 	if err := operations.remove(move.Source); err != nil {
 		return fmt.Errorf("copy was published at %q but source %q could not be removed: %w", move.Destination, move.Source, err)
+	}
+	return nil
+}
+
+var defaultRenameFallbackLogger = &renameFallbackLogger{logger: zap.S}
+
+// renameFallbackLogger warns once per process that the standard rename fallback
+// is in use and records each individual fallback at debug level, so organizing a
+// large library on an unsupported filesystem does not flood slm.log.
+type renameFallbackLogger struct {
+	logger func() *zap.SugaredLogger
+	warned sync.Once
+}
+
+func (l *renameFallbackLogger) log(from, to string) {
+	logger := l.logger()
+	l.warned.Do(func() {
+		logger.Warnf("Exclusive rename is unsupported by the filesystem; using standard rename after a destination check (first: %s -> %s)", from, to)
+	})
+	logger.Debugf("Standard rename fallback: %s -> %s", from, to)
+}
+
+// renameOrganizationFile keeps exclusive rename as the first choice. On macOS
+// and Linux, unsupported filesystems can use standard rename after a destination
+// check.
+// This check is best effort: another process can create the destination between
+// Lstat and Rename, in which case standard rename may replace that file.
+func renameOrganizationFile(from, to string, operations organizationFileOperations) error {
+	err := operations.renameNoReplace(from, to)
+	if err == nil || !operations.isRenameUnsupported(err) {
+		return err
+	}
+
+	operations.logRenameFallback(from, to)
+	if _, err := operations.lstat(to); err == nil {
+		return &os.LinkError{Op: "rename", Old: from, New: to, Err: os.ErrExist}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("inspect destination %q before standard rename fallback: %w", to, err)
+	}
+	if err := operations.rename(from, to); err != nil {
+		return fmt.Errorf("standard rename fallback: %w", err)
 	}
 	return nil
 }
