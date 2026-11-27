@@ -48,10 +48,26 @@ export function rowNumberColumn(width) {
 
 // 60px game art, centered in a fixed 78px column (art, cell padding and border).
 export const THUMBNAIL_WIDTH = 78;
+const THUMBNAIL_SIZE = "60px";
 
-export function thumbnailColumn(field) {
-    return {field, download: false, formatter: "image", headerSort: false, width: THUMBNAIL_WIDTH, hozAlign: "center",
-        formatterParams: {height: "60px", width: "60px"}};
+// Game art, or an empty cell when the catalog has none (rather than requesting a
+// broken image).
+export function thumbnailFormatter(cell) {
+    const source = cell.getValue();
+    if (typeof source !== "string" || source.trim() === "") {
+        return "";
+    }
+    const image = document.createElement("img");
+    image.setAttribute("src", source);
+    image.style.height = THUMBNAIL_SIZE;
+    image.style.width = THUMBNAIL_SIZE;
+    // The row is sized before the image loads; size it again once it has.
+    image.addEventListener("load", () => cell.getRow().normalizeHeight());
+    return image;
+}
+
+export function thumbnailColumn(field, visible = true) {
+    return {field, visible, download: false, formatter: thumbnailFormatter, headerSort: false, width: THUMBNAIL_WIDTH, hozAlign: "center"};
 }
 
 export function textColumn(title, field) {

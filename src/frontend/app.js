@@ -40,6 +40,7 @@ import {
     longestWordWidth,
     menuPosition,
     savedWidthFields,
+    serialSaver,
     trimOverflow,
     withHeaderMinWidths,
 } from './table_layout.js'
@@ -135,8 +136,6 @@ $(function () {
     }
 
     function destroyTables() {
-        flushTableLayoutSaves();
-
         for (const observer of tableResizeObservers) {
             observer.disconnect();
         }
@@ -496,7 +495,6 @@ $(function () {
         "Attributes.bannerUrl": "Thumbnail",
         "game.iconUrl": "Thumbnail"
     };
-    const pendingTableLayoutSaves = new Map();
 
     function savedTableLayout(key) {
         const layouts = state.settings && state.settings.gui && state.settings.gui.table_layouts;
@@ -514,44 +512,31 @@ $(function () {
         state.settings.gui.table_layouts = layouts;
     }
 
+    // Resolves once the save is done, without waiting for the error message to be closed,
+    // so later layout saves for the table are not held up behind the dialog.
     function persistTableLayout(key, layout) {
         return SaveTableLayout(key, layout).catch(error => {
             const detail = error && error.message ? error.message : String(error);
-            return ShowMessage("error", "Error", "The column layout could not be saved", detail)
+            console.error("table layout save failed", key, detail);
+            Promise.resolve()
+                .then(() => ShowMessage("error", "Error", "The column layout could not be saved", detail))
                 .catch(messageError => console.error(messageError));
         });
     }
 
-    // Dragging or resizing fires many events; save once the user pauses.
-    function scheduleTableLayoutSave(key, layout) {
+    // Tabulator reports a drag, move or show/hide once it is done, so each change is saved
+    // at once: a change followed straight away by closing the window is kept.
+    const sendTableLayout = serialSaver(persistTableLayout);
+
+    function saveTableLayout(key, layout) {
         storeTableLayout(key, layout);
-        cancelTableLayoutSave(key);
-        const run = () => {
-            pendingTableLayoutSaves.delete(key);
-            persistTableLayout(key, layout);
-        };
-        pendingTableLayoutSaves.set(key, {timer: setTimeout(run, 400), run});
-    }
-
-    function cancelTableLayoutSave(key) {
-        const pending = pendingTableLayoutSaves.get(key);
-        if (pending) {
-            clearTimeout(pending.timer);
-            pendingTableLayoutSaves.delete(key);
-        }
-    }
-
-    function flushTableLayoutSaves() {
-        for (const pending of Array.from(pendingTableLayoutSaves.values())) {
-            clearTimeout(pending.timer);
-            pending.run();
-        }
+        sendTableLayout(key, layout);
     }
 
     function resetTableLayout(key) {
-        cancelTableLayoutSave(key);
         storeTableLayout(key, undefined);
-        persistTableLayout(key, {columns: []});
+        // Through the same sender, so an earlier save still in progress cannot land after it.
+        sendTableLayout(key, {columns: []});
         if (!restartRequired) {
             loadTab(TABLE_LAYOUT_TABS[key]);
         }
@@ -755,7 +740,7 @@ $(function () {
     function tableLayoutOptions(options, key, hiddenFields = []) {
         const layout = savedTableLayout(key);
         const resizedFields = savedWidthFields(layout);
-        const save = table => scheduleTableLayoutSave(key,
+        const save = table => saveTableLayout(key,
             captureTableLayout(table.getColumns(), resizedFields, savedTableLayout(key), hiddenFields));
         const headerContextMenu = column => columnMenuItems(column.getTable().getColumns(), {
             labels: COLUMN_LABELS,
@@ -783,6 +768,9 @@ $(function () {
             },
             columnResized: function (column) {
                 resizedFields.add(column.getField());
+                // fitColumns only keeps a column's width when its definition has one; without
+                // it the next re-fit (a window resize, a column shown) would undo the user's width.
+                column.getDefinition().width = Math.round(column.getWidth());
                 save(this);
             },
             columnVisibilityChanged: function () {
@@ -1217,8 +1205,9 @@ $(function () {
                             {title: "Available update", headerSort:false, field: "latest_update", hozAlign: "right"},
                             oneLineColumn({title: "Update date", headerSort:true, field: "latest_update_date",sorter:"date", sorterParams:{format:"YYYY-MM-DD"}}, state.updates),
                             oneLineColumn(releaseDateColumn("Attributes.ParsedReleaseDate", false), state.updates),
-                            ...catalogColumns("Attributes.", CATALOG_FIELDS).map(column => readableColumn(column, state.updates)),
-                            fileSizeColumn("Download size", "Attributes.size")
+                            // No download size: update rows carry the base game's catalog entry,
+                            // and the catalog has no sizes for updates.
+                            ...catalogColumns("Attributes.", CATALOG_FIELDS).map(column => readableColumn(column, state.updates))
                         ],
                     }, "missing_updates"), "updates"), "missing_updates");
                 }
@@ -1267,7 +1256,7 @@ $(function () {
                         data: missingDlcRows,
                         columns: [
                             rowNumber(),
-                            thumbnailColumn("game.iconUrl"),
+                            thumbnailColumn("game.iconUrl", false),
                             readableColumn({title: "Missing DLC", field: "dlc.name", headerFilter:"input", formatter:"textarea", widthGrow:3, minWidth:TEXT_MIN_WIDTH}, missingDlcRows),
                             oneLineColumn({title: "DLC ID", field: "dlc.id", headerFilter:"input", widthGrow:1.3}, missingDlcRows),
                             oneLineColumn({title: "Release date", field: "dlc.release_date", sorter:"date", sorterParams:{format:"YYYY-MM-DD", alignEmptyValues:"bottom"}, widthGrow:1, formatter: function (cell) {

@@ -16,6 +16,7 @@ import {
     headerMinWidth,
     menuPosition,
     savedWidthFields,
+    serialSaver,
     trimOverflow,
     withHeaderMinWidths,
 } from "../frontend/table_layout.js";
@@ -81,6 +82,114 @@ test("saved order, visibility and widths are applied; new columns follow and sta
 test("columns hidden by an application setting stay hidden", () => {
     const columns = applyTableLayout(definitions(), {columns: [{field: "version", visible: true}]}, ["version"]);
     assert.equal(columns.find(column => column.field === "version").visible, false);
+});
+
+test("a layout that would hide every column shows the defaults instead", () => {
+    // Only Version left visible, then "hide version string" turned on: nothing would be
+    // left to right-click.
+    const layout = {columns: definitions().map(column => ({field: column.field, visible: column.field === "version"}))};
+    const columns = applyTableLayout(definitions(), layout, ["version"]);
+    assert.deepEqual(columns.filter(column => column.visible !== false).map(column => column.field),
+        [ROW_NUMBER_FIELD, "name", "titleId"], "the default columns, without the locked one");
+
+    // Without a lock the saved choice stands.
+    const unlocked = applyTableLayout(definitions(), layout);
+    assert.deepEqual(unlocked.filter(column => column.visible !== false).map(column => column.field), ["version"]);
+
+    // If every column is hidden by default too, the first unlocked one is shown.
+    const hiddenByDefault = [{field: "a", visible: false}, {field: "b", visible: false}];
+    assert.deepEqual(applyTableLayout(hiddenByDefault, undefined, ["a"]).map(column => column.visible), [false, true]);
+});
+
+test("a column exported while hidden by a setting is left out of exports once the user hides it", () => {
+    const columns = () => [{title: "Title", field: "name"}, {title: "Version", field: "version", download: true}];
+    const version = (layout, locked = ["version"]) => applyTableLayout(columns(), layout, locked).find(column => column.field === "version");
+
+    // Hidden by "hide version string" only: still exported, as before.
+    assert.equal(version(undefined).download, true);
+    assert.equal(version({columns: [{field: "version", visible: true}]}).download, true);
+    // Hidden by the user before the setting was turned on: left out.
+    assert.equal(version({columns: [{field: "version", visible: false}]}).download, false);
+    assert.equal(version({columns: [{field: "version", visible: false}]}).visible, false);
+
+    // Not locked: exported exactly when visible, so hiding it from the menu leaves it out.
+    assert.equal("download" in version(undefined, []), false);
+    assert.equal("download" in version({columns: [{field: "version", visible: false}]}, []), false);
+    // Columns that are never exported stay that way.
+    const icon = applyTableLayout([{field: "icon", download: false}], {columns: [{field: "icon", visible: true}]})[0];
+    assert.equal(icon.download, false);
+
+    // A layout with every column hidden falls back to the defaults; the column shown again
+    // is exported, because nothing marks it as left out.
+    const fallback = applyTableLayout(columns(), {columns: [{field: "name", visible: false}, {field: "version", visible: false}]});
+    assert.deepEqual(fallback.map(column => [column.field, column.visible, column.download]),
+        [["name", true, undefined], ["version", true, undefined]]);
+    // No option Tabulator doesn't know is added (it warns about unknown column options).
+    for (const column of fallback.concat(version(undefined), version({columns: [{field: "version", visible: false}]}))) {
+        assert.deepEqual(Object.keys(column).filter(name => !["title", "field", "download", "visible", "width"].includes(name)), []);
+    }
+});
+
+test("layout saves are sent at once, one at a time per table, newest last", async () => {
+    const sent = [];
+    const pending = [];
+    const save = serialSaver((key, layout) => {
+        sent.push([key, layout]);
+        return new Promise((resolve, reject) => pending.push({key, resolve, reject}));
+    });
+    const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+    const inFlight = key => pending.splice(pending.findIndex(entry => entry.key === key), 1)[0];
+
+    save("library", "A");
+    assert.deepEqual(sent, [["library", "A"]], "the first change is sent straight away, not after a delay");
+    save("library", "B");
+    save("library", "C");
+    save("issues", "X");
+    assert.deepEqual(sent, [["library", "A"], ["issues", "X"]], "other tables are not held up; this one waits");
+
+    inFlight("library").resolve();
+    await settle();
+    assert.deepEqual(sent.at(-1), ["library", "C"], "only the newest waiting layout is sent");
+    assert.equal(sent.filter(([key]) => key === "library").length, 2);
+
+    // A reset sent while a save is in progress lands after it.
+    save("library", {columns: []});
+    assert.deepEqual(sent.at(-1), ["library", "C"], "the reset waits for the save in progress");
+    inFlight("library").reject(new Error("disk full"));
+    await settle();
+    assert.deepEqual(sent.at(-1), ["library", {columns: []}], "a failed save does not stop the next one");
+
+    // Nothing waiting: the next change is sent at once again.
+    for (const entry of pending.splice(0)) {
+        entry.resolve();
+    }
+    await settle();
+    save("library", "D");
+    assert.deepEqual(sent.at(-1), ["library", "D"]);
+
+    // A send that throws does not block later saves either.
+    const thrown = [];
+    const failing = serialSaver((key, layout) => {
+        thrown.push(layout);
+        if (layout === 1) {
+            throw new Error("boom");
+        }
+    });
+    const logged = [];
+    const consoleError = console.error;
+    console.error = (...values) => logged.push(values);
+    try {
+        failing("t", 1);
+        failing("t", 2);
+        await settle();
+    } finally {
+        console.error = consoleError;
+    }
+    assert.deepEqual(thrown, [1, 2]);
+    // The error is logged, not dropped.
+    assert.equal(logged.length, 1);
+    assert.equal(logged[0][1], "t");
+    assert.equal(logged[0][2].message, "boom");
 });
 
 test("applying a layout does not modify the default definitions", () => {
@@ -209,8 +318,36 @@ test("optional catalog columns start hidden and format, sort and export their va
 
     assert.deepEqual(rowNumberColumn(), {formatter: "rownum", field: ROW_NUMBER_FIELD, headerSort: false, download: false, hozAlign: "center"});
     assert.equal(rowNumberColumn(44).width, 44);
-    assert.deepEqual(thumbnailColumn("icon"), {field: "icon", download: false, formatter: "image", headerSort: false,
-        width: THUMBNAIL_WIDTH, hozAlign: "center", formatterParams: {height: "60px", width: "60px"}});
+    const thumbnail = thumbnailColumn("icon");
+    assert.deepEqual(Object.assign({}, thumbnail, {formatter: undefined}), {field: "icon", visible: true, download: false,
+        formatter: undefined, headerSort: false, width: THUMBNAIL_WIDTH, hozAlign: "center"});
+    assert.equal(thumbnailColumn("game.iconUrl", false).visible, false);
+});
+
+test("thumbnails show the art, or an empty cell instead of a broken image", () => {
+    const previous = globalThis.document;
+    const listeners = [];
+    globalThis.document = {createElement: tag => ({tag, style: {}, attributes: {},
+        setAttribute(name, value) { this.attributes[name] = value; },
+        addEventListener(event, listener) { listeners.push([event, listener]); }})};
+    try {
+        const {formatter} = thumbnailColumn("icon");
+        let normalized = 0;
+        const cell = value => ({getValue: () => value, getRow: () => ({normalizeHeight: () => normalized++})});
+        for (const missing of [undefined, null, "", "  ", 42]) {
+            assert.equal(formatter(cell(missing)), "", `no image for ${JSON.stringify(missing)}`);
+        }
+        const image = formatter(cell("https://example.invalid/art.jpg"));
+        assert.equal(image.tag, "img");
+        assert.equal(image.attributes.src, "https://example.invalid/art.jpg");
+        assert.deepEqual(image.style, {height: "60px", width: "60px"});
+        assert.equal(listeners.length, 1);
+        assert.equal(listeners[0][0], "load");
+        listeners[0][1]();
+        assert.equal(normalized, 1, "the row is resized once the art loads");
+    } finally {
+        globalThis.document = previous;
+    }
 });
 
 test("ID and row-number columns are sized to their content", () => {

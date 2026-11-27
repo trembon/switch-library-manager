@@ -16,6 +16,15 @@ function savedColumns(layout) {
 // in their default order with their default visibility. Saved entries for columns that
 // no longer exist are ignored. Fields in hiddenFields stay hidden whatever is saved;
 // an application setting controls them.
+//
+// Tabulator exports a column with download: true even while it is hidden. Only a locked
+// field keeps it, and only while the user's own layout still shows that column: Version,
+// hidden by "hide version string", stays in exports unless the user hid it from the menu
+// earlier. Every other column is exported exactly when it is visible, so a column the user
+// hides from the menu is left out. If nothing would be visible (every other
+// column hidden, then the one left locked by a setting), the default columns are shown,
+// so there is still a header to right-click; the saved layout is kept until the user
+// changes it.
 export function applyTableLayout(columns, layout, hiddenFields = []) {
     const locked = new Set(hiddenFields);
     const saved = new Map();
@@ -29,20 +38,38 @@ export function applyTableLayout(columns, layout, hiddenFields = []) {
         .sort((a, b) => saved.get(a.field).index - saved.get(b.field).index);
     const added = columns.filter(column => !saved.has(column.field));
 
-    return known.concat(added).map(definition => {
-        const result = Object.assign({}, definition);
+    const result = known.concat(added).map(definition => {
+        const column = Object.assign({}, definition);
         const entry = saved.get(definition.field);
         if (entry) {
-            result.visible = entry.column.visible !== false;
+            column.visible = entry.column.visible !== false;
             if (Number.isFinite(entry.column.width) && entry.column.width > 0) {
-                result.width = entry.column.width;
+                column.width = entry.column.width;
+            }
+        }
+        if (column.download === true) {
+            if (!locked.has(definition.field)) {
+                delete column.download;
+            } else if (entry && entry.column.visible === false) {
+                column.download = false;
             }
         }
         if (locked.has(definition.field)) {
-            result.visible = false;
+            column.visible = false;
         }
-        return result;
+        return column;
     });
+
+    if (!result.some(column => column.visible !== false)) {
+        const defaults = columns.filter(column => column.visible !== false && !locked.has(column.field)).map(column => column.field);
+        const fallback = new Set(defaults.length ? defaults : result.filter(column => !locked.has(column.field)).slice(0, 1).map(column => column.field));
+        for (const column of result) {
+            if (fallback.has(column.field)) {
+                column.visible = true;
+            }
+        }
+    }
+    return result;
 }
 
 // Fields whose width the user chose: saved widths plus columns resized since.
@@ -76,6 +103,49 @@ export function captureTableLayout(columns, resizedFields, previousLayout, hidde
         result.push(entry);
     }
     return {columns: result};
+}
+
+// Returns save(key, layout), which sends each layout change straight away so it is not
+// lost if the window closes right after (closing does not run the page's unload handlers
+// in the desktop app). Saves for one table go one at a time: while one is being sent, only
+// the newest waiting layout is kept and sent when it finishes, so an older layout can never
+// land after a newer one, whatever order the backend handles calls in. send(key, layout)
+// may return a promise; an error, thrown or rejected, is logged and does not stop later
+// saves. send should report its own errors without waiting on the user, because the next
+// save waits for it.
+export function serialSaver(send) {
+    const tables = new Map();
+    const next = (key, entry) => {
+        if (!entry.waiting) {
+            entry.sending = false;
+            return;
+        }
+        const layout = entry.layout;
+        entry.waiting = false;
+        entry.layout = undefined;
+        entry.sending = true;
+        let result;
+        try {
+            result = send(key, layout);
+        } catch (error) {
+            result = Promise.reject(error);
+        }
+        Promise.resolve(result)
+            .catch(error => console.error("table layout save failed", key, error))
+            .then(() => next(key, entry));
+    };
+    return (key, layout) => {
+        let entry = tables.get(key);
+        if (!entry) {
+            entry = {sending: false, waiting: false, layout: undefined};
+            tables.set(key, entry);
+        }
+        entry.layout = layout;
+        entry.waiting = true;
+        if (!entry.sending) {
+            next(key, entry);
+        }
+    };
 }
 
 export function escapeHtml(value) {
