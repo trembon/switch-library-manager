@@ -130,6 +130,15 @@ export namespace app {
 	    update: number;
 	    region: string;
 	    type: string;
+	    update_id: string;
+	    file_size: number;
+	    release_date: string;
+	    publisher: string;
+	    genres: string[];
+	    languages: string[];
+	    players: number;
+	    age_rating: number;
+	    rating_content: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new LibraryTemplateData(source);
@@ -147,6 +156,15 @@ export namespace app {
 	        this.update = source["update"];
 	        this.region = source["region"];
 	        this.type = source["type"];
+	        this.update_id = source["update_id"];
+	        this.file_size = source["file_size"];
+	        this.release_date = source["release_date"];
+	        this.publisher = source["publisher"];
+	        this.genres = source["genres"];
+	        this.languages = source["languages"];
+	        this.players = source["players"];
+	        this.age_rating = source["age_rating"];
+	        this.rating_content = source["rating_content"];
 	    }
 	}
 	export class Pair {
@@ -285,6 +303,12 @@ export namespace app {
 	    icon: string;
 	    region: string;
 	    release_date: string;
+	    publisher: string;
+	    genres: string[];
+	    languages: string[];
+	    players: number;
+	    age_rating: number;
+	    rating_content: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new SwitchTitle(source);
@@ -297,6 +321,12 @@ export namespace app {
 	        this.icon = source["icon"];
 	        this.region = source["region"];
 	        this.release_date = source["release_date"];
+	        this.publisher = source["publisher"];
+	        this.genres = source["genres"];
+	        this.languages = source["languages"];
+	        this.players = source["players"];
+	        this.age_rating = source["age_rating"];
+	        this.rating_content = source["rating_content"];
 	    }
 	}
 
@@ -318,6 +348,11 @@ export namespace db {
 	    description?: string;
 	    size?: number;
 	    isDemo?: boolean;
+	    category?: string[];
+	    languages?: string[];
+	    numberOfPlayers?: number;
+	    rating?: number;
+	    ratingContent?: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new TitleAttributes(source);
@@ -338,6 +373,11 @@ export namespace db {
 	        this.description = source["description"];
 	        this.size = source["size"];
 	        this.isDemo = source["isDemo"];
+	        this.category = source["category"];
+	        this.languages = source["languages"];
+	        this.numberOfPlayers = source["numberOfPlayers"];
+	        this.rating = source["rating"];
+	        this.ratingContent = source["ratingContent"];
 	    }
 	}
 
@@ -543,6 +583,52 @@ export namespace settings {
 	        this.prod_keys = source["prod_keys"];
 	    }
 	}
+	export class ColumnLayout {
+	    field: string;
+	    visible: boolean;
+	    width?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ColumnLayout(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.field = source["field"];
+	        this.visible = source["visible"];
+	        this.width = source["width"];
+	    }
+	}
+	export class TableLayout {
+	    columns: ColumnLayout[];
+	
+	    static createFrom(source: any = {}) {
+	        return new TableLayout(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.columns = this.convertValues(source["columns"], ColumnLayout);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class GUISettings {
 	    enabled: boolean;
 	    page_size: number;
@@ -551,6 +637,7 @@ export namespace settings {
 	    hide_version_string: boolean;
 	    remember_window_state: boolean;
 	    theme: string;
+	    table_layouts?: Record<string, TableLayout>;
 	
 	    static createFrom(source: any = {}) {
 	        return new GUISettings(source);
@@ -565,7 +652,26 @@ export namespace settings {
 	        this.hide_version_string = source["hide_version_string"];
 	        this.remember_window_state = source["remember_window_state"];
 	        this.theme = source["theme"];
+	        this.table_layouts = this.convertValues(source["table_layouts"], TableLayout, true);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class AppSettings {
 	    schema_version: number;
@@ -611,6 +717,8 @@ export namespace settings {
 		    return a;
 		}
 	}
+	
+	
 	
 	
 	

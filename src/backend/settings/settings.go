@@ -60,6 +60,8 @@ type GUISettings struct {
 	HideVersionString   bool   `json:"hide_version_string"`
 	RememberWindowState bool   `json:"remember_window_state"`
 	Theme               string `json:"theme"`
+	// TableLayouts holds each table's saved column layout, keyed by table.
+	TableLayouts map[string]TableLayout `json:"table_layouts,omitempty"`
 }
 
 type PathSettings struct {
@@ -328,6 +330,7 @@ func defaultSettings() *AppSettings {
 
 func verifySettings(settings *AppSettings) {
 	settings.GUI.Theme = NormalizeTheme(settings.GUI.Theme)
+	settings.GUI.TableLayouts = normalizeTableLayouts(settings.GUI.TableLayouts)
 	if settings.DataSources.TitlesURL == "" {
 		settings.DataSources.TitlesURL = DEFAULT_TITLES_JSON_URL
 	}

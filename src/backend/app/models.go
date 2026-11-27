@@ -23,6 +23,18 @@ type SwitchTitle struct {
 	Icon        string `json:"icon"`
 	Region      string `json:"region"`
 	ReleaseDate string `json:"release_date"`
+	TitleMetadata
+}
+
+// TitleMetadata is optional catalog information shown in extra table columns.
+// List values are sent as received; the frontend joins them for display.
+type TitleMetadata struct {
+	Publisher     string   `json:"publisher"`
+	Genres        []string `json:"genres"`
+	Languages     []string `json:"languages"`
+	Players       int      `json:"players"`
+	AgeRating     int      `json:"age_rating"`
+	RatingContent []string `json:"rating_content"`
 }
 
 type LibraryTemplateData struct {
@@ -36,6 +48,13 @@ type LibraryTemplateData struct {
 	Update  int    `json:"update"`
 	Region  string `json:"region"`
 	Type    string `json:"type"`
+	// UpdateID is the title ID of the installed update, empty without one.
+	UpdateID string `json:"update_id"`
+	// FileSize is the base file's size in bytes; zero when it is unknown,
+	// such as for split files.
+	FileSize    int64  `json:"file_size"`
+	ReleaseDate string `json:"release_date"`
+	TitleMetadata
 }
 
 type ProgressUpdate struct {

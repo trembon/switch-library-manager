@@ -31,27 +31,24 @@ func buildLocalLibraryData(localDB *db.LocalSwitchFilesDB, switchDB *db.SwitchTi
 				version = latest.Metadata.Ncap.DisplayVersion
 			}
 
-			if title != nil {
-				response.LibraryData = append(response.LibraryData, LibraryTemplateData{
-					Icon:    title.Attributes.IconUrl,
-					Name:    name,
-					TitleId: title.Attributes.Id,
-					Update:  value.LatestUpdate,
-					Version: version,
-					Region:  title.Attributes.Region,
-					Type:    getType(value),
-					Path:    filepath.Join(value.File.ExtendedInfo.BaseFolder, value.File.ExtendedInfo.FileName),
-				})
-			} else {
-				response.LibraryData = append(response.LibraryData, LibraryTemplateData{
-					Name:    name,
-					Update:  value.LatestUpdate,
-					Version: version,
-					Type:    getType(value),
-					TitleId: titleID,
-					Path:    filepath.Join(value.File.ExtendedInfo.BaseFolder, value.File.ExtendedInfo.FileName),
-				})
+			row := LibraryTemplateData{
+				Name:     name,
+				Update:   value.LatestUpdate,
+				Version:  version,
+				Type:     getType(value),
+				TitleId:  titleID,
+				Path:     filepath.Join(value.File.ExtendedInfo.BaseFolder, value.File.ExtendedInfo.FileName),
+				FileSize: baseFileSize(value),
 			}
+			if title != nil {
+				row.Icon = title.Attributes.IconUrl
+				row.TitleId = title.Attributes.Id
+				row.Region = title.Attributes.Region
+				row.ReleaseDate = catalogReleaseDate(title.Attributes)
+				row.TitleMetadata = titleMetadata(title.Attributes)
+			}
+			row.UpdateID = updateTitleID(row.TitleId, value.LatestUpdate)
+			response.LibraryData = append(response.LibraryData, row)
 		} else {
 			for _, update := range value.Updates {
 				response.Issues = append(response.Issues, Pair{
@@ -89,4 +86,43 @@ func getType(gameFile *db.SwitchGameFiles) string {
 		return ext[1:]
 	}
 	return ""
+}
+
+// titleMetadata copies the optional catalog fields shown as extra columns.
+func titleMetadata(attributes db.TitleAttributes) TitleMetadata {
+	return TitleMetadata{
+		Publisher:     attributes.Publisher,
+		Genres:        attributes.Category,
+		Languages:     attributes.Languages,
+		Players:       int(attributes.NumberOfPlayers),
+		AgeRating:     int(attributes.Rating),
+		RatingContent: attributes.RatingContent,
+	}
+}
+
+// catalogReleaseDate returns the parsed catalog release date, or an empty
+// string when the catalog has none (it parses a missing date as "0").
+func catalogReleaseDate(attributes db.TitleAttributes) string {
+	if attributes.ReleaseDate <= 0 {
+		return ""
+	}
+	return attributes.ParsedReleaseDate
+}
+
+// baseFileSize reports the base file's size, or zero when a single file size
+// would be misleading: split games are stored as several parts.
+func baseFileSize(files *db.SwitchGameFiles) int64 {
+	if files == nil || files.IsSplit || files.File.ExtendedInfo.IsDir || files.File.ExtendedInfo.Size < 0 {
+		return 0
+	}
+	return files.File.ExtendedInfo.Size
+}
+
+// updateTitleID derives the update title ID (ending in 800) for a base title
+// that has an installed update.
+func updateTitleID(baseTitleID string, latestUpdate int) string {
+	if latestUpdate <= 0 || len(baseTitleID) != 16 {
+		return ""
+	}
+	return baseTitleID[:13] + "800"
 }

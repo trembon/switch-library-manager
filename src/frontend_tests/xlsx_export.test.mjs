@@ -3,6 +3,9 @@ import {readFile} from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 import {exportTableXLSX, reportFromExportList} from "../frontend/xlsx_export.js";
+import * as tableColumns from "../frontend/table_columns.js";
+import {applyTableLayout, serialSaver} from "../frontend/table_layout.js";
+import {tableHelpers} from "./table_sandbox.mjs";
 
 const appSource = await readFile(new URL("../frontend/app.js", import.meta.url), "utf8");
 const tabulatorSource = await readFile(new URL("../frontend/lib/js/tabulator/tabulator.min.js", import.meta.url), "utf8");
@@ -75,11 +78,12 @@ test("all five GUI tabs supply the correct report kind to the export adapter", (
     const state = {
         settings: {paths: {library_folder: "synthetic"}, gui: {}},
         library: {library_data: [{name: "test"}], issues: [{key: "test", value: "issue"}]},
-        updates: [{Attributes: {name: "test"}}],
+        updates: [{Attributes: {name: "test"}, local_update: 4456448, local_display_version: "1.8.795"}],
         dlc: [{Attributes: {name: "test"}, missing_dlc: [{name: "expansion"}]}],
         missingGames: [{name: "test"}]
     };
     const context = {state, $: () => ui, hideCurrentTab() {}, gameDetailsTableOptions: value => value, tableOptions: value => value,
+        ...tableHelpers,
         createTable(selector, options, kind) {captured.push({selector, options, kind});}};
     vm.createContext(context);
     vm.runInContext(appSource.slice(start, end), context);
@@ -88,6 +92,85 @@ test("all five GUI tabs supply the correct report kind to the export adapter", (
         assert.equal(captured.at(-1).kind, kind);
         assert.ok(captured.at(-1).options.columns.length);
     }
+
+    // Local update shows the version beside the number and is wide enough for either word.
+    const updates = captured.find(value => value.kind === "missing_updates").options;
+    const localUpdate = updates.columns.find(value => value.field === "local_update");
+    assert.equal(localUpdate.minWidth, "(1.8.795)".length * 8 + 20);
+    context.document = {createElement: () => ({textContent: ""})};
+    assert.equal(localUpdate.formatter({getRow: () => ({getData: () => state.updates[0]})}).textContent, "4456448 (1.8.795)");
+
+    // Update rows carry the base game's catalog entry, whose size is the game's, not the
+    // update's, so Missing updates has no size column.
+    assert.equal(updates.columns.some(value => /size/i.test(value.field) || /size/i.test(value.title ?? "")), false);
+    // Thumbnails are shown by default on the other tabs.
+    for (const kind of ["games", "missing_games", "missing_updates"]) {
+        const art = captured.find(value => value.kind === kind).options.columns.find(value => value.formatter === tableColumns.thumbnailFormatter);
+        assert.equal(art.visible, true, kind);
+    }
+});
+
+test("a Version column hidden from the menu is left out of exports; hidden by the setting it stays in", async () => {
+    const definitions = layout => applyTableLayout([
+        {title: "Title", field: "name"},
+        {title: "Version", field: "version", visible: true, download: true}
+    ], layout, ["version"]);
+    const data = [{name: "Game", version: "1.0.2"}];
+    const headers = async table => {
+        let report;
+        await exportTableXLSX(table, "games", async value => {report = value;});
+        return report.headers;
+    };
+
+    assert.deepEqual(await headers(tableFor(definitions(undefined), data)), ["Title", "Version"]);
+    assert.deepEqual(await headers(tableFor(definitions({columns: [{field: "version", visible: false}]}), data)), ["Title"]);
+
+    // Hidden from the menu while the table is open.
+    const table = tableFor(applyTableLayout([{title: "Title", field: "name"}, {title: "Version", field: "version", download: true}], undefined), data);
+    const version = table.columnManager.columns[1];
+    version.visible = false;
+    assert.deepEqual(await headers(table), ["Title"]);
+    let csv;
+    table.modules.download.downloaders.csv(table.modules.download.generateExportList("all"), {bom: true}, content => csv = content);
+    assert.ok(csv.startsWith("﻿Title\n") || csv.startsWith("﻿Title\r\n"), JSON.stringify(csv.slice(0, 20)));
+});
+
+test("layout changes are saved at once, and a failed save's error message does not hold up later saves", async () => {
+    const start = appSource.indexOf("    function storeTableLayout(key, layout) {");
+    const end = appSource.indexOf("    function resetTableLayout(key) {", start);
+    assert.ok(start > 0 && end > start);
+    const sent = [];
+    const messages = [];
+    const logged = [];
+    const context = {
+        serialSaver,
+        state: {settings: {gui: {table_layouts: {}}}},
+        console: {error: (...values) => logged.push(values)},
+        SaveTableLayout(key, layout) {
+            sent.push([key, layout]);
+            return sent.length === 1 ? Promise.reject(new Error("disk full")) : Promise.resolve();
+        },
+        // The user never closes the message during this test.
+        ShowMessage(...values) {
+            messages.push(values);
+            return new Promise(() => {});
+        }
+    };
+    vm.createContext(context);
+    vm.runInContext(appSource.slice(start, end), context);
+    const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+
+    context.saveTableLayout("games", {columns: [{field: "name", visible: true}]});
+    // Sent straight away, with no delay, and kept in the loaded settings.
+    assert.equal(sent.length, 1);
+    assert.deepEqual(context.state.settings.gui.table_layouts.games, {columns: [{field: "name", visible: true}]});
+    context.saveTableLayout("games", {columns: [{field: "name", visible: false}]});
+    await settle();
+    assert.equal(messages.length, 1);
+    assert.equal(messages[0][3], "disk full");
+    // The newer layout went out while the error message is still open.
+    assert.deepEqual(sent.map(value => value[1].columns[0].visible), [true, false]);
+    assert.ok(logged.some(values => values.includes("disk full")));
 });
 
 test("Missing DLC sorts newest releases across games and exports dates with blanks for unknowns", async () => {
@@ -116,12 +199,30 @@ test("Missing DLC sorts newest releases across games and exports dates with blan
             ]
         },
         $: () => ui, hideCurrentTab() {}, gameDetailsTableOptions: value => value,
+        ...tableHelpers,
         document: {createElement: () => ({textContent: ""})},
         createTable(selector, value) {assert.equal(selector, "#dlc-table"); options = value;}
     };
     vm.createContext(context);
     vm.runInContext(appSource.slice(start, end), context);
     vm.runInContext('loadTab("#dlc")', context);
+
+    // Columns share the window width: only the row-number and game cover columns are fixed,
+    // the ID and date columns are kept wide enough for a whole value, and names keep a
+    // readable minimum.
+    assert.equal(options.layout, "fitColumns");
+    assert.equal(typeof options.tableBuilt, "function");
+    assert.deepEqual(Array.from(options.columns.filter(value => value.width !== undefined), value => value.field),
+        [tableColumns.rowNumberColumn().field, "game.iconUrl"]);
+    // The game art column is there to show, but hidden until the user shows it.
+    const art = options.columns.find(value => value.field === "game.iconUrl");
+    assert.equal(art.visible, false);
+    assert.equal(art.formatter, tableColumns.thumbnailFormatter);
+    const flexible = options.columns.filter(value => value.width === undefined);
+    assert.ok(flexible.every(value => value.widthGrow > 0));
+    assert.deepEqual(Array.from(flexible.filter(value => value.minWidth !== undefined), value => [value.field, value.minWidth]),
+        [["dlc.name", tableColumns.TEXT_MIN_WIDTH], ["dlc.id", 16 * 8 + 20], ["dlc.release_date", 10 * 8 + 20],
+            ["game.name", tableColumns.TEXT_MIN_WIDTH], ["game.id", 16 * 8 + 20]]);
 
     const table = tableFor(options.columns, options.data);
     table.options = {...options, headerSort: false};

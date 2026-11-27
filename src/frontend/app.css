@@ -311,13 +311,84 @@ body {
     word-break: break-word;
 }
 
-#library-table .tabulator .tabulator-tableHolder {
-    overflow: visible;
+#library-table .tabulator .tabulator-tableHolder .tabulator-table {
+    white-space: normal;
 }
 
-#library-table .tabulator .tabulator-tableHolder .tabulator-table {
-    width: 100%;
+/* Table tabs fill the window below the navigation. A long or wide table scrolls inside its
+   own area, so its header, sideways scrollbar and footer stay in view; the tab itself
+   scrolls only when the window is too short for the alerts plus a few rows. */
+#library,
+#updates,
+#missing,
+#dlc,
+#status {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 22rem;
+}
+
+#library > *,
+#updates > *,
+#missing > *,
+#dlc > *,
+#status > * {
+    flex: none;
+}
+
+#library > .tabulator,
+#updates > .tabulator,
+#missing > .tabulator,
+#dlc > .tabulator,
+#status > .tabulator {
+    display: flex;
+    flex: 0 1 auto;
+    flex-direction: column;
+    min-height: 10rem;
+}
+
+.content.tabulator > .tabulator-header,
+.content.tabulator > .tabulator-footer {
+    flex: none;
+}
+
+.content.tabulator > .tabulator-tableHolder {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+/* These tables' columns share the window width; long text wraps, at most three lines per
+   row (see linesWidth in table_layout.js), and columns that no longer fit scroll sideways. */
+#library-table .tabulator-cell,
+#updates-table .tabulator-cell,
+#missingGames-table .tabulator-cell,
+#dlc-table .tabulator-cell {
     white-space: normal;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+}
+
+/* Header titles stay on one line, so every header is one title line plus its filter box
+   tall; each column is at least as wide as its title (see withHeaderMinWidths in
+   table_layout.js) and extra columns scroll sideways. */
+#library-table .tabulator-col-title,
+#updates-table .tabulator-col-title,
+#missingGames-table .tabulator-col-title,
+#dlc-table .tabulator-col-title,
+#status-table .tabulator-col-title {
+    white-space: nowrap;
+    text-overflow: clip;
+}
+
+/* The sort arrow sits 8-20px from the column's right edge; Tabulator's 25px title padding
+   leaves more room than it needs, which adds up across many narrow columns. */
+#library-table .tabulator-col.tabulator-sortable .tabulator-col-title,
+#updates-table .tabulator-col.tabulator-sortable .tabulator-col-title,
+#missingGames-table .tabulator-col.tabulator-sortable .tabulator-col-title,
+#dlc-table .tabulator-col.tabulator-sortable .tabulator-col-title {
+    padding-right: 16px;
 }
 
 #library-table .tabulator .tabulator-cell img {
@@ -443,6 +514,37 @@ body {
         margin-left: 0;
         text-align: left;
     }
+}
+
+/* Column show/hide menu opened by right-clicking a table header. */
+.tabulator-menu {
+    max-height: calc(100vh - 1rem);
+    padding: 0.25rem 0;
+    border-color: var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    background: var(--bs-body-bg);
+    box-shadow: var(--bs-box-shadow-sm);
+    color: var(--bs-body-color);
+    font-size: 0.875rem;
+}
+
+.tabulator-menu .tabulator-menu-item {
+    padding: 0.3rem 0.85rem 0.3rem 0.5rem;
+}
+
+.tabulator-menu .tabulator-menu-item:not(.tabulator-menu-item-disabled):hover {
+    background: var(--slm-table-hover);
+}
+
+.tabulator-menu .tabulator-menu-separator {
+    margin: 0.25rem 0;
+    border-color: var(--bs-border-color);
+}
+
+.tabulator-menu .slm-column-menu-check {
+    display: inline-block;
+    width: 1.25rem;
+    text-align: center;
 }
 
 .tabulator .tabulator-placeholder span {
